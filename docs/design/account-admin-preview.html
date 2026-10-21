@@ -125,6 +125,13 @@
     .danger-box { padding: 12px 14px; background: var(--red-soft); border: 1px solid var(--red); border-radius: 12px; color: var(--ink); font-size: .85rem; }
     .radio-line { display: flex !important; align-items: start; gap: 9px !important; margin: 10px 0 !important; font-weight: 500 !important; }
     .radio-line input { width: 18px !important; min-height: 18px !important; margin-top: 3px; }
+    .order-list { list-style: none; padding: 0; margin: 16px 0 0; }
+    .order-list li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 11px; padding: 9px 11px; margin-bottom: 7px; }
+    .order-list li.fixed { background: var(--surface-soft); }
+    .order-list small { display: block; color: var(--muted); font-size: .75rem; }
+    .order-buttons { display: flex; gap: 4px; }
+    .order-buttons button { min-width: 38px; min-height: 38px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); }
+    .order-buttons button:disabled { opacity: .4; cursor: not-allowed; }
     @media (max-width: 1050px) {
       .site-header { flex-wrap: wrap; gap: 0 18px; padding-top: 12px; }
       .site-nav { order: 3; width: 100%; }
@@ -169,7 +176,7 @@
     <header class="site-header">
       <a class="brand" href="#" aria-label="Home Hub home"><span class="brand-mark">⌂</span> Home Hub</a>
       <nav class="site-nav" aria-label="Main navigation">
-        <a href="#">Home</a><a href="#">Lists</a><a href="#">Recipes</a><a href="#">Calendar</a><a href="#">Weather</a><a href="#">RSS</a><a href="#">Games</a><a href="#" class="active" aria-current="page">Admin</a>
+        <a href="#">Home</a><a href="lists-navigation-preview.html">Lists</a><a href="#">Recipes</a><a href="#">Calendar</a><a href="#">Weather</a><a href="#">RSS</a><a href="#">Games</a><a href="#" class="active" aria-current="page">Admin</a>
       </nav>
       <div class="account-area"><button class="button small quiet" type="button" onclick="toggleTheme()" aria-label="Toggle light and dark theme">◐ Theme</button><span class="avatar">AP</span><span class="account-name">Alex P.</span></div>
     </header>
@@ -201,6 +208,7 @@
         <div class="sidebar-stack">
           <section class="panel side-panel"><p class="eyebrow">Access</p><h2>Passwords & sessions</h2><p>People can change their own password. Admin resets use a one-time temporary password and ask for a new password on login.</p><div class="setting-line"><span>Idle session limit</span><span>24 hours</span></div><div class="setting-line"><span>Absolute session limit</span><span>7 days</span></div><div style="margin-top:13px"><button class="button small" type="button">Edit session settings</button></div></section>
           <section class="panel side-panel"><p class="eyebrow">Shared display</p><h2>House-wide access</h2><p>The house-wide login can see shared content and play games. Its scores stay off leaderboards.</p><div class="callout"><strong>Privacy note</strong><br>Admins can view all household content, including private chats.</div></section>
+          <section class="panel side-panel"><p class="eyebrow">Navigation</p><h2>Household tab order</h2><p>One order for everyone. Home always comes first; Admin stays last for admins.</p><button class="button small" type="button" onclick="openOrder()">Reorder tabs</button></section>
         </div>
       </div>
     </main>
@@ -215,8 +223,24 @@
   <dialog id="temporary-dialog" aria-labelledby="temporary-title"><div class="dialog-body"><div class="dialog-top"><div><p class="eyebrow">Shown once</p><h2 id="temporary-title">Temporary password</h2></div><button class="button small quiet" type="button" onclick="closeDialog('temporary-dialog')" aria-label="Close">✕</button></div><p>Give this password directly to the person. It cannot be viewed again after this window closes.</p><div class="callout"><strong>Illustrative preview only</strong><br><code style="font-size:1.15rem;word-break:break-all">example-4F7q9K2v</code></div><p style="margin:14px 0 0">They will be asked to choose a new password at their next login.</p></div><div class="dialog-actions"><button class="button primary" type="button" onclick="closeDialog('temporary-dialog')">Done</button></div></dialog>
 
   <dialog id="delete-dialog" aria-labelledby="delete-title"><div class="dialog-body"><div class="dialog-top"><div><p class="eyebrow">Permanent removal</p><h2 id="delete-title">Remove Jamie?</h2></div><button class="button small quiet" type="button" onclick="closeDialog('delete-dialog')" aria-label="Close">✕</button></div><p id="delete-explanation">Choose what happens to Jamie's lists, recipes, and events. Chats, scores, and personal feeds will be deleted.</p><div class="danger-box"><strong>This cannot be undone.</strong><br><span id="delete-counts">Jamie owns 2 lists, 4 recipes, and 12 events.</span> A shared list may contain items added by other people.</div><label class="radio-line"><input type="radio" name="content-choice" checked>Transfer all owned content to another person</label><label>Transfer to<select aria-label="Transfer to"><option>Alex P.</option><option>Sam P.</option><option>Taylor P.</option></select></label><label class="radio-line"><input type="radio" name="content-choice">Delete all owned content, including other contributors' items in this person's lists</label><label id="confirm-label">Type Jamie to confirm<input id="confirm-name" placeholder="Jamie" aria-label="Type Jamie to confirm" oninput="updateRemoveButton()"></label></div><div class="dialog-actions"><button class="button" type="button" onclick="closeDialog('delete-dialog')">Cancel</button><button id="confirm-remove" class="button danger" type="button" onclick="closeDialog('delete-dialog')" disabled>Remove account</button></div></dialog>
+  <dialog id="order-dialog" aria-labelledby="order-title"><div class="dialog-body"><p class="eyebrow">Admin · Navigation</p><h2 id="order-title">Reorder household tabs</h2><p>Move the middle tabs with the arrow buttons. This order applies to everyone. Tabs for unavailable features remain hidden.</p><ol class="order-list" id="order-list"></ol></div><div class="dialog-actions"><button class="button" type="button" onclick="closeDialog('order-dialog')">Cancel</button><button class="button primary" type="button" onclick="saveOrder()">Save order</button></div></dialog>
 
   <script>
+    let tabOrder = ['Lists', 'Recipes', 'Calendar', 'Weather', 'RSS', 'Games'];
+    let draftOrder = [];
+    function openOrder() { draftOrder = [...tabOrder]; renderOrder(); openDialog('order-dialog'); }
+    function renderOrder() {
+      const rows = [{ name: 'Home', fixed: true }, ...draftOrder.map(name => ({ name })), { name: 'Admin', fixed: true }];
+      document.getElementById('order-list').innerHTML = rows.map((row, index) => `<li class="${row.fixed ? 'fixed' : ''}"><span><strong>${row.name}</strong>${row.fixed ? '<small>Fixed position</small>' : ''}</span>${row.fixed ? '' : `<span class="order-buttons"><button type="button" aria-label="Move ${row.name} up" onclick="moveTab(${index - 1}, -1)" ${index === 1 ? 'disabled' : ''}>↑</button><button type="button" aria-label="Move ${row.name} down" onclick="moveTab(${index - 1}, 1)" ${index === draftOrder.length ? 'disabled' : ''}>↓</button></span>`}</li>`).join('');
+    }
+    function moveTab(index, delta) { const next = index + delta; if (next < 0 || next >= draftOrder.length) return; [draftOrder[index], draftOrder[next]] = [draftOrder[next], draftOrder[index]]; renderOrder(); }
+    function saveOrder() {
+      tabOrder = [...draftOrder];
+      const nav = document.querySelector('.site-nav');
+      const links = new Map([...nav.querySelectorAll('a')].map(link => [link.textContent.trim(), link]));
+      ['Home', ...tabOrder, 'Admin'].forEach(name => nav.append(links.get(name)));
+      closeDialog('order-dialog');
+    }
     if (new URLSearchParams(location.search).has('mobile-preview')) document.documentElement.classList.add('in-frame');
     if (matchMedia('(max-width: 760px)').matches) {
       const nav = document.querySelector('.site-nav');

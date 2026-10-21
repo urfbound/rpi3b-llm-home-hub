@@ -26,9 +26,10 @@ by feature before implementation.
   run useful local answers within acceptable resource use.
 - Home shows preview cards; each feature has its own main navigation tab.
   Weather and RSS may use cards within their tabs.
-- An admin can set one household-wide order of feature tabs. Keep Home fixed
-  at the start and Admin fixed at the end; the feature tabs between them can
-  be reordered. The control's visual design still needs approval.
+- An admin can set one household-wide order of feature tabs from the Admin tab
+  only. Keep Home fixed at the start and Admin fixed at the end; the feature
+  tabs between them can be reordered. The control's visual design still needs
+  approval.
 - Target at most 32 users and four admins. Aim for under 256 MB application
   steady-state RSS and under 10 GB for application, dependencies, and data,
   excluding the OS and local model files.
