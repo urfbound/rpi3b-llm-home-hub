@@ -87,9 +87,15 @@ user's explicit confirmation.
 ## Weather, RSS, and system status
 
 - Weather uses one admin-set household town or postal code. Admins can turn
-  outbound weather and RSS access off.
+  outbound weather and RSS access off. Show a five-day forecast by default;
+  admins can choose one to 15 days and switch between metric (default) and
+  imperial units. An almanac sub-tab and on-demand historical weather are
+  deferred features.
 - Users manage personal RSS feeds; admins manage feeds for the house-wide
-  account. Adding a feed should be easy.
+  account. Adding a feed should be easy. Refresh every 30 minutes by default;
+  admins can choose an interval from ten to 240 minutes. Keep the latest 30
+  items per feed. When outbound access is off, show cached items with a
+  last-updated time.
 - Dashboard system status includes RAM use, CPU use, one hour of CPU history
   sampled each minute and reset on restart, Pi temperature, and app RSS.
   Admins can hide this from ordinary users while optionally retaining it
@@ -99,16 +105,22 @@ user's explicit confirmation.
 
 - First release games: an original Wordle-style word game, mini crosswords,
   Hunt the Wumpus, word ladders, mini nonograms, and Sudoku.
-- Start with a curated offline puzzle bank. Investigate puzzles generated on
-  the Pi as a later feature.
+- Start with a curated offline puzzle bank. Investigate broader generation
+  on the Pi as a later feature. Ship at least 30 days of distinct content
+  per game, curated or reproducibly randomized as appropriate, adding more
+  through updates; curated content may repeat after the bank is exhausted.
+  Games suited to randomized play, such as Hunt the Wumpus, may generate a
+  daily puzzle from a visible seed without separately storing that seed.
+  Practice play may accept a user-entered seed or choose a random one.
 - Everyone gets the same puzzle for each game on each household day; the
   day changes at midnight in the household time zone. One puzzle per game
   per day in the first release. Issue #1 tracks support for multiple daily
   puzzles without a fixed five-puzzle ceiling.
-- Users may replay a completed daily puzzle for practice. Only the first
-  completed attempt counts toward daily and all-time scoreboards and
-  streaks. Scoreboards are visible to all users. Faster completions rank
-  higher in timed games. The house-wide account can play without ranking.
+- The first move starts one scored attempt, which can be resumed but not
+  restarted. Replays after completion are practice only. Each game has its
+  own daily streak. Daily and all-time scoreboards are visible to all users.
+  Faster completions rank higher in timed games. The house-wide account can
+  play without ranking.
 
 ## Optional local chat
 
@@ -149,10 +161,10 @@ user's explicit confirmation.
 
 ## Open decisions
 
-- Game answer validation, first-attempt scoring, and what
+- Game answer validation, exact scoring, and what
   counts as a completion for each of the six games.
-- Weather provider, forecast detail, units, caching, and offline behavior.
-- RSS refresh schedule, item retention, feed URL safety, and offline behavior.
+- Weather provider, forecast contents, caching, and offline behavior.
+- RSS feed URL safety and item display behavior.
 - Calendar archival format and backup/restore policy.
 - First-release visual designs and their approval.
 
@@ -163,3 +175,6 @@ user's explicit confirmation.
 - Email delivery of calendar archives, dependent on outbound email: issue #3.
 - Inbound email controls: GitHub issue #4.
 - Puzzles generated on the Pi: GitHub issue #5.
+- Weather almanac sub-tab: GitHub issue #6.
+- On-demand historical weather, off unless enabled by an admin: GitHub issue
+  #7.
