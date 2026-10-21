@@ -49,6 +49,8 @@ user's explicit confirmation.
 - A house-wide account serves shared displays and guests. It is read-only
   for household content, sees shared items and its own admin-managed RSS
   feeds, may play games without appearing on leaderboards, and cannot chat.
+  Guests log in with a shared password set by an admin; there is no
+  password-free guest entry.
 - On account deletion, admins must transfer or delete the user's lists,
   recipes, and events. Delete the user's chats, scores, and personal feeds.
   Warn before deleting a shared list containing other contributors' items.
@@ -112,7 +114,10 @@ user's explicit confirmation.
   account. Adding a feed should be easy. Refresh every 30 minutes by default;
   admins can choose an interval from ten to 240 minutes. Keep the latest 30
   items per feed. When outbound access is off, show cached items with a
-  last-updated time.
+  last-updated time. Ordinary users may add public web feeds; only admins may
+  add trusted feeds hosted on the household LAN. RSS cards show the title,
+  source, publication date, and a short text summary, without loading remote
+  images.
 - Dashboard system status includes RAM use, CPU use, one hour of CPU history
   sampled each minute and reset on restart, Pi temperature, and app RSS.
   Admins can hide this from ordinary users while optionally retaining it
@@ -191,7 +196,7 @@ user's explicit confirmation.
 - Weather cache lifetime and offline behavior.
 - Exact pressure trend thresholds and units.
 - Backup verification and how restore handles sessions.
-- RSS feed URL safety and item display behavior.
+- RSS feed URL validation and safe handling of admin-approved LAN sources.
 - Calendar archival format and backup/restore policy.
 - First-release visual designs and their approval.
 
