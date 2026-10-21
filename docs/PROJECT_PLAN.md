@@ -210,6 +210,9 @@ by feature before implementation.
   unsafe addresses. Only an admin can explicitly approve a LAN destination.
 - Dashboard system status includes RAM use, CPU use, one hour of CPU history
   sampled each minute and reset on restart, Pi temperature, and app RSS.
+  Normalize CPU use across all logical cores to a 0–100% per-core average
+  before plotting. Color history bars green below 60%, warm yellow from 60%
+  through 80%, and muted red above 80%, in both light and dark themes.
   Admins can hide this from ordinary users while optionally retaining it
   for the house-wide account.
 
