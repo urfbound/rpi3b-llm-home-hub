@@ -15,15 +15,16 @@
   @media(max-width:930px){.site-head{flex-wrap:wrap;gap:6px 18px}.nav{order:3;width:100%}.workspace{grid-template-columns:1fr}.panel.list-panel{display:flex;gap:8px;overflow-x:auto;align-items:center}.panel.list-panel h2,.panel.list-panel p{display:none}.list-link{min-width:175px;margin:0}}@media(max-width:650px){.preview{border-radius:0;margin:0;border-left:0;border-right:0}.intro{padding:18px 16px}.site-head{padding:10px 16px 0}.nav{margin:4px -16px 0;padding:0 12px 8px}.head-actions span:last-child{display:none}.content{padding:21px 16px 27px}.page-head{align-items:stretch;flex-direction:column}.page-head .button{width:100%}.tabs{margin-top:20px}.panel{padding:16px}.admin-demo{padding:16px}.item-details{grid-template-columns:1fr}}
   .detail-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:end}.delete-button{border:1px solid var(--line);border-radius:8px;background:transparent;color:var(--muted);min-width:36px;min-height:36px}.delete-button:hover{color:#a54139;border-color:#a54139}.danger{color:#a54139;border-color:#a54139}.danger-box{background:#fff0ed;border:1px solid #a54139;border-radius:11px;padding:12px;color:var(--ink)}html[data-theme=dark] .danger-box{background:#503734}.task{grid-template-columns:auto minmax(0,1fr) auto auto;align-items:center}.task input[type=checkbox]{margin:0}.empty-state{padding:22px;background:var(--soft);border-radius:12px;color:var(--muted)}@media(max-width:650px){.detail-actions{justify-content:start}.panel-head{flex-direction:column}.task{gap:7px}}
   .list-tools{display:flex;align-items:center;gap:10px;margin:16px 0 0;flex-wrap:wrap}.list-tools small{color:var(--muted)}.sync-banner{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:12px 14px;margin-top:14px}.sync-banner.away{background:var(--amber-soft)}.sync-banner strong,.sync-banner small{display:block}.sync-banner small{color:var(--muted);font-size:.78rem}.sync-actions{display:flex;gap:6px;flex-wrap:wrap}.copy-text{width:100%;min-height:185px;resize:vertical;white-space:pre-wrap;background:var(--page);color:var(--ink);border:1px solid var(--line);border-radius:9px;padding:10px}.copy-feedback{min-height:1.4em;color:var(--muted);font-size:.84rem}@media(max-width:650px){.sync-banner{align-items:stretch;flex-direction:column}.sync-actions .button{flex:1}}
+  .paste-text{width:100%;min-height:170px;resize:vertical;background:var(--page);color:var(--ink);border:1px solid var(--line);border-radius:9px;padding:10px}.paste-review{margin-top:14px;padding:12px;border:1px solid var(--line);border-radius:11px}.paste-review h3{margin:0 0 8px;font-size:1rem}.paste-review ul{margin:0;padding-left:18px}.paste-review li{margin:6px 0}.paste-review small{color:var(--muted)}.paste-warning{color:#a54139!important}.paste-success{color:var(--green)!important;font-weight:700}
 </style>
 </head>
 <body>
-<div class="intro"><p class="eyebrow">Visual design · review before implementation</p><h1>Lists and household tabs</h1><p>Illustrative content. Try Copy list text, the away-from-home checkbox demo, list creation, tab ordering, and theme toggle.</p></div>
+<div class="intro"><p class="eyebrow">Visual design · review before implementation</p><h1>Lists and household tabs</h1><p>Illustrative content. Try Copy list text, Paste list, the away-from-home checkbox demo, list creation, tab ordering, and theme toggle.</p></div>
 <div class="preview"><header class="site-head"><a class="brand" href="#"><span class="mark">⌂</span> Home Hub</a><nav class="nav" id="main-nav" aria-label="Main navigation"></nav><div class="head-actions"><button class="theme button quiet small" type="button" onclick="toggleTheme()">◐ Theme</button><span class="avatar">AP</span><span>Alex</span></div></header>
 <main class="content"><div class="crumb">Home / <strong>Lists</strong></div><div class="page-head"><div><p class="eyebrow">Around the house</p><h1>Lists</h1><p>Everything to pick up and everything to get done, in one place.</p></div><button class="button primary" id="new-list-button" type="button" onclick="openCreate()">+ New checklist</button></div>
 <div class="tabs" role="tablist" aria-label="List type"><button id="shopping-tab" type="button" role="tab" aria-selected="false" onclick="showKind('shopping')">Shopping</button><button id="todo-tab" type="button" role="tab" aria-selected="true" class="active" onclick="showKind('todo')">To-do</button></div>
 <div class="workspace"><section class="panel list-panel"><h2 id="list-title">Your checklists</h2><p>Shared with the people who need them.</p><button class="list-link selected" type="button"><span><strong id="first-list">Weekend reset</strong><small id="first-list-meta">Household · Shared with Sam</small></span><span class="count" id="first-count">1 of 3</span></button><button class="list-link" type="button"><span><strong id="second-list">Before the trip</strong><small id="second-list-meta">Household · Shared with Sam</small></span><span class="count" id="second-count">1 of 4</span></button></section>
-<section class="panel"><div class="panel-head"><div><p class="eyebrow" id="detail-eyebrow">To-do · Household</p><h2 id="detail-title">Weekend reset</h2><p id="detail-subtitle">Shared with Sam · Created by Alex</p></div><div class="detail-actions"><span class="tag" id="detail-tag">2 left</span><button class="button small" type="button" id="delete-list-button" onclick="openDeleteList()">Delete list</button></div></div><div class="list-tools" id="list-tools"><button class="button small" type="button" onclick="openCopy()">Copy list text</button><small>Includes open and completed items.</small></div><div class="sync-banner" id="sync-banner" hidden><div><strong id="sync-title">Connected to home · All changes saved</strong><small id="sync-detail">This list is ready on this phone if you leave the LAN.</small></div><div class="sync-actions"><button class="button small" id="leave-button" type="button" onclick="simulateAway()">Preview away mode</button><button class="button small primary" id="return-button" type="button" onclick="simulateReturn()" hidden>Preview return home</button></div></div><div id="task-list"></div><div class="add-row" id="quick-add-row"><input type="text" id="quick-add" placeholder="Add an item" aria-label="Add an item"><button type="button" class="button primary" onclick="addItem()">Add</button></div><div class="hint" id="item-hint">Delete is separate from checking an item off. Only its creator or an admin can delete a to-do item in this example.</div></section></div>
+<section class="panel"><div class="panel-head"><div><p class="eyebrow" id="detail-eyebrow">To-do · Household</p><h2 id="detail-title">Weekend reset</h2><p id="detail-subtitle">Shared with Sam · Created by Alex</p></div><div class="detail-actions"><span class="tag" id="detail-tag">2 left</span><button class="button small" type="button" id="delete-list-button" onclick="openDeleteList()">Delete list</button></div></div><div class="list-tools" id="list-tools"><button class="button small" type="button" onclick="openCopy()">Copy list text</button><button class="button small" id="paste-button" type="button" onclick="openPaste()">Paste list</button><small>Copy includes open and completed items.</small></div><div class="sync-banner" id="sync-banner" hidden><div><strong id="sync-title">Connected to home · All changes saved</strong><small id="sync-detail">This list is ready on this phone if you leave the LAN.</small></div><div class="sync-actions"><button class="button small" id="leave-button" type="button" onclick="simulateAway()">Preview away mode</button><button class="button small primary" id="return-button" type="button" onclick="simulateReturn()" hidden>Preview return home</button></div></div><div id="task-list"></div><div class="add-row" id="quick-add-row"><input type="text" id="quick-add" placeholder="Add an item" aria-label="Add an item"><button type="button" class="button primary" onclick="addItem()">Add</button></div><div class="hint" id="item-hint">Delete is separate from checking an item off. Only its creator or an admin can delete a to-do item in this example.</div></section></div>
 <p class="section-note">Preview only: away mode simulates an unavailable home hub. The real app will store pending checkmarks on this device and recheck permissions during sync. Reopening after a browser closes the page will require the planned HTTPS setup, and browser storage cannot be guaranteed.</p></main>
 <section class="admin-demo"><p class="eyebrow">Admin setting preview</p><div class="panel"><h2>Household tab order</h2><p>One order for everyone. Home always comes first; Admin stays last for admins.</p><button class="button" type="button" onclick="openOrder()">Reorder tabs</button></div></section></div>
 <dialog id="create-dialog"><div class="dialog-body"><p class="eyebrow">New shared checklist</p><h2>Create a to-do list</h2><p>Choose details separately for each task. Due dates and assignees are optional.</p><div class="dialog-fields"><label>List name<input value="Weekend reset"></label><label>Share with<select><option>Sam</option><option>Just me</option></select></label><div class="item-card"><h3>1 · Change bed linen</h3><label>Task<input value="Change bed linen"></label><div class="item-details"><label>Due date<input type="date"></label><label>Assign to<select><option>Sam</option><option>Unassigned</option><option>Alex</option></select></label></div></div><div class="item-card"><h3>2 · Water the plants</h3><label>Task<input value="Water the plants"></label><div class="item-details"><label>Due date<input type="date"></label><label>Assign to<select><option>Unassigned</option><option>Alex</option><option>Sam</option></select></label></div></div><button class="button small" type="button" onclick="addPreviewTask()">+ Add another task</button></div></div><div class="dialog-actions"><button class="button" type="button" onclick="document.getElementById('create-dialog').close()">Cancel</button><button class="button primary" type="button" onclick="document.getElementById('create-dialog').close()">Create checklist</button></div></dialog>
@@ -32,6 +33,7 @@
 <dialog id="delete-item-dialog"><div class="dialog-body"><p class="eyebrow">Remove an item</p><h2 id="delete-item-title">Delete item?</h2><p>Removing an item is permanent. Marking it complete remains a separate action.</p></div><div class="dialog-actions"><button class="button" type="button" onclick="document.getElementById('delete-item-dialog').close()">Cancel</button><button class="button danger" type="button" onclick="confirmDeleteItem()">Delete item</button></div></dialog>
 <dialog id="delete-list-dialog"><div class="dialog-body"><p class="eyebrow">Remove a list</p><h2 id="delete-list-title">Delete list?</h2><p class="danger-box">This permanently removes the list and every item in it, including items added by other people. This cannot be undone.</p></div><div class="dialog-actions"><button class="button" type="button" onclick="document.getElementById('delete-list-dialog').close()">Cancel</button><button class="button danger" type="button" onclick="confirmDeleteList()">Delete list</button></div></dialog>
 <dialog id="copy-dialog"><div class="dialog-body"><p class="eyebrow">Take it with you</p><h2>Copy list text</h2><p>Plain text includes the list name and every item, with its checked state. Paste it into notes or a message.</p><textarea class="copy-text" id="copy-text" readonly aria-label="List text to copy"></textarea><p class="copy-feedback" id="copy-feedback"></p></div><div class="dialog-actions"><button class="button" type="button" onclick="document.getElementById('copy-dialog').close()">Close</button><button class="button primary" type="button" onclick="copyListText()">Copy text</button></div></dialog>
+<dialog id="paste-dialog"><div class="dialog-body"><p class="eyebrow">Bring it back home</p><h2>Paste into <span id="paste-list-name">this list</span></h2><p>Paste copied list text, then review additions and checkmarks. The pasted heading will not change the selected list.</p><label for="paste-text">List text</label><textarea class="paste-text" id="paste-text" aria-label="List text to merge" oninput="clearPasteReview()"></textarea><p class="section-note">[ ] is open; any nonblank mark inside brackets counts as checked. Existing checked items stay checked.</p><div class="paste-review" id="paste-review" hidden><h3>Review changes</h3><p id="paste-summary"></p><ul id="paste-results"></ul><p id="paste-errors" class="paste-warning"></p></div><p id="paste-feedback" class="copy-feedback"></p></div><div class="dialog-actions"><button class="button" type="button" onclick="document.getElementById('paste-dialog').close()">Cancel</button><button class="button" type="button" onclick="previewPaste()">Review paste</button><button class="button primary" id="apply-paste" type="button" onclick="applyPaste()" disabled>Apply changes</button></div></dialog>
 <script>
 let order=['Lists','Recipes','Calendar','Weather','RSS','Games'];
 let draft=[];
@@ -39,6 +41,7 @@ let kind='todo';
 let pendingItemRow=null;
 let demoAway=false;
 const pendingChecks=new Map();
+let pasteActions=[];
 function toggleTheme(){document.documentElement.dataset.theme=document.documentElement.dataset.theme==='light'?'dark':'light';}
 function openCreate(){document.getElementById(kind==='shopping'?'shopping-dialog':'create-dialog').showModal();}
 function renderNav(){document.getElementById('main-nav').innerHTML=['Home',...order,'Admin'].map(name=>`<a href="#" class="${name==='Lists'?'active':''}" ${name==='Lists'?'aria-current="page"':''}>${name}</a>`).join('');}
@@ -50,6 +53,7 @@ function showKind(next){
   document.getElementById('quick-add-row').hidden=false;
   document.getElementById('delete-list-button').hidden=false;
   document.getElementById('delete-list-button').disabled=false;
+  document.getElementById('paste-button').disabled=false;
   document.getElementById('list-tools').hidden=false;
   for(const name of ['shopping','todo']){const tab=document.getElementById(name+'-tab');tab.classList.toggle('active',name===next);tab.setAttribute('aria-selected',name===next?'true':'false');}
   const shopping=next==='shopping';
@@ -109,6 +113,7 @@ function simulateAway(){
   demoAway=true;
   document.getElementById('quick-add-row').hidden=true;
   document.getElementById('delete-list-button').disabled=true;
+  document.getElementById('paste-button').disabled=true;
   document.querySelectorAll('#task-list .delete-button').forEach(button=>button.disabled=true);
   updateSyncBanner();
 }
@@ -118,6 +123,7 @@ function simulateReturn(){
   document.querySelectorAll('#task-list .task').forEach(row=>{row.dataset.baseline=row.querySelector('input[type=checkbox]').checked?'1':'0';});
   document.getElementById('quick-add-row').hidden=false;
   document.getElementById('delete-list-button').disabled=false;
+  document.getElementById('paste-button').disabled=false;
   document.querySelectorAll('#task-list .delete-button').forEach(button=>button.disabled=false);
   updateSyncBanner();
 }
@@ -140,6 +146,67 @@ async function copyListText(){
     field.focus();field.select();
     document.getElementById('copy-feedback').textContent='Your browser cannot copy automatically here. Select the highlighted text and use Copy.';
   }
+}
+function openPaste(){
+  const listName=document.getElementById('detail-title').textContent;
+  document.getElementById('paste-list-name').textContent=listName;
+  document.getElementById('paste-text').value=kind==='shopping'?`${listName}\n\n[x] Oat milk\n[ ] Apples\n[✓] Bread\n[ ] Bananas`:`${listName}\n\n[x] Change bed linen\n[ ] Take recycling out\n[ ] Clean kitchen`;
+  clearPasteReview();
+  document.getElementById('paste-dialog').showModal();
+}
+function clearPasteReview(){
+  pasteActions=[];
+  document.getElementById('paste-review').hidden=true;
+  document.getElementById('apply-paste').disabled=true;
+  document.getElementById('paste-feedback').textContent='';
+}
+function normalizeItem(text){return text.trim().replace(/\s+/gu,' ').toLocaleLowerCase();}
+function previewPaste(){
+  const lines=document.getElementById('paste-text').value.split(/\r?\n/u);
+  const parsed=new Map();const errors=[];let headerSkipped=false;let seenItem=false;
+  for(const [index,raw] of lines.entries()){
+    const line=raw.trim();if(!line)continue;
+    const match=/^\[([^\]]*)\]\s+(.+)$/u.exec(line);
+    if(!match){if(!headerSkipped&&!seenItem){headerSkipped=true;continue;}errors.push('Line '+(index+1)+' needs a checkbox and item text.');continue;}
+    seenItem=true;const name=match[2].trim();if(!name){errors.push('Line '+(index+1)+' needs item text.');continue;}
+    const key=normalizeItem(name);const checked=match[1].trim().length>0;
+    if(parsed.has(key))parsed.get(key).checked ||= checked;
+    else parsed.set(key,{name,checked,key});
+  }
+  const existing=new Map();
+  document.querySelectorAll('#task-list .task').forEach(row=>{const key=normalizeItem(row.querySelector('strong').textContent);if(!existing.has(key))existing.set(key,[]);existing.get(key).push(row);});
+  pasteActions=[...parsed.values()].map(item=>{
+    const matches=existing.get(item.key)||[];
+    let action='add';
+    if(matches.length>1){action='ambiguous';errors.push('More than one existing item matches '+item.name+'.');}
+    else if(matches.length===1)action=item.checked&&!matches[0].querySelector('input[type=checkbox]').checked?'check':'unchanged';
+    return {...item,action,row:matches[0]};
+  });
+  const changed=pasteActions.filter(item=>item.action==='add'||item.action==='check').length;
+  document.getElementById('paste-summary').textContent=changed+' change'+(changed===1?'':'s')+' proposed for '+document.getElementById('detail-title').textContent+'. Existing item owners stay the same; Alex owns new items.';
+  const results=document.getElementById('paste-results');results.replaceChildren();
+  for(const item of pasteActions){
+    const line=document.createElement('li');const label=document.createElement('strong');
+    label.textContent=(item.checked?'[x] ':'[ ] ')+item.name;
+    const detail=document.createElement('small');detail.textContent=' — '+({add:'Add as a new item',check:'Check existing item',unchanged:'Keep existing item unchanged',ambiguous:'Needs review: multiple matches'}[item.action]);
+    line.append(label,detail);results.append(line);
+  }
+  document.getElementById('paste-errors').textContent=errors.join(' ');
+  document.getElementById('paste-review').hidden=false;
+  document.getElementById('apply-paste').disabled=errors.length>0||changed===0;
+}
+function applyPaste(){
+  for(const item of pasteActions){
+    if(item.action==='check'){
+      const box=item.row.querySelector('input[type=checkbox]');box.checked=true;box.dispatchEvent(new Event('change'));
+    }else if(item.action==='add'){
+      appendTask({name:item.name,completed:item.checked,addedBy:'Alex',avatar:'AP',details:kind==='todo'?'No due date · Unassigned · Added by Alex':'Added by Alex'});
+    }
+  }
+  updateCounts();
+  document.getElementById('paste-feedback').textContent='Merged into this list. New items belong to Alex.';
+  document.getElementById('paste-feedback').className='paste-success';
+  document.getElementById('apply-paste').disabled=true;
 }
 function openDeleteItem(row,name){pendingItemRow=row;document.getElementById('delete-item-title').textContent='Delete '+name+'?';document.getElementById('delete-item-dialog').showModal();}
 function confirmDeleteItem(){pendingItemRow.remove();pendingItemRow=null;document.getElementById('delete-item-dialog').close();updateCounts();}

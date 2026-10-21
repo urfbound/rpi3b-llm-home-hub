@@ -87,6 +87,20 @@ by feature before implementation.
   On insecure HTTP, offer selectable text when one-tap clipboard access is
   unavailable. Emailing lists is a deferred feature dependent on outbound
   email.
+- Add **Paste list** to a selected shopping or to-do list. Accept the copied
+  format: an optional title followed by `[ ] Item` for open items and
+  `[anything nonblank] Item` for checked items. Show a review before applying
+  it. Match existing items within that list by trimmed, case-insensitive text
+  with repeated whitespace collapsed. A unique match may be checked off by
+  a checked pasted line; an open pasted line never unchecks an existing item.
+  Add unmatched items in the pasted state and record the importing user as
+  their creator. Preserve existing item ownership, text, and other metadata;
+  do not delete anything. Collapse repeated pasted names, treating any
+  checked occurrence as checked. Flag ambiguous matches and malformed lines
+  for review rather than guessing. Recheck permissions and current list data
+  when applying the review. New to-do tasks start without a due date or
+  assignee. Paste requires a connection to the hub and is unavailable to the
+  read-only house-wide account.
 - Make a shopping list already opened on a phone usable away from the LAN.
   Cache its visible contents on that device and persist checkbox changes
   locally. Show when the hub is unreachable and how many changes await sync.
