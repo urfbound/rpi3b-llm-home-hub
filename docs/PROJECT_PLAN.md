@@ -127,6 +127,12 @@ user's explicit confirmation.
 
 - First release games: an original Wordle-style word game, mini crosswords,
   Hunt the Wumpus, word ladders, mini nonograms, and Sudoku.
+- Word guessing uses five-letter answers and six guesses, with correct
+  handling of repeated letters. Mini crosswords use 5×5 grids with across
+  and down clues. Hunt the Wumpus uses a classic 20-room cave, five arrows,
+  and a shared daily seed. Word ladders use four- or five-letter words and
+  reward fewer valid steps. Nonogram size and Sudoku format still need
+  confirmation.
 - Start with a curated offline puzzle bank. Investigate broader generation
   on the Pi as a later feature. Ship at least 30 days of distinct content
   per game, curated or reproducibly randomized as appropriate, adding more
@@ -193,6 +199,7 @@ user's explicit confirmation.
 
 - Game answer validation, game-specific score formulas, hint behavior, and
   completion rules for the six games.
+- Mini nonogram size and Sudoku format/difficulty.
 - Weather cache lifetime and offline behavior.
 - Exact pressure trend thresholds and units.
 - Backup verification and how restore handles sessions.
