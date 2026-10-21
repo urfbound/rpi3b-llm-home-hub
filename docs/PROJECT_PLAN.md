@@ -26,8 +26,9 @@ by feature before implementation.
   run useful local answers within acceptable resource use.
 - Home shows preview cards; each feature has its own main navigation tab.
   Weather and RSS may use cards within their tabs.
-- An admin can set the household-wide order of feature tabs. The control's
-  visual design and exact ordering rules still need approval.
+- An admin can set one household-wide order of feature tabs. Keep Home fixed
+  at the start and Admin fixed at the end; the feature tabs between them can
+  be reordered. The control's visual design still needs approval.
 - Target at most 32 users and four admins. Aim for under 256 MB application
   steady-state RSS and under 10 GB for application, dependencies, and data,
   excluding the OS and local model files.
@@ -66,7 +67,9 @@ by feature before implementation.
 ## Lists and recipes
 
 - Keep one top-level Lists tab with separate Shopping and To-do sections.
-  To-do task details and shared editing rules are awaiting confirmation.
+  To-do checklists are collaborative: invited members may add, edit, and
+  complete tasks. At creation, the user may decide optional due dates and
+  assignees for each item separately. The visual design still needs approval.
 - Support multiple shopping lists with static categories: Groceries,
   Household, Gifts, Health & Personal Care, Pets, Home & Garden, School &
   Activities, and Other. A list's creator or an admin may delete the list.
