@@ -190,8 +190,9 @@ by feature before implementation.
   weather and RSS access off. Show a five-day forecast by default; admins
   can choose one to 15 days and switch between metric (default) and imperial
   units. Daily cards show high/low temperature, conditions, and precipitation
-  chance. Today's hourly view also shows wind conditions and barometric
-  pressure with a rising/steady/falling trend based on the preceding three
+  chance. Today's hourly view shows temperature, conditions, precipitation
+  chance, wind conditions, and barometric pressure with a
+  rising/steady/falling trend based on the preceding three
   hours of provider forecast data. Show the pressure change amount; when a
   defensible threshold is available, qualify slower and faster changes.
   After rounding the three-hour change to 0.1 hPa, use the
