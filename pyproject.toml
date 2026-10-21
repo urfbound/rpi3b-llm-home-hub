@@ -1,0 +1,22 @@
+[project]
+name = "homehub"
+version = "0.1.0"
+description = "A lightweight, local-first household dashboard"
+requires-python = ">=3.11"
+dependencies = ["Flask>=3.1,<4", "waitress>=3,<4", "argon2-cffi>=23,<26"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10"]
+
+[project.scripts]
+homehub = "homehub.app:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["homehub*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
