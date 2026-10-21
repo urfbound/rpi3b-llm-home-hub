@@ -34,6 +34,13 @@ by feature before implementation.
   excluding the OS and local model files.
 - Use Flask, SQLite, small vanilla JavaScript, pytest, and systemd on the Pi.
   Keep the LLM runtime on loopback. No public Internet exposure.
+- Treat upgrades of running households as a primary design requirement. Never
+  reset an existing database to apply a release. Record a schema version,
+  apply ordered data-preserving migrations, and refuse to open a database
+  created by a newer app version. Make a verified pre-upgrade backup before
+  changing an existing database. Test upgrades from the current prototype
+  and each supported release with representative data, including ownership,
+  passwords, and relationships. Document a recovery path if an upgrade fails.
 - Make local backups automatically every day by default. Admins can choose a
   backup interval of one to 31 days or turn automatic backups off, set the
   storage folder and retention count (14 copies by default), download a
@@ -70,6 +77,9 @@ by feature before implementation.
   To-do checklists are collaborative: invited members may add, edit, and
   complete tasks. At creation, the user may decide optional due dates and
   assignees for each item separately. The visual design still needs approval.
+- Show a distinct Delete action for items whether complete or incomplete.
+  Show a Delete list action to its creator and admins, with confirmation that
+  its items, including contributions from others, will be removed.
 - Support multiple shopping lists with static categories: Groceries,
   Household, Gifts, Health & Personal Care, Pets, Home & Garden, School &
   Activities, and Other. A list's creator or an admin may delete the list.
