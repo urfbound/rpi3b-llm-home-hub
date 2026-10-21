@@ -11,6 +11,9 @@ user's explicit confirmation.
 
 - A cozy, local-first household hub on a Raspberry Pi 3B, available on the
   household LAN, with light and dark themes and server-rendered pages.
+  Design every feature for extensive desktop and mobile use, with responsive
+  layouts and interactions that update promptly without unnecessary full-page
+  reloads. Keep JavaScript small and preserve usable server-rendered paths.
 - First release includes secure accounts, lists, recipes, calendar, weather,
   RSS, and all six games below. It can ship with Chat hidden if the Pi cannot
   run useful local answers within acceptable resource use.
@@ -21,6 +24,8 @@ user's explicit confirmation.
   excluding the OS and local model files.
 - Use Flask, SQLite, small vanilla JavaScript, pytest, and systemd on the Pi.
   Keep the LLM runtime on loopback. No public Internet exposure.
+- Make daily local backups automatically. Admins can download a backup and
+  restore one; backup retention is admin-configurable.
 - The project uses GPLv3.
 
 ## Accounts, visibility, and sharing
@@ -86,10 +91,14 @@ user's explicit confirmation.
 
 ## Weather, RSS, and system status
 
-- Weather uses one admin-set household town or postal code. Admins can turn
-  outbound weather and RSS access off. Show a five-day forecast by default;
-  admins can choose one to 15 days and switch between metric (default) and
-  imperial units. An almanac sub-tab and on-demand historical weather are
+- Weather uses one admin-set household town or postal code and Open-Meteo as
+  the first provider, with required attribution. Admins can turn outbound
+  weather and RSS access off. Show a five-day forecast by default; admins
+  can choose one to 15 days and switch between metric (default) and imperial
+  units. Daily cards show high/low temperature, conditions, and precipitation
+  chance. Today's hourly view also shows wind conditions and barometric
+  pressure with a forecast trend derived from recent hourly values. An almanac
+  sub-tab, on-demand historical weather, and alternative providers are
   deferred features.
 - Users manage personal RSS feeds; admins manage feeds for the house-wide
   account. Adding a feed should be easy. Refresh every 30 minutes by default;
@@ -163,7 +172,9 @@ user's explicit confirmation.
 
 - Game answer validation, exact scoring, and what
   counts as a completion for each of the six games.
-- Weather provider, forecast contents, caching, and offline behavior.
+- Weather cache lifetime and offline behavior.
+- Whether shared data needs automatic live updates across open devices.
+- Backup retention default, restore workflow, and backup verification.
 - RSS feed URL safety and item display behavior.
 - Calendar archival format and backup/restore policy.
 - First-release visual designs and their approval.
@@ -178,3 +189,4 @@ user's explicit confirmation.
 - Weather almanac sub-tab: GitHub issue #6.
 - On-demand historical weather, off unless enabled by an admin: GitHub issue
   #7.
+- Alternative weather APIs and feeds: GitHub issue #8.
