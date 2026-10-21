@@ -4,6 +4,7 @@ A lightweight local-first family dashboard for Raspberry Pi 3B. Includes login, 
 
 The [draft product plan](docs/PROJECT_PLAN.md) records the agreed direction
 for the full household app and decisions still to settle.
+See the [upgrade guide](docs/UPGRADES.md) before updating an existing install.
 
 ## Run on Windows (PowerShell)
 
@@ -27,10 +28,9 @@ Install a minimal Raspberry Pi OS (Python 3.11+), create a Python virtual enviro
 
 ## Important limitations / follow-up work
 
-- Bootstrap supports administrator creation only. User/account admin UI (and cap enforcement across all creation paths) is **not implemented yet**.
+- Admins can now create and remove accounts, reset passwords, and configure session limits. Account deletion can transfer or remove owned prototype content.
 - Recipe creation and viewing exist, but editing, ingredient normalization, linking recipes to dates, deletion, and shopping-list aggregation remain to build.
 - Calendar `.ics` downloads are a one-way snapshot, not two-way synchronization. The basic export covers all-day events only.
 - Weather, RSS, games, outbound email, and LLM chat are not wired up yet.
-- Login rate limits, session idle expiry, TLS, database migration tooling, backup/restore, audit logging, and reliable timezone rules must be added before production.
-- Cookie session revocation exists via a database version field, but a management UI is needed to use it.
+- Login rate limits, TLS, routine backup/restore, audit logging, and reliable timezone rules must be added before production. Initial schema versioning and pre-upgrade backups are implemented; later releases still need their own migrations and upgrade tests.
 - Do not store sensitive information until further security hardening. For now, run on localhost for development.

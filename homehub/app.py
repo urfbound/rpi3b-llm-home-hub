@@ -3,6 +3,7 @@ import os
 import secrets
 import sqlite3
 import time
+from contextlib import closing
 from datetime import date, datetime, timezone
 from functools import wraps
 from pathlib import Path
@@ -12,6 +13,7 @@ from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError, VerificationError
 
 PH = PasswordHasher(memory_cost=16384, time_cost=2, parallelism=1)
+SCHEMA_VERSION = 1
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
  id INTEGER PRIMARY KEY, username TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -74,6 +76,51 @@ def temporary_password_page(username, password, change_required):
     response.headers['Cache-Control'] = 'no-store'
     return response
 
+def initialize_database(db_path):
+    """Upgrade the prototype schema without replacing household data."""
+    existed = db_path.exists() and db_path.stat().st_size > 0
+    with closing(sqlite3.connect(db_path, timeout=5)) as db:
+        version = db.execute('PRAGMA user_version').fetchone()[0]
+        if version > SCHEMA_VERSION:
+            raise RuntimeError('Database was created by a newer Home Hub version')
+        if db.execute('PRAGMA integrity_check').fetchone()[0] != 'ok':
+            raise RuntimeError('Database integrity check failed; upgrade cancelled')
+        if version == SCHEMA_VERSION:
+            return
+        has_data = existed and db.execute(
+            "SELECT EXISTS(SELECT 1 FROM sqlite_master WHERE type='table' "
+            "AND name NOT LIKE 'sqlite_%')").fetchone()[0]
+        if has_data:
+            stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+            backup_path = db_path.with_name(
+                f'{db_path.stem}.pre-v{SCHEMA_VERSION}-{stamp}-{secrets.token_hex(3)}{db_path.suffix}')
+            with closing(sqlite3.connect(backup_path)) as backup:
+                db.backup(backup)
+                if backup.execute('PRAGMA integrity_check').fetchone()[0] != 'ok':
+                    raise RuntimeError('Pre-upgrade backup failed verification')
+        db.execute('PRAGMA foreign_keys=ON')
+        try:
+            db.execute('BEGIN IMMEDIATE')
+            for statement in SCHEMA.split(';'):
+                if statement.strip():
+                    db.execute(statement)
+            columns = {row[1] for row in db.execute('PRAGMA table_info(users)')}
+            for column, definition in (
+                ('display_name', "TEXT NOT NULL DEFAULT ''"),
+                ('must_change_password', 'INTEGER NOT NULL DEFAULT 0'),
+                ('account_kind', "TEXT NOT NULL DEFAULT 'person'"),
+            ):
+                if column not in columns:
+                    db.execute(f'ALTER TABLE users ADD COLUMN {column} {definition}')
+            db.execute("UPDATE users SET display_name=username WHERE display_name=''")
+            if db.execute('PRAGMA foreign_key_check').fetchone():
+                raise RuntimeError('Database relationships failed verification')
+            db.execute(f'PRAGMA user_version={SCHEMA_VERSION}')
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
+
 def safe_ics_text(value):
     return str(value).replace('\\', '\\\\').replace('\n', '\\n').replace(',', '\\,').replace(';', '\\;')
 
@@ -92,17 +139,7 @@ def create_app(test_config=None):
         raise RuntimeError('Set HOMEHUB_SECRET_KEY to a long, random persistent secret')
     db_path = Path(app.config['DATABASE'])
     db_path.parent.mkdir(parents=True, exist_ok=True)
-    with sqlite3.connect(db_path) as db:
-        db.executescript(SCHEMA)
-        columns = {row[1] for row in db.execute('PRAGMA table_info(users)')}
-        for column, definition in (
-            ('display_name', "TEXT NOT NULL DEFAULT ''"),
-            ('must_change_password', 'INTEGER NOT NULL DEFAULT 0'),
-            ('account_kind', "TEXT NOT NULL DEFAULT 'person'"),
-        ):
-            if column not in columns:
-                db.execute(f'ALTER TABLE users ADD COLUMN {column} {definition}')
-        db.execute("UPDATE users SET display_name=username WHERE display_name=''")
+    initialize_database(db_path)
 
     @app.before_request
     def load_context():
