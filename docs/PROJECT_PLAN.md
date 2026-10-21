@@ -1,0 +1,165 @@
+# Home Hub product plan (draft)
+
+This document records decisions made during planning. Open questions below
+must be settled before the affected feature is designed and built. Show the
+user the visual design of **each feature** and obtain feedback before
+implementing it. Implementation will proceed in small, tested feature
+increments on feature or ticket branches. Merging into `main` requires the
+user's explicit confirmation.
+
+## Product and release
+
+- A cozy, local-first household hub on a Raspberry Pi 3B, available on the
+  household LAN, with light and dark themes and server-rendered pages.
+- First release includes secure accounts, lists, recipes, calendar, weather,
+  RSS, and all six games below. It can ship with Chat hidden if the Pi cannot
+  run useful local answers within acceptable resource use.
+- Home shows preview cards; each feature has its own main navigation tab.
+  Weather and RSS may use cards within their tabs.
+- Target at most 32 users and four admins. Aim for under 256 MB application
+  steady-state RSS and under 10 GB for application, dependencies, and data,
+  excluding the OS and local model files.
+- Use Flask, SQLite, small vanilla JavaScript, pytest, and systemd on the Pi.
+  Keep the LLM runtime on loopback. No public Internet exposure.
+- The project uses GPLv3.
+
+## Accounts, visibility, and sharing
+
+- Only admins create or delete accounts and reset passwords. Users may change
+  their own passwords. Password resets issue a one-time temporary password
+  and force a change. Reset and deletion revoke existing sessions.
+- Sessions expire after 24 hours idle or seven days absolute by default.
+  Both limits are configurable by admins. Add login rate limiting and CSRF
+  protection before household deployment.
+- Items are shared by default; private items can have a per-user allowlist.
+  Admins may view all content and delete any content. Ordinary users edit or
+  delete only content they created, except that participants may freely edit
+  an invited shared shopping list. Show who added each list item.
+- A house-wide account serves shared displays and guests. It is read-only
+  for household content, sees shared items and its own admin-managed RSS
+  feeds, may play games without appearing on leaderboards, and cannot chat.
+- On account deletion, admins must transfer or delete the user's lists,
+  recipes, and events. Delete the user's chats, scores, and personal feeds.
+  Warn before deleting a shared list containing other contributors' items.
+
+## Lists and recipes
+
+- Support multiple shopping lists with static categories: Groceries,
+  Household, Gifts, Health & Personal Care, Pets, Home & Garden, School &
+  Activities, and Other. A list's creator or an admin may delete the list.
+- Recipes have structured ingredient quantity, unit, name, and optional
+  notes, plus a default serving count shown at the top. Users can scale
+  quantities to another serving count.
+- A deliberate **Add to list** action copies recipe ingredients into an
+  editable shopping-list snapshot. Combine matching ingredient names only
+  when units convert reliably; leave uncertain combinations separate.
+  Initially support common weight, volume, and count units and free text
+  such as “to taste.” Later recipe or event edits do not silently change
+  copied shopping items.
+
+## Calendar
+
+- Support all-day and timed events, plus daily, weekly, monthly, and yearly
+  recurrence. Edit or cancel a single occurrence or the entire series.
+  Recurrence requires an end date, defaulting to one year.
+- Admins set the household time zone. Calendar views and event budgets use
+  that zone. Add month view and local, one-way downloadable ICS; no cloud
+  synchronization in the first release.
+- Events may link to recipes. A visible event linked to a private recipe
+  shows **Private recipe** to viewers without recipe access. Meal slots are
+  breakfast, lunch, and dinner. A meal-prep event template links exactly one
+  recipe; users may create multiple meal-prep events.
+- Each user, including admins, has a configurable budget, initially eight
+  event occurrences per day and 32 per month. Recurring occurrences count.
+- Users can be added to events. A private event appears as **Busy** to people
+  without access. ICS downloads contain only event details the downloading
+  user may view. The creator and admins can add or remove event participants;
+  participants can view full event details, including for private events, but
+  cannot edit the event. Participation does not grant access to a linked
+  private recipe. There is no RSVP or attendance tracking in the first
+  release. An optional **Only events requiring me** ICS filter includes
+  events the user created or was added to, and excludes generally shared
+  events without that user's participation.
+- Old-event cleanup is off by default. An admin may select deletion after a
+  configurable age or local ICS archiving followed by deletion. Emailing
+  archives is a future feature dependent on outbound email.
+
+## Weather, RSS, and system status
+
+- Weather uses one admin-set household town or postal code. Admins can turn
+  outbound weather and RSS access off.
+- Users manage personal RSS feeds; admins manage feeds for the house-wide
+  account. Adding a feed should be easy.
+- Dashboard system status includes RAM use, CPU use, one hour of CPU history
+  sampled each minute and reset on restart, Pi temperature, and app RSS.
+  Admins can hide this from ordinary users while optionally retaining it
+  for the house-wide account.
+
+## Games
+
+- First release games: an original Wordle-style word game, mini crosswords,
+  Hunt the Wumpus, word ladders, mini nonograms, and Sudoku.
+- Start with a curated offline puzzle bank. Investigate puzzles generated on
+  the Pi as a later feature.
+- Everyone gets the same puzzle for each game on each household day; the
+  day changes at midnight in the household time zone. One puzzle per game
+  per day in the first release. Issue #1 tracks support for multiple daily
+  puzzles without a fixed five-puzzle ceiling.
+- Users may replay a completed daily puzzle for practice. Only the first
+  completed attempt counts toward daily and all-time scoreboards and
+  streaks. Scoreboards are visible to all users. Faster completions rank
+  higher in timed games. The house-wide account can play without ranking.
+
+## Optional local chat
+
+- Hidden until an admin enables it. An admin selects one installed Ollama
+  model; only one model and one request run at a time. The runtime remains
+  bound to loopback. A response taking minutes is acceptable.
+- Queue waiting requests with admins first, FIFO within a priority. Finish
+  the current response before starting another. Show users their queue
+  position. Admin-configurable maximum waiting depth is eight by default;
+  reject new requests once full.
+- Prompts are limited to 128 characters. Each user can have 16 chats, up to
+  ten pinned. When opening a seventeenth chat, delete the oldest unpinned
+  chat; if all chats are pinned, do not open another.
+- Admins can set the prompt/response pair limit, initially 16 per chat.
+  Warn before the first oldest pair is dropped on continuation. Users can
+  delete their own chats; admins can see and delete every user's chats.
+  Clearly disclose admin access in the UI. The house-wide account has no
+  chat access.
+- Chat may read only data the requesting user can see and may propose list
+  or calendar changes. Applying a change requires visible confirmation and
+  a fresh server-side authorization check.
+
+## Delivery sequence
+
+1. Show the account administration visual design, then stabilize foundations:
+   account administration and data migration, roles, sessions, login rate
+   limiting, CSRF, backup/restore, TLS deployment guide, and baseline memory
+   measurement.
+2. Show the user a visual design for dashboard and navigation, then build
+   the shared shell and status cards.
+3. For each remaining feature, show its visual design, incorporate feedback,
+   then implement it in a focused branch with relevant tests and profiling:
+   lists, recipes, calendar, weather, RSS, and games.
+4. Spike Ollama on the target Pi, then design and implement Chat if feasible;
+   otherwise keep it hidden for first release.
+5. Verify permissions, privacy, resource use, backup/restore, and household
+   deployment before the first release.
+
+## Open decisions
+
+- Game answer validation, first-attempt scoring, and what
+  counts as a completion for each of the six games.
+- Weather provider, forecast detail, units, caching, and offline behavior.
+- RSS refresh schedule, item retention, feed URL safety, and offline behavior.
+- Calendar archival format and backup/restore policy.
+- First-release visual designs and their approval.
+
+## Deferred features
+
+- Multiple daily puzzles per game: GitHub issue #1.
+- Outbound email: GitHub issue #2.
+- Email delivery of calendar archives, dependent on outbound email: issue #3.
+- Inbound email controls: GitHub issue #4.
+- Puzzles generated on the Pi: GitHub issue #5.
