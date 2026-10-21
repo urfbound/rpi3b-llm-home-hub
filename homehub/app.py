@@ -7,7 +7,7 @@ from datetime import date, datetime, timezone
 from functools import wraps
 from pathlib import Path
 from urllib.parse import urlsplit
-from flask import Flask, abort, flash, g, redirect, render_template, request, session, url_for, Response
+from flask import Flask, abort, flash, g, make_response, redirect, render_template, request, session, url_for, Response
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError, VerificationError
 
@@ -67,6 +67,12 @@ def setting(db, key, default):
 
 def temporary_password():
     return secrets.token_urlsafe(18)
+
+def temporary_password_page(username, password, change_required):
+    response = make_response(render_template('temporary_password.html', username=username,
+                                             password=password, change_required=change_required))
+    response.headers['Cache-Control'] = 'no-store'
+    return response
 
 def safe_ics_text(value):
     return str(value).replace('\\', '\\\\').replace('\n', '\\n').replace(',', '\\,').replace(';', '\\;')
@@ -244,8 +250,7 @@ def create_app(test_config=None):
             db.commit()
         except sqlite3.IntegrityError:
             abort(409, description='That username is already in use.')
-        return render_template('temporary_password.html', username=username, password=password,
-                               change_required=kind == 'person')
+        return temporary_password_page(username, password, kind == 'person')
 
     @app.post('/admin/accounts/<int:user_id>/reset-password')
     @admin_required
@@ -261,8 +266,8 @@ def create_app(test_config=None):
         db.commit()
         if user_id == g.user['id']:
             session.clear()
-        return render_template('temporary_password.html', username=user['username'],
-                               password=password, change_required=user['account_kind'] == 'person')
+        return temporary_password_page(user['username'], password,
+                                       user['account_kind'] == 'person')
 
     @app.post('/admin/accounts/<int:user_id>/delete')
     @admin_required

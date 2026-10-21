@@ -52,6 +52,7 @@ def test_create_and_force_password_change(app):
     sign_in(admin)
     response = post(admin, '/admin/accounts', username='morgan', display_name='Morgan', role='user')
     assert response.status_code == 200
+    assert response.headers['Cache-Control'] == 'no-store'
     assert b'Temporary password' in response.data
     password = re.search(rb'<code>([^<]+)</code>', response.data).group(1).decode()
     assert db_rows(app, 'SELECT must_change_password FROM users WHERE username=?', ('morgan',)) == [(1,)]
