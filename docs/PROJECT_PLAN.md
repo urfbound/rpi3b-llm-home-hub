@@ -7,6 +7,9 @@ implementing it. Implementation will proceed in small, tested feature
 increments on feature or ticket branches. Merging into `main` requires the
 user's explicit confirmation.
 
+The functional scope and game rules are agreed. Visual designs remain to be
+reviewed feature by feature before implementation.
+
 ## Product and release
 
 - A cozy, local-first household hub on a Raspberry Pi 3B, available on the
@@ -96,8 +99,11 @@ user's explicit confirmation.
   events the user created or was added to, and excludes generally shared
   events without that user's participation.
 - Old-event cleanup is off by default. An admin may select deletion after a
-  configurable age or local ICS archiving followed by deletion. Emailing
-  archives is a future feature dependent on outbound email.
+  configurable age or local ICS archiving followed by deletion. Archives are
+  downloadable by admins from settings and are not searchable in the active
+  calendar. Store archive period and file metadata so a later outbound-email
+  feature can send them without changing the archival flow. Emailing archives
+  is a future feature dependent on outbound email.
 
 ## Weather, RSS, and system status
 
@@ -166,10 +172,33 @@ user's explicit confirmation.
   scoreboards are visible to all users. Faster completions rank higher in
   timed games. The house-wide account can play without ranking.
 - Offer optional score-reducing hints in mini crosswords, word ladders, mini
-  nonograms, and Sudoku. The word-guessing game and Hunt the Wumpus have no
-  hints. Public scoreboards never reveal answers. A player may see the
-  solution when their scored attempt ends; everyone can see it after the
-  household day ends.
+  nonograms, and Sudoku, up to three hints per scored attempt in each game.
+  For crosswords, nonograms, and Sudoku, completion time breaks leaderboard
+  ties while points depend on completion and hints. The word-guessing game
+  and Hunt the Wumpus have no hints. Public scoreboards never reveal answers.
+  A player may see the solution when their scored attempt ends; everyone can
+  see it after the household day ends.
+
+### Game scoring
+
+All formulas award zero for a loss or an attempt left incomplete at midnight.
+For every win, including Hunt the Wumpus, award `max(1, calculated score)`.
+Practice play never scores.
+
+| Game | Win condition | Proposed score |
+| --- | --- | --- |
+| Word guessing | Find the answer within six valid guesses | `100 - 15 × (guesses - 1)` |
+| Mini crossword | Complete every answer correctly | `100 - 15 × hints`; time breaks ties |
+| Hunt the Wumpus | Shoot the Wumpus before a hazard or no arrows ends the attempt | `100 - 3 × room moves - 12 × missed arrows` |
+| Word ladder | Reach the target through valid one-letter changes | `100 - 10 × (steps - shortest path) - 15 × hints` |
+| Mini nonogram | Mark every cell correctly | `100 - 15 × hints`; time breaks ties |
+| Sudoku | Complete the grid correctly | `100 - 15 × hints`; time breaks ties |
+
+For hints, a crossword reveals a selected letter, a ladder suggests a valid
+next word on a shortest route, a nonogram reveals a selected cell, and Sudoku
+reveals a selected digit. The timer starts with the first move and measures
+elapsed time, including when the page is closed; it does not lower points in
+the three games where it breaks ties.
 
 ## Optional local chat
 
@@ -208,12 +237,8 @@ user's explicit confirmation.
 5. Verify permissions, privacy, resource use, backup/restore, and household
    deployment before the first release.
 
-## Open decisions
+## Open design reviews
 
-- Game answer validation, game-specific score formulas, hint behavior, and
-  completion rules for the six games.
-- Whether archived calendar events should be downloadable only by admins or
-  also searchable in the calendar after removal from the active database.
 - First-release visual designs and their approval.
 
 ## Deferred features
