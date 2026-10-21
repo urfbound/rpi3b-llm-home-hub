@@ -2,6 +2,7 @@
 import os
 import secrets
 import sqlite3
+import time
 from datetime import date, datetime, timezone
 from functools import wraps
 from pathlib import Path
@@ -16,6 +17,9 @@ CREATE TABLE IF NOT EXISTS users (
  id INTEGER PRIMARY KEY, username TEXT NOT NULL UNIQUE COLLATE NOCASE,
  password_hash TEXT NOT NULL, role TEXT NOT NULL CHECK(role IN ('user','admin')),
  active INTEGER NOT NULL DEFAULT 1, session_version INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS app_settings (
+ key TEXT PRIMARY KEY, value TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS recipes (
  id INTEGER PRIMARY KEY, title TEXT NOT NULL, ingredients TEXT NOT NULL DEFAULT '',
@@ -48,6 +52,22 @@ def login_required(fn):
         return fn(*args, **kwargs)
     return wrapper
 
+def admin_required(fn):
+    @wraps(fn)
+    @login_required
+    def wrapper(*args, **kwargs):
+        if g.user['role'] != 'admin':
+            abort(403)
+        return fn(*args, **kwargs)
+    return wrapper
+
+def setting(db, key, default):
+    row = db.execute('SELECT value FROM app_settings WHERE key=?', (key,)).fetchone()
+    return int(row['value']) if row else default
+
+def temporary_password():
+    return secrets.token_urlsafe(18)
+
 def safe_ics_text(value):
     return str(value).replace('\\', '\\\\').replace('\n', '\\n').replace(',', '\\,').replace(';', '\\;')
 
@@ -68,6 +88,15 @@ def create_app(test_config=None):
     db_path.parent.mkdir(parents=True, exist_ok=True)
     with sqlite3.connect(db_path) as db:
         db.executescript(SCHEMA)
+        columns = {row[1] for row in db.execute('PRAGMA table_info(users)')}
+        for column, definition in (
+            ('display_name', "TEXT NOT NULL DEFAULT ''"),
+            ('must_change_password', 'INTEGER NOT NULL DEFAULT 0'),
+            ('account_kind', "TEXT NOT NULL DEFAULT 'person'"),
+        ):
+            if column not in columns:
+                db.execute(f'ALTER TABLE users ADD COLUMN {column} {definition}')
+        db.execute("UPDATE users SET display_name=username WHERE display_name=''")
 
     @app.before_request
     def load_context():
@@ -76,10 +105,23 @@ def create_app(test_config=None):
         uid = session.get('uid')
         if uid is not None:
             user = get_db().execute('SELECT * FROM users WHERE id=? AND active=1', (uid,)).fetchone()
-            if user and user['session_version'] == session.get('sv'):
+            now = int(time.time())
+            idle = setting(get_db(), 'session_idle_hours', 24) * 3600
+            absolute = setting(get_db(), 'session_absolute_days', 7) * 86400
+            valid = (user and user['session_version'] == session.get('sv')
+                     and now - session.get('last_seen', 0) <= idle
+                     and now - session.get('signed_in', 0) <= absolute)
+            if valid:
                 g.user = user
+                session['last_seen'] = now
             else:
                 session.clear()
+        if g.user and g.user['must_change_password'] and request.endpoint not in (
+            'change_password', 'logout', 'static'):
+            return redirect(url_for('change_password'))
+        if g.user and g.user['account_kind'] == 'house' and request.method in (
+            'POST', 'PUT', 'PATCH', 'DELETE') and request.endpoint not in ('logout',):
+            abort(403)
         if request.method in ('POST','PUT','PATCH','DELETE'):
             token = session.get('csrf_token')
             supplied = request.form.get('_csrf', '')
@@ -119,8 +161,9 @@ def create_app(test_config=None):
             if ok:
                 session.clear()
                 session['uid'],session['sv'] = user['id'],user['session_version']
+                session['signed_in'] = session['last_seen'] = int(time.time())
                 session['csrf_token'] = secrets.token_urlsafe(24)
-                return redirect(url_for('index'))
+                return redirect(url_for('change_password') if user['must_change_password'] else url_for('index'))
             flash('Incorrect username or password.')
         return render_template('login.html')
 
@@ -129,6 +172,154 @@ def create_app(test_config=None):
     def logout():
         session.clear()
         return redirect(url_for('login'))
+
+    @app.route('/account/password', methods=['GET', 'POST'])
+    @login_required
+    def change_password():
+        if request.method == 'POST':
+            current = request.form.get('current_password', '')
+            try:
+                verified = PH.verify(g.user['password_hash'], current)
+            except (VerifyMismatchError, VerificationError):
+                verified = False
+            new = request.form.get('new_password', '')
+            if not verified:
+                flash('Current password is incorrect.')
+            elif len(new) < 12 or len(new) > 256:
+                flash('Choose a password between 12 and 256 characters.')
+            elif new != request.form.get('confirm_password', ''):
+                flash('The new passwords do not match.')
+            else:
+                db = get_db()
+                db.execute('UPDATE users SET password_hash=?, must_change_password=0, '
+                           'session_version=session_version+1 WHERE id=?',
+                           (PH.hash(new), g.user['id']))
+                db.commit()
+                session.clear()
+                flash('Password changed. Please sign in again.')
+                return redirect(url_for('login'))
+        return render_template('change_password.html')
+
+    @app.get('/admin/accounts')
+    @admin_required
+    def accounts():
+        db = get_db()
+        users = db.execute('SELECT * FROM users ORDER BY account_kind, username COLLATE NOCASE').fetchall()
+        counts = {key: db.execute('SELECT COUNT(*) FROM users WHERE ' + where).fetchone()[0]
+                  for key, where in (('users', '1=1'), ('admins', "role='admin'"),
+                                     ('house', "account_kind='house'"))}
+        ownership = {}
+        for user in users:
+            ownership[user['id']] = {table: db.execute(
+                f'SELECT COUNT(*) FROM {table} WHERE created_by=?', (user['id'],)).fetchone()[0]
+                for table in ('shopping_items', 'recipes', 'events')}
+        return render_template('accounts.html', users=users, counts=counts,
+                               ownership=ownership,
+                               idle_hours=setting(db, 'session_idle_hours', 24),
+                               absolute_days=setting(db, 'session_absolute_days', 7))
+
+    @app.post('/admin/accounts')
+    @admin_required
+    def create_account():
+        db = get_db()
+        username = request.form.get('username', '').strip()
+        display_name = request.form.get('display_name', '').strip()
+        role = request.form.get('role', 'user')
+        kind = request.form.get('account_kind', 'person')
+        if (not 3 <= len(username) <= 32 or not username.replace('_', '').isalnum()
+                or not 1 <= len(display_name) <= 80 or role not in ('user', 'admin')
+                or kind not in ('person', 'house') or (kind == 'house' and role != 'user')):
+            abort(400)
+        if db.execute('SELECT COUNT(*) FROM users').fetchone()[0] >= 32:
+            abort(409, description='The household account limit has been reached.')
+        if role == 'admin' and db.execute("SELECT COUNT(*) FROM users WHERE role='admin'").fetchone()[0] >= 4:
+            abort(409, description='The admin account limit has been reached.')
+        if kind == 'house' and db.execute("SELECT COUNT(*) FROM users WHERE account_kind='house'").fetchone()[0]:
+            abort(409, description='A house-wide account already exists.')
+        password = temporary_password()
+        try:
+            db.execute('INSERT INTO users(username,display_name,password_hash,role,account_kind,must_change_password) '
+                       'VALUES(?,?,?,?,?,?)', (username, display_name, PH.hash(password), role, kind,
+                                             int(kind == 'person')))
+            db.commit()
+        except sqlite3.IntegrityError:
+            abort(409, description='That username is already in use.')
+        return render_template('temporary_password.html', username=username, password=password,
+                               change_required=kind == 'person')
+
+    @app.post('/admin/accounts/<int:user_id>/reset-password')
+    @admin_required
+    def reset_password(user_id):
+        db = get_db()
+        user = db.execute('SELECT * FROM users WHERE id=?', (user_id,)).fetchone()
+        if not user:
+            abort(404)
+        password = temporary_password()
+        db.execute('UPDATE users SET password_hash=?, must_change_password=?, '
+                   'session_version=session_version+1 WHERE id=?',
+                   (PH.hash(password), int(user['account_kind'] == 'person'), user_id))
+        db.commit()
+        if user_id == g.user['id']:
+            session.clear()
+        return render_template('temporary_password.html', username=user['username'],
+                               password=password, change_required=user['account_kind'] == 'person')
+
+    @app.post('/admin/accounts/<int:user_id>/delete')
+    @admin_required
+    def delete_account(user_id):
+        db = get_db()
+        user = db.execute('SELECT * FROM users WHERE id=?', (user_id,)).fetchone()
+        if not user:
+            abort(404)
+        if user_id == g.user['id']:
+            abort(400, description='You cannot remove your own account.')
+        if user['role'] == 'admin' and db.execute(
+                "SELECT COUNT(*) FROM users WHERE role='admin'").fetchone()[0] <= 1:
+            abort(409, description='The last admin cannot be removed.')
+        if request.form.get('confirm_username') != user['username']:
+            abort(400, description='Type the username to confirm removal.')
+        choice = request.form.get('content_choice')
+        if choice not in ('transfer', 'delete'):
+            abort(400)
+        if choice == 'transfer':
+            try:
+                target_id = int(request.form.get('transfer_to', ''))
+            except ValueError:
+                abort(400)
+            target = db.execute('SELECT id FROM users WHERE id=? AND id!=? AND account_kind=?',
+                                (target_id, user_id, 'person')).fetchone()
+            if not target:
+                abort(400)
+        with db:
+            if choice == 'transfer':
+                for table in ('shopping_items', 'recipes', 'events'):
+                    db.execute(f'UPDATE {table} SET created_by=? WHERE created_by=?', (target_id, user_id))
+            else:
+                db.execute('DELETE FROM events WHERE created_by=?', (user_id,))
+                db.execute('DELETE FROM recipes WHERE created_by=?', (user_id,))
+                db.execute('DELETE FROM shopping_items WHERE created_by=?', (user_id,))
+            db.execute('DELETE FROM users WHERE id=?', (user_id,))
+        flash(f'{user["username"]} was removed.')
+        return redirect(url_for('accounts'))
+
+    @app.post('/admin/session-settings')
+    @admin_required
+    def update_session_settings():
+        try:
+            idle = int(request.form.get('idle_hours', ''))
+            absolute = int(request.form.get('absolute_days', ''))
+        except ValueError:
+            abort(400)
+        if not 1 <= idle <= 168 or not 1 <= absolute <= 30:
+            abort(400)
+        db = get_db()
+        with db:
+            db.executemany('INSERT INTO app_settings(key,value) VALUES(?,?) '
+                           'ON CONFLICT(key) DO UPDATE SET value=excluded.value',
+                           (('session_idle_hours', str(idle)),
+                            ('session_absolute_days', str(absolute))))
+        flash('Session settings updated.')
+        return redirect(url_for('accounts'))
 
     @app.post('/shopping')
     @login_required
@@ -208,7 +399,8 @@ def create_app(test_config=None):
             raise SystemExit('User cap reached')
         if db.execute("SELECT COUNT(*) FROM users WHERE active=1 AND role='admin'").fetchone()[0]>=4:
             raise SystemExit('Admin cap reached')
-        db.execute('INSERT INTO users(username,password_hash,role) VALUES(?,?,?)',(username,PH.hash(password),'admin'))
+        db.execute('INSERT INTO users(username,display_name,password_hash,role) VALUES(?,?,?,?)',
+                   (username, username, PH.hash(password), 'admin'))
         db.commit();db.close()
         print('Administrator created.')
 

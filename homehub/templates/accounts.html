@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="crumb">Admin / <strong>Accounts</strong></div>
+<div class="page-heading"><div><p class="eyebrow">Your household</p><h1>People at home</h1><p class="muted">Give each person their own space, and manage access to the shared home.</p></div><button class="primary" type="button" onclick="document.getElementById('create-dialog').showModal()">+ Add account</button></div>
+<section class="stats" aria-label="Account counts">
+  <div class="stat"><strong>{{ counts.users }} <small>/ 32</small></strong><span>Accounts</span></div>
+  <div class="stat"><strong>{{ counts.admins }} <small>/ 4</small></strong><span>Admins</span></div>
+  <div class="stat"><strong>{{ counts.house }}</strong><span>House-wide login</span></div>
+</section>
+<div class="account-grid">
+  <section class="panel account-list"><h2>Accounts</h2><p class="muted">Only admins can create, reset, or remove accounts.</p>
+    <label class="search-label">Find a person<input type="search" id="account-search" placeholder="Find a person" oninput="filterAccounts(this.value)"></label>
+    {% for user in users %}<div class="person" data-search="{{ (user['display_name'] ~ ' ' ~ user['username'])|lower }}">
+      <span class="avatar">{{ '⌂' if user['account_kind'] == 'house' else user['display_name'][:2]|upper }}</span>
+      <div class="person-main"><strong>{{ user['display_name'] }}</strong> {% if user['role'] == 'admin' %}<span class="chip">Admin</span>{% endif %}{% if user['account_kind'] == 'house' %}<span class="chip amber">Guest display</span>{% endif %}<small>{{ user['username'] }}{% if user['id'] == current_user['id'] %} · You{% endif %}</small></div>
+      <div class="person-actions">
+      {% if user['id'] == current_user['id'] %}<a class="button" href="{{ url_for('change_password') }}">Change password</a>
+      {% else %}<button type="button" onclick="openReset({{ user['id'] }}, {{ user['username']|tojson }})">Reset password</button>
+      <button type="button" class="quiet" onclick="openRemove({{ user['id'] }}, {{ user['username']|tojson }}, {{ ownership[user['id']]|tojson }})">Remove</button>{% endif %}
+      </div>
+    </div>{% endfor %}
+  </section>
+  <aside class="account-side"><section class="panel"><p class="eyebrow">Access</p><h2>Passwords & sessions</h2><p>People can change their own passwords. Admin resets issue a one-time password and sign that person out.</p><form method="post" action="{{ url_for('update_session_settings') }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><label>Idle session limit (hours)<input type="number" name="idle_hours" min="1" max="168" value="{{ idle_hours }}" required></label><label>Absolute session limit (days)<input type="number" name="absolute_days" min="1" max="30" value="{{ absolute_days }}" required></label><button>Save session settings</button></form></section>
+    <section class="panel"><p class="eyebrow">Shared display</p><h2>House-wide access</h2><p>The house-wide login can see shared content and play games. Its scores stay off leaderboards.</p><p class="callout"><strong>Privacy note</strong><br>Admins can view all household content, including private chats.</p></section>
+  </aside>
+</div>
+<dialog id="create-dialog"><form method="post" action="{{ url_for('create_account') }}" class="dialog-form"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><p class="eyebrow">New person</p><h2>Add an account</h2><p>Each person gets their own login and private space.</p><label>Display name<input name="display_name" maxlength="80" required></label><label>Username<input name="username" minlength="3" maxlength="32" pattern="[A-Za-z0-9_]+" required></label><label>Role<select name="role"><option value="user">Household member</option><option value="admin">Admin</option></select></label><label>Account type<select name="account_kind"><option value="person">Person</option><option value="house">House-wide display</option></select></label><p class="callout">A temporary password will appear once after creation. Each person must change it at first login.</p><div class="dialog-actions"><button type="button" onclick="this.closest('dialog').close()">Cancel</button><button class="primary">Create account</button></div></form></dialog>
+<dialog id="reset-dialog"><form method="post" id="reset-form" class="dialog-form"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><p class="eyebrow">Account access</p><h2 id="reset-title">Reset password</h2><p>Resetting signs this account out everywhere. A one-time temporary password will appear once.</p><p class="callout">Share the temporary password directly. It will not be shown again after you leave the result page.</p><div class="dialog-actions"><button type="button" onclick="this.closest('dialog').close()">Cancel</button><button class="primary">Reset password</button></div></form></dialog>
+<dialog id="delete-dialog"><form method="post" id="delete-form" class="dialog-form"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><p class="eyebrow">Permanent removal</p><h2 id="delete-title">Remove account?</h2><p>Choose what happens to this person's items, recipes, and events. This cannot be undone.</p><p class="danger-box" id="delete-counts"></p><label class="radio-line"><input type="radio" name="content_choice" value="transfer" checked>Transfer all owned content to another person</label><label>Transfer to<select name="transfer_to" required>{% for user in users if user['account_kind'] == 'person' %}<option value="{{ user['id'] }}">{{ user['display_name'] }} ({{ user['username'] }})</option>{% endfor %}</select></label><label class="radio-line"><input type="radio" name="content_choice" value="delete">Delete all owned content, including items by others in this person's lists</label><label id="confirm-label">Type username to confirm<input name="confirm_username" id="confirm-username" required autocomplete="off"></label><div class="dialog-actions"><button type="button" onclick="this.closest('dialog').close()">Cancel</button><button class="danger">Remove account</button></div></form></dialog>
+<script>
+function filterAccounts(value) { document.querySelectorAll('.person').forEach(row => { row.hidden = !row.dataset.search.includes(value.toLowerCase()); }); }
+function openReset(id, username) {
+  document.getElementById('reset-form').action = {{ url_for('accounts')|tojson }} + '/' + id + '/reset-password';
+  document.getElementById('reset-title').textContent = 'Reset ' + username + "'s password?";
+  document.getElementById('reset-dialog').showModal();
+}
+function openRemove(id, username, counts) {
+  const form = document.getElementById('delete-form');
+  form.action = {{ url_for('accounts')|tojson }} + '/' + id + '/delete';
+  document.getElementById('delete-title').textContent = 'Remove ' + username + '?';
+  document.getElementById('delete-counts').textContent = username + ' owns ' + counts.shopping_items + ' shopping items, ' + counts.recipes + ' recipes, and ' + counts.events + ' events. Shared lists may contain items added by others.';
+  document.getElementById('confirm-label').firstChild.textContent = 'Type ' + username + ' to confirm';
+  document.getElementById('confirm-username').value = '';
+  form.querySelectorAll('[name="transfer_to"] option').forEach(option => { option.disabled = Number(option.value) === id; });
+  form.querySelector('[name="transfer_to"] option:not(:disabled)').selected = true;
+  document.getElementById('delete-dialog').showModal();
+}
+</script>
+{% endblock %}
