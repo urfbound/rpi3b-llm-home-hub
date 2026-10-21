@@ -41,6 +41,8 @@ by feature before implementation.
   changing an existing database. Test upgrades from the current prototype
   and each supported release with representative data, including ownership,
   passwords, and relationships. Document a recovery path if an upgrade fails.
+  Version the phone's offline store as well, migrating pending checklist
+  changes across app updates rather than silently discarding them.
 - Make local backups automatically every day by default. Admins can choose a
   backup interval of one to 31 days or turn automatic backups off, set the
   storage folder and retention count (14 copies by default), download a
@@ -80,6 +82,26 @@ by feature before implementation.
 - Show a distinct Delete action for items whether complete or incomplete.
   Show a Delete list action to its creator and admins, with confirmation that
   its items, including contributions from others, will be removed.
+- Let users copy a list as plain text, including its name and every visible
+  item marked open or complete, so it can be carried outside the house.
+  On insecure HTTP, offer selectable text when one-tap clipboard access is
+  unavailable. Emailing lists is a deferred feature dependent on outbound
+  email.
+- Make a shopping list already opened on a phone usable away from the LAN.
+  Cache its visible contents on that device and persist checkbox changes
+  locally. Show when the hub is unreachable and how many changes await sync.
+  When the hub becomes reachable again, upload desired checkbox states by
+  stable item ID, rechecking login and list permissions. Keep pending changes
+  through session expiry and prompt for login before syncing them. If another
+  person changed the same item, show the conflicting states for review rather
+  than silently replacing either. Explain deleted items or lost access.
+  Offline creation, text edits, sharing, and deletion are not in this initial
+  scope. Keep a stable home URL and HTTPS so the page can be reopened offline
+  with a small service worker; browser storage remains best effort and may be
+  cleared by the browser or user. The copy action is a portable fallback when
+  offline storage is unavailable. Sync only on actual hub reachability while
+  the page is active, rather than relying solely on the browser's online flag
+  or background sync support.
 - Support multiple shopping lists with static categories: Groceries,
   Household, Gifts, Health & Personal Care, Pets, Home & Garden, School &
   Activities, and Other. A list's creator or an admin may delete the list.
@@ -267,6 +289,7 @@ the three games where it breaks ties.
 
 - Multiple daily puzzles per game: GitHub issue #1.
 - Outbound email: GitHub issue #2.
+- Email delivery of list text, dependent on outbound email: future feature.
 - Email delivery of calendar archives, dependent on outbound email: issue #3.
 - Inbound email controls: GitHub issue #4.
 - Puzzles generated on the Pi: GitHub issue #5.
