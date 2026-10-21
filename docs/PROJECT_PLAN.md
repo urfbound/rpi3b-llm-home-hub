@@ -239,7 +239,9 @@ the three games where it breaks ties.
 
 ## Open design reviews
 
-- First-release visual designs and their approval.
+- [Account administration preview](design/account-admin-preview.html): awaiting
+  user review. All other first-release feature visuals also need approval
+  before implementation.
 
 ## Deferred features
 

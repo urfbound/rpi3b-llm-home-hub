@@ -1,0 +1,251 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Home Hub · Account administration design preview</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --page: #f7f4ed;
+      --surface: #fffefa;
+      --surface-soft: #f1f4ed;
+      --ink: #253329;
+      --muted: #617065;
+      --line: #dce3d8;
+      --green: #376c52;
+      --green-ink: #fffefa;
+      --green-soft: #e7f0e8;
+      --amber: #a96520;
+      --amber-soft: #fff2df;
+      --red: #a54139;
+      --red-soft: #fff0ed;
+      --shadow: 0 14px 42px rgb(33 51 38 / 7%);
+    }
+    html[data-theme="dark"] {
+      color-scheme: dark;
+      --page: #1d2721;
+      --surface: #28362d;
+      --surface-soft: #314137;
+      --ink: #f4f2e9;
+      --muted: #c0cabd;
+      --line: #4a5e4f;
+      --green: #a5d3ae;
+      --green-ink: #1b2a20;
+      --green-soft: #334d3b;
+      --amber: #e3b675;
+      --amber-soft: #4f402b;
+      --red: #efa69f;
+      --red-soft: #503734;
+      --shadow: 0 14px 42px rgb(0 0 0 / 16%);
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--page); color: var(--ink); font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+    button, input, select { font: inherit; }
+    button { cursor: pointer; }
+    button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible { outline: 3px solid var(--amber); outline-offset: 3px; }
+    a { color: inherit; }
+    .design-header { max-width: 1180px; margin: 0 auto; padding: 30px 24px 18px; display: flex; justify-content: space-between; align-items: end; gap: 24px; }
+    .eyebrow { margin: 0 0 6px; color: var(--green); font-size: .76rem; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+    h1, h2, h3, p { margin-top: 0; }
+    .design-header h1, .page-title h1 { font-family: Georgia, "Times New Roman", serif; font-weight: 700; letter-spacing: -.035em; }
+    .design-header h1 { font-size: clamp(1.8rem, 3vw, 2.6rem); margin-bottom: 8px; }
+    .design-header p:last-child { color: var(--muted); margin-bottom: 0; }
+    .preview-pill { flex: 0 0 auto; padding: 8px 12px; border: 1px solid var(--line); background: var(--surface); border-radius: 999px; color: var(--muted); font-size: .85rem; }
+    .app { max-width: 1180px; margin: 16px auto 42px; border: 1px solid var(--line); border-radius: 24px; overflow: hidden; background: var(--surface); box-shadow: var(--shadow); }
+    .site-header { display: flex; justify-content: space-between; align-items: center; min-height: 74px; padding: 0 30px; border-bottom: 1px solid var(--line); gap: 24px; }
+    .brand { display: inline-flex; align-items: center; gap: 11px; font-size: 1.18rem; font-weight: 800; text-decoration: none; white-space: nowrap; }
+    .brand-mark { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 11px; background: var(--green); color: var(--green-ink); font-size: 1.3rem; }
+    .site-nav { display: flex; align-items: center; gap: 4px; overflow-x: auto; scrollbar-width: none; }
+    .site-nav a { display: inline-block; padding: 9px 11px; border-radius: 10px; color: var(--muted); text-decoration: none; font-size: .9rem; font-weight: 650; white-space: nowrap; }
+    .site-nav a.active { color: var(--green); background: var(--green-soft); }
+    .site-nav a:hover { background: var(--surface-soft); }
+    .account-area { display: flex; align-items: center; gap: 10px; white-space: nowrap; }
+    .avatar { display: inline-grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--amber-soft); color: var(--amber); font-size: .78rem; font-weight: 800; }
+    .account-name { font-size: .88rem; font-weight: 700; }
+    .app-main { padding: 26px 32px 38px; }
+    .crumb { margin-bottom: 16px; color: var(--muted); font-size: .84rem; }
+    .crumb b { color: var(--ink); }
+    .page-heading { display: flex; justify-content: space-between; align-items: end; gap: 20px; }
+    .page-title h1 { font-size: clamp(2rem, 3.2vw, 2.9rem); line-height: 1.15; margin-bottom: 8px; }
+    .page-title p { color: var(--muted); margin-bottom: 0; max-width: 610px; }
+    .button { min-height: 44px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 10px 16px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface); color: var(--ink); font-weight: 700; text-decoration: none; white-space: nowrap; }
+    .button:hover { background: var(--surface-soft); }
+    .button.primary { background: var(--green); border-color: var(--green); color: var(--green-ink); }
+    .button.primary:hover { filter: brightness(.94); }
+    .button.quiet { background: transparent; border-color: transparent; }
+    .button.danger { color: var(--red); border-color: var(--red); background: var(--red-soft); }
+    .button:disabled { cursor: not-allowed; opacity: .48; }
+    .button.small { min-height: 38px; padding: 7px 11px; font-size: .84rem; }
+    .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 26px 0; }
+    .stat { padding: 16px 18px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface-soft); }
+    .stat .number { display: block; font-size: 1.55rem; line-height: 1.1; font-weight: 800; letter-spacing: -.03em; }
+    .stat .label { display: block; margin-top: 5px; color: var(--muted); font-size: .84rem; }
+    .two-col { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(270px, .8fr); gap: 18px; align-items: start; }
+    .panel { border: 1px solid var(--line); border-radius: 18px; background: var(--surface); overflow: hidden; }
+    .panel-head { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 19px 20px 15px; }
+    .panel-head h2 { margin: 0; font-family: Georgia, "Times New Roman", serif; font-size: 1.34rem; letter-spacing: -.02em; }
+    .panel-head p { margin: 3px 0 0; color: var(--muted); font-size: .85rem; }
+    .search { width: 100%; padding: 0 20px 14px; }
+    .search input { width: 100%; min-height: 42px; padding: 10px 13px; border-radius: 10px; border: 1px solid var(--line); background: var(--page); color: var(--ink); }
+    .person { display: grid; grid-template-columns: 40px minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 14px 20px; border-top: 1px solid var(--line); }
+    .person .avatar { width: 40px; height: 40px; }
+    .person-main { min-width: 0; }
+    .person-name { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 750; }
+    .person-meta { color: var(--muted); font-size: .8rem; }
+    .chip { display: inline-flex; align-items: center; border-radius: 999px; padding: 2px 8px; font-size: .7rem; font-weight: 750; line-height: 1.5; }
+    .chip.admin { color: var(--green); background: var(--green-soft); }
+    .chip.home { color: var(--amber); background: var(--amber-soft); }
+    .person-actions { display: flex; gap: 5px; }
+    .sidebar-stack { display: grid; gap: 16px; }
+    .side-panel { padding: 19px 20px; }
+    .side-panel h2 { font-family: Georgia, "Times New Roman", serif; font-size: 1.24rem; margin-bottom: 8px; }
+    .side-panel p { color: var(--muted); font-size: .86rem; margin-bottom: 12px; }
+    .setting-line { display: flex; justify-content: space-between; gap: 16px; padding: 9px 0; border-top: 1px solid var(--line); font-size: .85rem; }
+    .setting-line span:last-child { text-align: right; font-weight: 750; }
+    .callout { padding: 12px 14px; border-radius: 12px; background: var(--amber-soft); color: var(--ink); font-size: .83rem; }
+    .callout strong { color: var(--amber); }
+    .mobile-section { max-width: 1180px; margin: 0 auto 56px; padding: 0 24px; }
+    .mobile-section h2 { font-family: Georgia, "Times New Roman", serif; font-size: 1.65rem; margin-bottom: 4px; }
+    .mobile-section p { color: var(--muted); }
+    .phone { width: min(390px, 100%); height: 700px; border: 9px solid #29372c; border-radius: 38px; overflow: hidden; background: var(--surface); box-shadow: var(--shadow); }
+    html[data-theme="dark"] .phone { border-color: #728a76; }
+    .phone iframe { width: 100%; height: 100%; border: 0; background: var(--surface); }
+    dialog { width: min(520px, calc(100vw - 28px)); max-height: calc(100vh - 30px); overflow-y: auto; padding: 0; border: 1px solid var(--line); border-radius: 20px; background: var(--surface); color: var(--ink); box-shadow: 0 25px 90px rgb(0 0 0 / 25%); }
+    dialog::backdrop { background: rgb(19 27 21 / 55%); }
+    .dialog-body { padding: 24px; }
+    .dialog-top { display: flex; justify-content: space-between; gap: 12px; align-items: start; }
+    .dialog-top h2 { margin-bottom: 4px; font-family: Georgia, "Times New Roman", serif; font-size: 1.7rem; }
+    .dialog-body p { color: var(--muted); }
+    .dialog-body label { display: grid; gap: 5px; margin: 16px 0; font-size: .86rem; font-weight: 700; }
+    .dialog-body input, .dialog-body select { min-height: 44px; width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; color: var(--ink); background: var(--page); }
+    .dialog-body .check { display: flex; align-items: center; gap: 10px; }
+    .dialog-body .check input { width: 18px; min-height: 18px; }
+    .dialog-actions { display: flex; justify-content: end; gap: 9px; padding: 16px 24px; border-top: 1px solid var(--line); }
+    .danger-box { padding: 12px 14px; background: var(--red-soft); border: 1px solid var(--red); border-radius: 12px; color: var(--ink); font-size: .85rem; }
+    .radio-line { display: flex !important; align-items: start; gap: 9px !important; margin: 10px 0 !important; font-weight: 500 !important; }
+    .radio-line input { width: 18px !important; min-height: 18px !important; margin-top: 3px; }
+    @media (max-width: 1050px) {
+      .site-header { flex-wrap: wrap; gap: 0 18px; padding-top: 12px; }
+      .site-nav { order: 3; width: 100%; }
+    }
+    @media (max-width: 760px) {
+      .design-header { align-items: start; flex-direction: column; }
+      .app { margin: 0; border-left: 0; border-right: 0; border-radius: 0; box-shadow: none; }
+      .site-header { padding: 10px 16px 0; min-height: 0; }
+      .site-nav { margin: 9px -16px 0; padding: 0 12px 8px; }
+      .account-name { display: none; }
+      .app-main { padding: 18px 16px 32px; }
+      .page-heading { align-items: stretch; flex-direction: column; gap: 14px; }
+      .page-heading .button { width: 100%; }
+      .page-title h1 { font-size: 2.1rem; }
+      .stats { gap: 8px; margin: 20px 0; }
+      .stat { padding: 11px; }
+      .stat .number { font-size: 1.28rem; }
+      .stat .label { font-size: .74rem; }
+      .two-col { grid-template-columns: 1fr; }
+      .person { grid-template-columns: 38px minmax(0, 1fr); padding: 12px 15px; }
+      .person .avatar { width: 38px; height: 38px; }
+      .person-actions { grid-column: 2; flex-wrap: wrap; }
+      .panel-head { padding: 16px 15px 12px; }
+      .search { padding: 0 15px 12px; }
+      .mobile-section { display: none; }
+    }
+    html.in-frame .design-header, html.in-frame .mobile-section { display: none; }
+    html.in-frame .app { margin: 0; border: 0; border-radius: 0; box-shadow: none; }
+  </style>
+</head>
+<body>
+  <div class="design-header">
+    <div>
+      <p class="eyebrow">Visual design · review before implementation</p>
+      <h1>Account administration</h1>
+      <p>A design preview for the admin experience. Names and counts are illustrative; buttons only show example dialogs.</p>
+    </div>
+    <span class="preview-pill">Desktop + mobile · light + dark</span>
+  </div>
+
+  <div class="app">
+    <header class="site-header">
+      <a class="brand" href="#" aria-label="Home Hub home"><span class="brand-mark">⌂</span> Home Hub</a>
+      <nav class="site-nav" aria-label="Main navigation">
+        <a href="#">Home</a><a href="#">Lists</a><a href="#">Recipes</a><a href="#">Calendar</a><a href="#">Weather</a><a href="#">RSS</a><a href="#">Games</a><a href="#" class="active" aria-current="page">Admin</a>
+      </nav>
+      <div class="account-area"><button class="button small quiet" type="button" onclick="toggleTheme()" aria-label="Toggle light and dark theme">◐ Theme</button><span class="avatar">AP</span><span class="account-name">Alex P.</span></div>
+    </header>
+
+    <main class="app-main">
+      <div class="crumb">Admin <span aria-hidden="true">/</span> <b>Accounts</b></div>
+      <div class="page-heading">
+        <div class="page-title"><p class="eyebrow">Your household</p><h1>People at home</h1><p>Give each person their own space, and manage access to the shared home.</p></div>
+        <button class="button primary" type="button" onclick="openDialog('create-dialog')">＋ Add account</button>
+      </div>
+
+      <section class="stats" aria-label="Account counts">
+        <div class="stat"><span class="number">5 <small style="font-size:.7em;font-weight:500">/ 32</small></span><span class="label">Accounts</span></div>
+        <div class="stat"><span class="number">2 <small style="font-size:.7em;font-weight:500">/ 4</small></span><span class="label">Admins</span></div>
+        <div class="stat"><span class="number">1</span><span class="label">House-wide login</span></div>
+      </section>
+
+      <div class="two-col">
+        <section class="panel" aria-labelledby="accounts-heading">
+          <div class="panel-head"><div><h2 id="accounts-heading">Accounts</h2><p>Only admins can create, reset, or remove accounts.</p></div></div>
+          <div class="search"><input type="search" placeholder="Find a person" aria-label="Find a person"></div>
+          <div class="person"><span class="avatar">AP</span><div class="person-main"><div class="person-name">Alex P. <span class="chip admin">Admin</span></div><div class="person-meta">alex · Active today · You</div></div><div class="person-actions"><button class="button small" type="button">Change password</button></div></div>
+          <div class="person"><span class="avatar" style="background:var(--green-soft);color:var(--green)">SP</span><div class="person-main"><div class="person-name">Sam P. <span class="chip admin">Admin</span></div><div class="person-meta">sam · Active today</div></div><div class="person-actions"><button class="button small" type="button" onclick="openDialog('reset-dialog')">Reset password</button><button class="button small quiet" type="button" onclick="openRemove('Sam', '1 list, 3 recipes, and 4 events')">Remove</button></div></div>
+          <div class="person"><span class="avatar" style="background:var(--surface-soft);color:var(--green)">JP</span><div class="person-main"><div class="person-name">Jamie P.</div><div class="person-meta">jamie · Active yesterday</div></div><div class="person-actions"><button class="button small" type="button" onclick="openDialog('reset-dialog')">Reset password</button><button class="button small quiet" type="button" onclick="openRemove('Jamie', '2 lists, 4 recipes, and 12 events')">Remove</button></div></div>
+          <div class="person"><span class="avatar" style="background:var(--surface-soft);color:var(--green)">TP</span><div class="person-main"><div class="person-name">Taylor P.</div><div class="person-meta">taylor · Active 3 days ago</div></div><div class="person-actions"><button class="button small" type="button" onclick="openDialog('reset-dialog')">Reset password</button><button class="button small quiet" type="button" onclick="openRemove('Taylor', '1 list, 2 recipes, and 7 events')">Remove</button></div></div>
+          <div class="person"><span class="avatar" style="background:var(--amber-soft);color:var(--amber)">⌂</span><div class="person-main"><div class="person-name">House-wide <span class="chip home">Guest display</span></div><div class="person-meta">Shared password · No private content</div></div><div class="person-actions"><button class="button small" type="button" onclick="openDialog('reset-dialog')">Change password</button></div></div>
+        </section>
+
+        <div class="sidebar-stack">
+          <section class="panel side-panel"><p class="eyebrow">Access</p><h2>Passwords & sessions</h2><p>People can change their own password. Admin resets use a one-time temporary password and ask for a new password on login.</p><div class="setting-line"><span>Idle session limit</span><span>24 hours</span></div><div class="setting-line"><span>Absolute session limit</span><span>7 days</span></div><div style="margin-top:13px"><button class="button small" type="button">Edit session settings</button></div></section>
+          <section class="panel side-panel"><p class="eyebrow">Shared display</p><h2>House-wide access</h2><p>The house-wide login can see shared content and play games. Its scores stay off leaderboards.</p><div class="callout"><strong>Privacy note</strong><br>Admins can view all household content, including private chats.</div></section>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <section class="mobile-section" aria-label="Mobile preview"><h2>On a phone</h2><p>The same screen becomes touch-friendly cards and a scrollable tab bar. The frame below is a live narrow-width preview.</p><div class="phone"><iframe title="Mobile account administration preview" src="?mobile-preview=1"></iframe></div></section>
+
+  <dialog id="create-dialog" aria-labelledby="create-title"><div class="dialog-body"><div class="dialog-top"><div><p class="eyebrow">New person</p><h2 id="create-title">Add an account</h2></div><button class="button small quiet" type="button" onclick="closeDialog('create-dialog')" aria-label="Close">✕</button></div><p>Each person gets their own login and private space.</p><label>Display name<input value="Morgan P." aria-label="Display name"></label><label>Username<input value="morgan" aria-label="Username"></label><label>Role<select aria-label="Role"><option>Household member</option><option>Admin</option></select></label><div class="callout">A temporary password will appear once after creation. Share it directly; the person must change it at first login.</div></div><div class="dialog-actions"><button class="button" type="button" onclick="closeDialog('create-dialog')">Cancel</button><button class="button primary" type="button" onclick="showTemporaryPassword('create-dialog')">Create account</button></div></dialog>
+
+  <dialog id="reset-dialog" aria-labelledby="reset-title"><div class="dialog-body"><div class="dialog-top"><div><p class="eyebrow">Account access</p><h2 id="reset-title">Reset password</h2></div><button class="button small quiet" type="button" onclick="closeDialog('reset-dialog')" aria-label="Close">✕</button></div><p>Resetting signs this account out everywhere. A one-time temporary password will appear once. The person must change it at next login.</p><div class="callout"><strong>Only share the temporary password directly</strong><br>It will not be shown again after you close the result.</div></div><div class="dialog-actions"><button class="button" type="button" onclick="closeDialog('reset-dialog')">Cancel</button><button class="button primary" type="button" onclick="showTemporaryPassword('reset-dialog')">Reset password</button></div></dialog>
+
+  <dialog id="temporary-dialog" aria-labelledby="temporary-title"><div class="dialog-body"><div class="dialog-top"><div><p class="eyebrow">Shown once</p><h2 id="temporary-title">Temporary password</h2></div><button class="button small quiet" type="button" onclick="closeDialog('temporary-dialog')" aria-label="Close">✕</button></div><p>Give this password directly to the person. It cannot be viewed again after this window closes.</p><div class="callout"><strong>Illustrative preview only</strong><br><code style="font-size:1.15rem;word-break:break-all">example-4F7q9K2v</code></div><p style="margin:14px 0 0">They will be asked to choose a new password at their next login.</p></div><div class="dialog-actions"><button class="button primary" type="button" onclick="closeDialog('temporary-dialog')">Done</button></div></dialog>
+
+  <dialog id="delete-dialog" aria-labelledby="delete-title"><div class="dialog-body"><div class="dialog-top"><div><p class="eyebrow">Permanent removal</p><h2 id="delete-title">Remove Jamie?</h2></div><button class="button small quiet" type="button" onclick="closeDialog('delete-dialog')" aria-label="Close">✕</button></div><p id="delete-explanation">Choose what happens to Jamie's lists, recipes, and events. Chats, scores, and personal feeds will be deleted.</p><div class="danger-box"><strong>This cannot be undone.</strong><br><span id="delete-counts">Jamie owns 2 lists, 4 recipes, and 12 events.</span> A shared list may contain items added by other people.</div><label class="radio-line"><input type="radio" name="content-choice" checked>Transfer all owned content to another person</label><label>Transfer to<select aria-label="Transfer to"><option>Alex P.</option><option>Sam P.</option><option>Taylor P.</option></select></label><label class="radio-line"><input type="radio" name="content-choice">Delete all owned content, including other contributors' items in this person's lists</label><label id="confirm-label">Type Jamie to confirm<input id="confirm-name" placeholder="Jamie" aria-label="Type Jamie to confirm" oninput="updateRemoveButton()"></label></div><div class="dialog-actions"><button class="button" type="button" onclick="closeDialog('delete-dialog')">Cancel</button><button id="confirm-remove" class="button danger" type="button" onclick="closeDialog('delete-dialog')" disabled>Remove account</button></div></dialog>
+
+  <script>
+    if (new URLSearchParams(location.search).has('mobile-preview')) document.documentElement.classList.add('in-frame');
+    if (matchMedia('(max-width: 760px)').matches) {
+      const nav = document.querySelector('.site-nav');
+      const active = nav.querySelector('.active');
+      nav.scrollLeft = active.offsetLeft - nav.offsetLeft - 24;
+    }
+    function toggleTheme() {
+      const next = document.documentElement.dataset.theme === 'light' ? 'dark' : 'light';
+      document.documentElement.dataset.theme = next;
+      document.querySelectorAll('iframe').forEach(frame => {
+        try { frame.contentDocument.documentElement.dataset.theme = next; } catch (_) {}
+      });
+    }
+    function openDialog(id) { document.getElementById(id).showModal(); }
+    function closeDialog(id) { document.getElementById(id).close(); }
+    function showTemporaryPassword(source) { closeDialog(source); openDialog('temporary-dialog'); }
+    let removeName = 'Jamie';
+    function openRemove(name, counts) {
+      removeName = name;
+      document.getElementById('delete-title').textContent = `Remove ${name}?`;
+      document.getElementById('delete-explanation').textContent = `Choose what happens to ${name}'s lists, recipes, and events. Chats, scores, and personal feeds will be deleted.`;
+      document.getElementById('delete-counts').textContent = `${name} owns ${counts}.`;
+      document.getElementById('confirm-label').firstChild.textContent = `Type ${name} to confirm`;
+      document.getElementById('confirm-name').placeholder = name;
+      document.getElementById('confirm-name').value = '';
+      updateRemoveButton();
+      openDialog('delete-dialog');
+    }
+    function updateRemoveButton() { document.getElementById('confirm-remove').disabled = document.getElementById('confirm-name').value.trim() !== removeName; }
+  </script>
+</body>
+</html>
