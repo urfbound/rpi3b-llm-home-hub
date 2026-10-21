@@ -24,8 +24,14 @@ by feature before implementation.
 - First release includes secure accounts, lists, recipes, calendar, weather,
   RSS, and all six games below. It can ship with Chat hidden if the Pi cannot
   run useful local answers within acceptable resource use.
-- Home shows preview cards; each feature has its own main navigation tab.
-  Weather and RSS may use cards within their tabs.
+- Home shows preview cards in two columns when space permits. Put today's
+  Chores and **This weekend** (calendar items for the upcoming Saturday and
+  Sunday) in the first row, followed by current weather and system status cards.
+  The chores card groups tasks by person and can filter to the signed-in user;
+  completed tasks are crossed out without list bullets. Cards stack on narrow
+  screens. Each feature has its own main navigation tab. Weather and RSS may
+  use cards within their tabs. Use the balanced desktop layout: 32 px side
+  margins up to a 1440 px content width.
 - An admin can set one household-wide order of feature tabs from the Admin tab
   only. Keep Home fixed at the start and Admin fixed at the end; the feature
   tabs between them can be reordered. The control's visual design still needs
