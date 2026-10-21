@@ -76,7 +76,16 @@ by feature before implementation.
 
 ## Lists and recipes
 
-- Keep one top-level Lists tab with separate Shopping and To-do sections.
+- Keep one top-level Lists tab with Shopping, To-do, and Chores sections in
+  that order. Chores has exactly one permanent shared list for each day of the
+  week. Members may add chores and mark them complete; each chore records its
+  creator and assignee. A chore stays in its day list until its creator or an
+  admin deletes it. Clear all chore completion states at Sunday midnight in
+  the household time zone, leaving the tasks and assignments in place. Home
+  shows the current day's chores grouped by person, with a **Just my chores**
+  checkbox to filter to the signed-in user's assignments.
+  The Chores visual design still needs approval.
+  To-do remains a separate section.
   To-do checklists are collaborative: invited members may add, edit, and
   complete tasks. At creation, the user may decide optional due dates and
   assignees for each item separately. The visual design still needs approval.
