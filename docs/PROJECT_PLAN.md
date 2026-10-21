@@ -134,10 +134,18 @@ user's explicit confirmation.
   per day in the first release. Issue #1 tracks support for multiple daily
   puzzles without a fixed five-puzzle ceiling.
 - The first move starts one scored attempt, which can be resumed but not
-  restarted. Replays after completion are practice only. Each game has its
-  own daily streak. Daily and all-time scoreboards are visible to all users.
-  Faster completions rank higher in timed games. The house-wide account can
-  play without ranking.
+  restarted. An unfinished attempt expires at household midnight. Replays
+  after completion are practice only. Each game has its own daily win streak;
+  a loss or missed day resets that game's streak. A win earns up to 100
+  points, adjusted for game-specific efficiency and optional hints; a loss
+  earns zero. All-time totals sum those points. Daily and all-time
+  scoreboards are visible to all users. Faster completions rank higher in
+  timed games. The house-wide account can play without ranking.
+- Offer optional score-reducing hints in mini crosswords, word ladders, mini
+  nonograms, and Sudoku. The word-guessing game and Hunt the Wumpus have no
+  hints. Public scoreboards never reveal answers. A player may see the
+  solution when their scored attempt ends; everyone can see it after the
+  household day ends.
 
 ## Optional local chat
 
@@ -178,8 +186,8 @@ user's explicit confirmation.
 
 ## Open decisions
 
-- Game answer validation, exact scoring, and what
-  counts as a completion for each of the six games.
+- Game answer validation, game-specific score formulas, hint behavior, and
+  completion rules for the six games.
 - Weather cache lifetime and offline behavior.
 - Exact pressure trend thresholds and units.
 - Backup verification and how restore handles sessions.
