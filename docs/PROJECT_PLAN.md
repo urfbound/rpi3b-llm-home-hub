@@ -28,7 +28,8 @@ by feature before implementation.
   Chores and **This weekend** (calendar items for the upcoming Saturday and
   Sunday) in the first row, followed by current weather and system status cards.
   The chores card groups tasks by person and can filter to the signed-in user;
-  completed tasks are crossed out without list bullets. Cards stack on narrow
+  open and completed tasks use circle and checkmark markers without list
+  bullets or strikethrough. Cards stack on narrow
   screens. Each feature has its own main navigation tab. Weather and RSS may
   use cards within their tabs. Use the balanced desktop layout: 32 px side
   margins up to a 1440 px content width.
