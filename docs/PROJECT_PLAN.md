@@ -97,7 +97,8 @@ by feature before implementation.
   tasks and assignments in place. Home shows the current day's chores grouped
   by person, with a **Just my chores** checkbox to filter to the signed-in
   user's assignments.
-  The Chores visual design still needs approval.
+  The Chores visual design is approved, including per-person groups and the
+  exclusion of the shared house-wide login from Everyone assignments.
   To-do remains a separate section.
   To-do checklists are collaborative: invited members may add, edit, and
   complete tasks. At creation, the user may decide optional due dates and
