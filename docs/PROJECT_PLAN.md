@@ -31,7 +31,9 @@ user's explicit confirmation.
   backup interval of one to 31 days or turn automatic backups off, set the
   storage folder and retention count (14 copies by default), download a
   backup, and restore one. Restoring requires confirmation and briefly
-  interrupts the app.
+  interrupts the app. Verify each backup before retaining it, and verify a
+  selected backup before restoring. Restore revokes existing sessions so
+  users log in again.
 - The project uses GPLv3.
 
 ## Accounts, visibility, and sharing
@@ -108,6 +110,15 @@ user's explicit confirmation.
   pressure with a rising/steady/falling trend based on the preceding three
   hours of provider forecast data. Show the pressure change amount; when a
   defensible threshold is available, qualify slower and faster changes.
+  After rounding the three-hour change to 0.1 hPa, use the
+  [Met Office pressure-tendency bands](https://weather.metoffice.gov.uk/guides/coast-and-sea)
+  as indicative labels: under 0.1 hPa steady, 0.1–1.5 slowly, 1.6–3.5
+  rising/falling, 3.6–6.0 quickly, and above 6.0 very rapidly. These bands
+  describe observations; the hub applies them to model data and labels the
+  result as a forecast. Display hPa in metric mode and inHg in imperial mode.
+  Refresh the shared weather cache no more often than every 30 minutes.
+  When fetches fail or outbound access is off, show cached data with its age
+  and mark it stale after two hours; explain when no cached forecast exists.
   An almanac sub-tab, on-demand historical weather, and alternative providers
   are deferred features.
 - Users manage personal RSS feeds; admins manage feeds for the house-wide
@@ -117,7 +128,9 @@ user's explicit confirmation.
   last-updated time. Ordinary users may add public web feeds; only admins may
   add trusted feeds hosted on the household LAN. RSS cards show the title,
   source, publication date, and a short text summary, without loading remote
-  images.
+  images. Accept HTTP(S) feed URLs with size and timeout limits; recheck
+  destinations after DNS resolution and redirects. Block loopback and other
+  unsafe addresses. Only an admin can explicitly approve a LAN destination.
 - Dashboard system status includes RAM use, CPU use, one hour of CPU history
   sampled each minute and reset on restart, Pi temperature, and app RSS.
   Admins can hide this from ordinary users while optionally retaining it
@@ -199,11 +212,8 @@ user's explicit confirmation.
 
 - Game answer validation, game-specific score formulas, hint behavior, and
   completion rules for the six games.
-- Weather cache lifetime and offline behavior.
-- Exact pressure trend thresholds and units.
-- Backup verification and how restore handles sessions.
-- RSS feed URL validation and safe handling of admin-approved LAN sources.
-- Calendar archival format and backup/restore policy.
+- Whether archived calendar events should be downloadable only by admins or
+  also searchable in the calendar after removal from the active database.
 - First-release visual designs and their approval.
 
 ## Deferred features
