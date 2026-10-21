@@ -7,8 +7,9 @@ implementing it. Implementation will proceed in small, tested feature
 increments on feature or ticket branches. Merging into `main` requires the
 user's explicit confirmation.
 
-The functional scope and game rules are agreed. Visual designs remain to be
-reviewed feature by feature before implementation.
+The previously planned functional scope and game rules are agreed. New list
+and navigation details are being settled. Visual designs are reviewed feature
+by feature before implementation.
 
 ## Product and release
 
@@ -25,6 +26,8 @@ reviewed feature by feature before implementation.
   run useful local answers within acceptable resource use.
 - Home shows preview cards; each feature has its own main navigation tab.
   Weather and RSS may use cards within their tabs.
+- An admin can set the household-wide order of feature tabs. The control's
+  visual design and exact ordering rules still need approval.
 - Target at most 32 users and four admins. Aim for under 256 MB application
   steady-state RSS and under 10 GB for application, dependencies, and data,
   excluding the OS and local model files.
@@ -62,6 +65,8 @@ reviewed feature by feature before implementation.
 
 ## Lists and recipes
 
+- Keep one top-level Lists tab with separate Shopping and To-do sections.
+  To-do task details and shared editing rules are awaiting confirmation.
 - Support multiple shopping lists with static categories: Groceries,
   Household, Gifts, Health & Personal Care, Pets, Home & Garden, School &
   Activities, and Other. A list's creator or an admin may delete the list.
@@ -239,9 +244,9 @@ the three games where it breaks ties.
 
 ## Open design reviews
 
-- [Account administration preview](design/account-admin-preview.html): awaiting
-  user review. All other first-release feature visuals also need approval
-  before implementation.
+- [Account administration preview](design/account-admin-preview.html): approved
+  by the user. Other first-release feature visuals need approval before
+  implementation.
 
 ## Deferred features
 
