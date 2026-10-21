@@ -250,6 +250,8 @@ the three games where it breaks ties.
 - [Account administration preview](design/account-admin-preview.html): approved
   by the user. Other first-release feature visuals need approval before
   implementation.
+- [Lists and navigation preview](design/lists-navigation-preview.html):
+  awaiting user review before list and tab-order implementation.
 
 ## Deferred features
 
