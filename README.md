@@ -2,6 +2,9 @@
 
 A lightweight local-first family dashboard for Raspberry Pi 3B. Includes login, a household shopping list, recipes, local event creation, `.ics` calendar export and a switchable cozy light/dark theme. **This is a prototype, not a production-hardened household service.**
 
+The [draft product plan](docs/PROJECT_PLAN.md) records the agreed direction
+for the full household app and decisions still to settle.
+
 ## Run on Windows (PowerShell)
 
 Install Python 3.11 or newer, then run:
