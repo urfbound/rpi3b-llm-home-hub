@@ -160,6 +160,42 @@ def test_scheduler_respects_interval_and_off_setting(tmp_path):
     assert len(list(folder.glob('homehub-*.sqlite3'))) == 1
 
 
+def test_scheduler_uses_current_settings_after_pause_and_folder_change(tmp_path):
+    _, client, database = make_admin_client(tmp_path)
+    first_folder = tmp_path / 'scheduled-first'
+    next_folder = tmp_path / 'scheduled-next'
+    client.get('/admin/accounts')
+    response = client.post('/admin/backups/settings', data={
+        '_csrf': token(client), 'backup_folder': str(first_folder),
+        'backup_frequency': '1', 'backup_retention': '14',
+    })
+    assert response.status_code == 302
+
+    now = time.time() + 5
+    logger = logging.getLogger('test-backup-settings-reload')
+    assert run_backup_cycle(database, logger, now=now)
+    assert len(list(first_folder.glob('homehub-*.sqlite3'))) == 1
+
+    response = client.post('/admin/backups/settings', data={
+        '_csrf': token(client), 'backups_off': 'on',
+        'backup_folder': str(next_folder), 'backup_retention': '14',
+    })
+    assert response.status_code == 302
+    assert not run_backup_cycle(database, logger, now=now + 86400)
+    assert not list(next_folder.glob('homehub-*.sqlite3'))
+
+    response = client.post('/admin/backups/settings', data={
+        '_csrf': token(client), 'backup_folder': str(next_folder),
+        'backup_frequency': '1', 'backup_retention': '1',
+    })
+    assert response.status_code == 302
+    assert run_backup_cycle(database, logger, now=now + 86400)
+    assert len(list(first_folder.glob('homehub-*.sqlite3'))) == 1
+    assert len(list(next_folder.glob('homehub-*.sqlite3'))) == 1
+    assert run_backup_cycle(database, logger, now=now + 2 * 86400)
+    assert len(list(next_folder.glob('homehub-*.sqlite3'))) == 1
+
+
 def test_backup_command_uses_configured_database_and_reports_failures(tmp_path, monkeypatch):
     _, _, database = make_admin_client(tmp_path)
     with closing(sqlite3.connect(database)) as db:

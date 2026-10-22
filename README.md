@@ -38,6 +38,22 @@ Backups contain account hashes and private household data.
 
 Install a minimal Raspberry Pi OS (Python 3.11+), create a Python virtual environment, install the app using `pip install .`, and configure a systemd service with `HOMEHUB_SECRET_KEY`, `HOMEHUB_DB` and `HOMEHUB_BIND=<Pi LAN IP>`. See `deploy/homehub.service.example`, `deploy/homehub-backup.service.example` and `deploy/homehub-backup.timer.example`; edit paths and user before installation. Install the backup unit files, then run `sudo systemctl daemon-reload` and `sudo systemctl enable --now homehub.service homehub-backup.timer`. The timer catches up after downtime and checks the Admin-configured interval. If you choose a backup folder outside `/var/lib/homehub`, allow it in `ReadWritePaths=` in both service units. Do not open a router port to this service. Restrict the allowed LAN subnet with your firewall. If you use an HTTP connection for the initial prototype, passwords and cookies travel unencrypted over the LAN; arrange HTTPS before household use.
 
+## Uninstall from the Pi
+
+Disable and remove both the web service and backup timer before uninstalling
+the Python package. Replace these paths if you installed the unit files
+elsewhere:
+
+```sh
+sudo systemctl disable --now homehub-backup.timer homehub.service
+sudo rm -f /etc/systemd/system/homehub-backup.timer /etc/systemd/system/homehub-backup.service /etc/systemd/system/homehub.service
+sudo systemctl daemon-reload
+sudo systemctl reset-failed
+```
+
+This removes scheduled work while leaving the database and backup files in
+place for manual recovery or a later reinstall.
+
 ## Important limitations / follow-up work
 
 - Admins can now create and remove accounts, reset passwords, and configure session limits. Account deletion can transfer or remove owned prototype content.
