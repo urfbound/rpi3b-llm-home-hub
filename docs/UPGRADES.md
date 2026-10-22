@@ -26,9 +26,11 @@ Schema version 2 adds the persistent login-attempt table and indexes.
 Schema version 3 adds the named-list and private-access tables, then links
 existing shopping items to a shared **Groceries** list without changing their
 IDs, text, completion states, or owners. The v3 upgrade creates a verified
-pre-v3 copy before changing a populated earlier database. Later releases must
-continue adding ordered migrations and upgrade tests for each supported prior
-release.
+pre-v3 copy before changing a populated earlier database. Schema version 4
+adds chores and per-user weekly completion state without changing existing
+lists, recipes, or events; its upgrade creates a verified pre-v4 copy. Later
+releases must continue adding ordered migrations and upgrade tests for each
+supported prior release.
 
 ## If an upgrade fails
 

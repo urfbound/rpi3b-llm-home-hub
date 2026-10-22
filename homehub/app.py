@@ -7,7 +7,7 @@ import sqlite3
 import threading
 import time
 from contextlib import closing
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 from functools import wraps
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -20,7 +20,7 @@ from .backups import (BackupError, backup_filename, create_backup,
                       prune_backups, restore_backup, validate_backup_directory)
 
 PH = PasswordHasher(memory_cost=16384, time_cost=2, parallelism=1)
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 LOGIN_WINDOW_SECONDS = 15 * 60
 LOGIN_USERNAME_LIMIT = 5
 LOGIN_ADDRESS_LIMIT = 30
@@ -80,6 +80,24 @@ CREATE TABLE IF NOT EXISTS events (
  recipe_id INTEGER REFERENCES recipes(id) ON DELETE SET NULL,
  created_by INTEGER NOT NULL REFERENCES users(id)
 );
+CREATE TABLE IF NOT EXISTS chores (
+ id INTEGER PRIMARY KEY,
+ weekday INTEGER NOT NULL CHECK(weekday BETWEEN 0 AND 6),
+ text TEXT NOT NULL CHECK(length(trim(text)) BETWEEN 1 AND 240),
+ created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ assignee_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+ assigned_everyone INTEGER NOT NULL DEFAULT 0 CHECK(assigned_everyone IN (0,1)),
+ created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ CHECK((assigned_everyone=1 AND assignee_id IS NULL) OR
+       (assigned_everyone=0 AND assignee_id IS NOT NULL))
+);
+CREATE INDEX IF NOT EXISTS chores_weekday ON chores(weekday,id);
+CREATE TABLE IF NOT EXISTS chore_completions (
+ chore_id INTEGER NOT NULL REFERENCES chores(id) ON DELETE CASCADE,
+ user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ completed_week TEXT NOT NULL,
+ PRIMARY KEY(chore_id,user_id)
+);
 """
 
 def get_db():
@@ -110,6 +128,27 @@ def admin_required(fn):
 def setting(db, key, default):
     row = db.execute('SELECT value FROM app_settings WHERE key=?', (key,)).fetchone()
     return int(row['value']) if row else default
+
+def household_today():
+    """Use the Pi's configured local date until household timezone settings exist."""
+    return datetime.now().astimezone().date()
+
+def week_start_for(day):
+    """Return the Sunday that begins the week containing day."""
+    return day - timedelta(days=(day.weekday() + 1) % 7)
+
+def chore_groups_for(db, users, weekday, week_key):
+    groups = []
+    for user in users:
+        user_chores = db.execute(
+            'SELECT c.*, cc.completed_week AS completed_week '
+            'FROM chores c LEFT JOIN chore_completions cc ON cc.chore_id=c.id AND cc.user_id=? '
+            'AND cc.completed_week=? WHERE c.weekday=? '
+            'AND (c.assigned_everyone=1 OR c.assignee_id=?) ORDER BY c.id',
+            (user['id'], week_key, weekday, user['id'])
+        ).fetchall()
+        groups.append({'user': user, 'chores': user_chores})
+    return groups
 
 def visible_lists(db, user, kind=None):
     """Return lists visible to this account without leaking private titles."""
@@ -319,8 +358,9 @@ def create_app(test_config=None):
     @login_required
     def index():
         db = get_db()
+        today = household_today()
         list_kind = request.args.get('kind', 'shopping')
-        if list_kind not in ('shopping', 'todo'):
+        if list_kind not in ('shopping', 'todo', 'chores'):
             abort(400)
         lists = visible_lists(db, g.user, list_kind)
         selected_id = request.args.get('list_id')
@@ -342,11 +382,46 @@ def create_app(test_config=None):
             "SELECT id,username,display_name FROM users "
             "WHERE active=1 AND account_kind='person' ORDER BY display_name COLLATE NOCASE, id"
         ).fetchall()
+        weekdays = ('Monday', 'Tuesday', 'Wednesday', 'Thursday',
+                    'Friday', 'Saturday', 'Sunday')
+        selected_weekday = request.args.get('weekday', str(today.weekday()))
+        try:
+            selected_weekday = int(selected_weekday)
+        except ValueError:
+            abort(400)
+        if not 0 <= selected_weekday < len(weekdays):
+            abort(400)
+        chore_filter = request.args.get('assignee_id', '')
+        if chore_filter:
+            try:
+                chore_filter = int(chore_filter)
+            except ValueError:
+                abort(400)
+            if chore_filter not in {user['id'] for user in list_users}:
+                abort(400)
+        chore_groups = []
+        if list_kind == 'chores':
+            week_key = week_start_for(today).isoformat()
+            group_users = [user for user in list_users
+                           if not chore_filter or user['id'] == chore_filter]
+            chore_groups = chore_groups_for(db, group_users, selected_weekday, week_key)
+        home_weekday = today.weekday()
+        just_my_chores = request.args.get('just_my_chores') == '1'
+        home_users = ([user for user in list_users if user['id'] == g.user['id']]
+                      if just_my_chores and g.user['account_kind'] == 'person'
+                      else list_users)
+        home_chore_groups = chore_groups_for(
+            db, home_users, home_weekday,
+            week_start_for(today).isoformat()
+        )
         return render_template('index.html', recipes=db.execute('SELECT * FROM recipes ORDER BY id DESC LIMIT 6').fetchall(),
           events=db.execute('SELECT events.*,recipes.title AS recipe_title FROM events LEFT JOIN recipes ON recipes.id=events.recipe_id ORDER BY event_date LIMIT 12').fetchall(),
           items=items, lists=lists, selected_list=selected_list, list_kind=list_kind,
           list_users=list_users, shopping_categories=SHOPPING_CATEGORIES,
-          today=date.today().isoformat())
+          today=today.isoformat(), weekdays=weekdays,
+          selected_weekday=selected_weekday, chore_filter=chore_filter,
+          chore_groups=chore_groups, home_weekday=home_weekday,
+          home_chore_groups=home_chore_groups, just_my_chores=just_my_chores)
 
     @app.route('/login', methods=['GET','POST'])
     def login():
@@ -699,6 +774,81 @@ def create_app(test_config=None):
                 db.executemany('INSERT INTO list_access(list_id,user_id) VALUES(?,?)',
                                ((list_id, user_id) for user_id in allowed_ids))
         return redirect(url_for('index', kind=kind, list_id=list_id))
+
+    @app.post('/chores')
+    @login_required
+    def create_chore():
+        text = request.form.get('text', '').strip()
+        assignee = request.form.get('assignee', '').strip()
+        try:
+            weekday = int(request.form.get('weekday', ''))
+        except ValueError:
+            abort(400)
+        if not 0 <= weekday <= 6 or not text or len(text) > 240:
+            abort(400)
+        db = get_db()
+        assigned_everyone = assignee.casefold() == 'everyone'
+        assignee_id = None
+        if not assigned_everyone:
+            try:
+                assignee_id = int(assignee)
+            except ValueError:
+                abort(400)
+            assigned_user = db.execute(
+                "SELECT id FROM users WHERE id=? AND active=1 AND account_kind='person'",
+                (assignee_id,)
+            ).fetchone()
+            if not assigned_user:
+                abort(400)
+        with db:
+            db.execute(
+                'INSERT INTO chores(weekday,text,created_by,assignee_id,assigned_everyone) '
+                'VALUES(?,?,?,?,?)',
+                (weekday, text, g.user['id'], assignee_id, int(assigned_everyone))
+            )
+        return redirect(url_for('index', kind='chores', weekday=weekday))
+
+    @app.post('/chores/<int:chore_id>/toggle')
+    @login_required
+    def toggle_chore(chore_id):
+        db = get_db()
+        chore = db.execute('SELECT * FROM chores WHERE id=?', (chore_id,)).fetchone()
+        if not chore:
+            abort(404)
+        if (g.user['account_kind'] != 'person' or
+                (not chore['assigned_everyone'] and chore['assignee_id'] != g.user['id'])):
+            abort(403)
+        week_key = week_start_for(household_today()).isoformat()
+        with db:
+            completion = db.execute(
+                'SELECT completed_week FROM chore_completions WHERE chore_id=? AND user_id=?',
+                (chore_id, g.user['id'])
+            ).fetchone()
+            if completion and completion['completed_week'] == week_key:
+                db.execute('DELETE FROM chore_completions WHERE chore_id=? AND user_id=?',
+                           (chore_id, g.user['id']))
+            else:
+                db.execute(
+                    'INSERT INTO chore_completions(chore_id,user_id,completed_week) VALUES(?,?,?) '
+                    'ON CONFLICT(chore_id,user_id) DO UPDATE SET completed_week=excluded.completed_week',
+                    (chore_id, g.user['id'], week_key)
+                )
+        if request.args.get('return_to') == 'home':
+            return redirect(url_for('index'))
+        return redirect(url_for('index', kind='chores', weekday=chore['weekday']))
+
+    @app.post('/chores/<int:chore_id>/delete')
+    @login_required
+    def delete_chore(chore_id):
+        db = get_db()
+        chore = db.execute('SELECT * FROM chores WHERE id=?', (chore_id,)).fetchone()
+        if not chore:
+            abort(404)
+        if chore['created_by'] != g.user['id'] and g.user['role'] != 'admin':
+            abort(403)
+        with db:
+            db.execute('DELETE FROM chores WHERE id=?', (chore_id,))
+        return redirect(url_for('index', kind='chores', weekday=chore['weekday']))
 
     def add_list_item(expected_kind):
         text = request.form.get('text','').strip()

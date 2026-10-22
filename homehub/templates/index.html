@@ -5,6 +5,44 @@
   <p>Your family's recipes, plans, and shopping lists, all in one place.</p>
 </section>
 <div class="grid">
+  <section class="panel home-chores" id="home-chores">
+    <h2>Chores · {{ weekdays[home_weekday] }}</h2>
+    {% if current_user['account_kind'] == 'person' %}
+    <form method="get" action="{{ url_for('index') }}" class="home-chore-filter">
+      <input type="hidden" name="kind" value="shopping">
+      <label class="checkbox-line"><input type="checkbox" name="just_my_chores" value="1" {% if just_my_chores %}checked{% endif %}> Just my chores</label>
+      <button>Apply</button>
+    </form>
+    {% endif %}
+    {% set home_has_chores = namespace(value=false) %}
+    {% for group in home_chore_groups %}
+      {% if group['chores'] %}
+      {% set home_has_chores.value = true %}
+      <section class="home-chore-group">
+        <h3>{{ group['user']['display_name'] or group['user']['username'] }}</h3>
+        <ul class="checks">
+          {% for chore in group['chores'] %}
+          {% set chore_done = chore['completed_week'] is not none %}
+          <li>
+            {% if current_user['account_kind'] == 'person' and group['user']['id'] == current_user['id'] %}
+            <form method="post" action="{{ url_for('toggle_chore', chore_id=chore['id'], return_to='home') }}">
+              <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+              <button aria-label="{{ 'Mark incomplete' if chore_done else 'Mark complete' }}">{{ '✓' if chore_done else '◯' }}</button>
+              <span class="{{ 'done' if chore_done else '' }}">{{ chore['text'] }}</span>
+            </form>
+            {% else %}
+            <span class="{{ 'done' if chore_done else '' }}">{{ '✓' if chore_done else '◯' }} {{ chore['text'] }}</span>
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+      </section>
+      {% endif %}
+    {% endfor %}
+    {% if not home_has_chores.value %}<p class="muted">No chores assigned for today.</p>{% endif %}
+    <a href="{{ url_for('index', kind='chores', weekday=home_weekday) }}">Manage chores</a>
+  </section>
+
   <section class="panel" id="calendar">
     <h2>Calendar</h2>
     <form method="post" action="{{ url_for('add_event') }}">
@@ -25,7 +63,7 @@
     <nav aria-label="List categories" class="list-tabs">
       <a href="{{ url_for('index', kind='shopping') }}" {% if list_kind == 'shopping' %}aria-current="page"{% endif %}>Shopping</a>
       <a href="{{ url_for('index', kind='todo') }}" {% if list_kind == 'todo' %}aria-current="page"{% endif %}>To-do</a>
-      <span aria-disabled="true">Chores (coming next)</span>
+      <a href="{{ url_for('index', kind='chores') }}" {% if list_kind == 'chores' %}aria-current="page"{% endif %}>Chores</a>
     </nav>
 
     {% if lists %}
@@ -100,6 +138,73 @@
         {% else %}<li>{{ 'Nothing to buy.' if list_kind == 'shopping' else 'No tasks yet.' }}</li>{% endfor %}
       </ul>
       {% if list_kind == 'shopping' %}<a href="{{ url_for('shopping_text', list_id=selected_list['id']) }}">Download list</a>{% endif %}
+    {% elif list_kind == 'chores' %}
+      <nav class="chore-days" aria-label="Day of the week">
+        {% for day in weekdays %}
+        <a href="{{ url_for('index', kind='chores', weekday=loop.index0, assignee_id=chore_filter or None) }}" {% if selected_weekday == loop.index0 %}aria-current="page"{% endif %}>{{ day }}</a>
+        {% endfor %}
+      </nav>
+      {% if current_user['account_kind'] != 'house' %}
+      <form method="post" action="{{ url_for('create_chore') }}" class="chore-create">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        <input type="hidden" name="weekday" value="{{ selected_weekday }}">
+        <label for="chore-text">Add a chore for {{ weekdays[selected_weekday] }}</label>
+        <input id="chore-text" name="text" maxlength="240" placeholder="Put clothes away" required>
+        <label for="chore-assignee">Assign to</label>
+        <select id="chore-assignee" name="assignee">
+          <option value="everyone">Everyone</option>
+          {% for user in list_users %}
+          <option value="{{ user['id'] }}">{{ user['display_name'] or user['username'] }}</option>
+          {% endfor %}
+        </select>
+        <button class="primary">Add chore</button>
+      </form>
+      {% endif %}
+      <form method="get" action="{{ url_for('index') }}" class="chore-filter">
+        <input type="hidden" name="kind" value="chores">
+        <input type="hidden" name="weekday" value="{{ selected_weekday }}">
+        <label for="chore-filter-user">Filter by user</label>
+        <select id="chore-filter-user" name="assignee_id">
+          <option value="">Everyone</option>
+          {% for user in list_users %}
+          <option value="{{ user['id'] }}" {% if chore_filter == user['id'] %}selected{% endif %}>{{ user['display_name'] or user['username'] }}</option>
+          {% endfor %}
+        </select>
+        <button>Show chores</button>
+      </form>
+      {% for group in chore_groups %}
+      {% set group_index = loop.index0 %}
+      <section class="chore-group">
+        <h3>{{ group['user']['display_name'] or group['user']['username'] }}</h3>
+        <ul class="checks">
+          {% for chore in group['chores'] %}
+          {% set chore_done = chore['completed_week'] is not none %}
+          <li>
+            {% if current_user['account_kind'] != 'house' and group['user']['id'] == current_user['id'] and (chore['assigned_everyone'] or chore['assignee_id'] == current_user['id']) %}
+            <form method="post" action="{{ url_for('toggle_chore', chore_id=chore['id']) }}">
+              <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+              <button aria-label="{{ 'Mark incomplete' if chore_done else 'Mark complete' }}">{{ '✓' if chore_done else '◯' }}</button>
+              <span class="{{ 'done' if chore_done else '' }}">{{ chore['text'] }}</span>
+            </form>
+            {% else %}
+            <span class="{{ 'done' if chore_done else '' }}">{{ '✓' if chore_done else '◯' }} {{ chore['text'] }}</span>
+            {% endif %}
+            {% if (chore['created_by'] == current_user['id'] or current_user['role'] == 'admin') and (not chore['assigned_everyone'] or group_index == 0) %}
+            <button type="button" class="danger" onclick="document.getElementById('delete-chore-{{ chore['id'] }}').showModal()">Delete</button>
+            <dialog id="delete-chore-{{ chore['id'] }}">
+              <form method="post" action="{{ url_for('delete_chore', chore_id=chore['id']) }}" class="dialog-form">
+                <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+                <p class="eyebrow">Remove chore</p><h2>Delete this chore?</h2>
+                <p>{{ chore['text'] }} will be removed from {{ weekdays[selected_weekday] }} for every assigned person.</p>
+                <div class="dialog-actions"><button type="button" onclick="this.closest('dialog').close()">Cancel</button><button class="danger">Delete chore</button></div>
+              </form>
+            </dialog>
+            {% endif %}
+          </li>
+          {% else %}<li>No chores assigned.</li>{% endfor %}
+        </ul>
+      </section>
+      {% endfor %}
     {% elif list_kind == 'todo' %}
       <p>Create a To-do list to get started.</p>
     {% endif %}
