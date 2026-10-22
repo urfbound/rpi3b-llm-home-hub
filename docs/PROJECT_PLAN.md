@@ -64,7 +64,8 @@ tabs are implemented.
   backup, and restore one. Restoring requires confirmation and briefly
   interrupts the app. Verify each backup before retaining it, and verify a
   selected backup before restoring. Restore revokes existing sessions so
-  users log in again.
+  users log in again. Run scheduled checks as a persistent systemd timer,
+  separate from the web process, so missed checks run after downtime.
 - The project uses GPLv3.
 
 ## Accounts, visibility, and sharing

@@ -3,7 +3,7 @@ import sqlite3
 import time
 from contextlib import closing
 
-from homehub.backup_scheduler import run_backup_cycle
+from homehub.backup_scheduler import main as backup_main, run_backup_cycle
 from homehub.app import PH, create_app
 
 
@@ -158,3 +158,16 @@ def test_scheduler_respects_interval_and_off_setting(tmp_path):
         db.commit()
     assert not run_backup_cycle(database, logger, now=now + 86400)
     assert len(list(folder.glob('homehub-*.sqlite3'))) == 1
+
+
+def test_backup_command_uses_configured_database_and_reports_failures(tmp_path, monkeypatch):
+    _, _, database = make_admin_client(tmp_path)
+    with closing(sqlite3.connect(database)) as db:
+        db.execute("INSERT INTO app_settings(key,value) VALUES('backup_interval_days','0')")
+        db.commit()
+
+    monkeypatch.setenv('HOMEHUB_DB', str(database))
+    assert backup_main() == 0
+
+    monkeypatch.setenv('HOMEHUB_DB', str(tmp_path / 'missing.sqlite3'))
+    assert backup_main() == 1

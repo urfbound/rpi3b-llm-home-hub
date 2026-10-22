@@ -1,8 +1,10 @@
-"""Small in-process scheduler for routine database snapshots."""
+"""One-shot backup runner invoked by the systemd timer."""
 from __future__ import annotations
 
+import logging
+import os
 import sqlite3
-import threading
+import sys
 from contextlib import closing
 from pathlib import Path
 
@@ -10,7 +12,8 @@ from .backups import (BackupError, create_backup, default_backup_directory,
                       list_backups, prune_backups, validate_backup_directory)
 
 
-def run_backup_cycle(database: Path, logger, now: float | None = None) -> bool:
+def run_backup_cycle(database: Path, logger, now: float | None = None,
+                     raise_on_error: bool = False) -> bool:
     """Create a verified backup when the configured interval has elapsed."""
     import time
 
@@ -34,21 +37,23 @@ def run_backup_cycle(database: Path, logger, now: float | None = None) -> bool:
         return True
     except (OSError, ValueError, sqlite3.Error, BackupError):
         logger.exception('Scheduled Home Hub backup failed')
+        if raise_on_error:
+            raise
         return False
 
 
-def start_backup_scheduler(app):
-    """Start one low-frequency daemon that checks settings every 15 minutes."""
-    if app.testing:
-        return None
-    stop = threading.Event()
+def main() -> int:
+    """Run one backup check; systemd owns the recurring schedule."""
+    logging.basicConfig(level=logging.INFO,
+                        format='%(asctime)s %(levelname)s %(name)s: %(message)s')
+    database = Path(os.environ.get(
+        'HOMEHUB_DB', str(Path.home() / '.local/share/homehub/homehub.sqlite3')))
+    try:
+        run_backup_cycle(database, logging.getLogger('homehub.backup'), raise_on_error=True)
+    except (OSError, ValueError, sqlite3.Error, BackupError):
+        return 1
+    return 0
 
-    def run():
-        database = Path(app.config['DATABASE'])
-        while not stop.is_set():
-            run_backup_cycle(database, app.logger)
-            stop.wait(15 * 60)
 
-    thread = threading.Thread(target=run, name='homehub-backup-scheduler', daemon=True)
-    thread.start()
-    return stop, thread
+if __name__ == '__main__':
+    sys.exit(main())

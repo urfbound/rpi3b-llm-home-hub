@@ -1,0 +1,11 @@
+[Unit]
+Description=Check whether a Home Hub backup is due
+
+[Timer]
+OnCalendar=*-*-* *:0/15:00
+Persistent=true
+AccuracySec=1min
+Unit=homehub-backup.service
+
+[Install]
+WantedBy=timers.target

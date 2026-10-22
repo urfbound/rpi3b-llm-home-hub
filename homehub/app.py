@@ -636,9 +636,7 @@ def create_app(test_config=None):
 
 def main():
     from waitress import serve
-    from .backup_scheduler import start_backup_scheduler
     app=create_app()
-    start_backup_scheduler(app)
     host=os.environ.get('HOMEHUB_BIND','127.0.0.1')
     serve(app,host=host,port=int(os.environ.get('HOMEHUB_PORT','8080')),threads=2)
 

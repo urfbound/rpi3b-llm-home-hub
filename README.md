@@ -25,9 +25,10 @@ Browse to http://127.0.0.1:8080. **Keep your secret key persistent** across rest
 ## Backups
 
 Admins can manage backups from **Admin → Backup settings**. Verified SQLite
-snapshots are created daily by default, with 14 copies retained. The interval
-can be set from 1 to 31 days or disabled; the retention count can be set from
-1 to 365. Admins can also create, download, restore, and delete backups.
+snapshots are created daily by default, with 14 copies retained. A systemd
+timer checks every 15 minutes whether one is due. The interval can be set
+from 1 to 31 days or disabled; the retention count can be set from 1 to 365.
+Admins can also create, download, restore, and delete backups.
 Restores are checked and upgraded before replacing the database, then all
 users are signed out. The default backup folder is `backups` beside the
 configured database; choose a protected folder with enough free space.
@@ -35,7 +36,7 @@ Backups contain account hashes and private household data.
 
 ## Run on the Pi
 
-Install a minimal Raspberry Pi OS (Python 3.11+), create a Python virtual environment, install the app using `pip install .`, and configure a systemd service with `HOMEHUB_SECRET_KEY`, `HOMEHUB_DB` and `HOMEHUB_BIND=<Pi LAN IP>`. See `deploy/homehub.service.example`; edit paths and user before installation. Do not open a router port to this service. Restrict the allowed LAN subnet with your firewall. If you use an HTTP connection for the initial prototype, passwords and cookies travel unencrypted over the LAN; arrange HTTPS before household use.
+Install a minimal Raspberry Pi OS (Python 3.11+), create a Python virtual environment, install the app using `pip install .`, and configure a systemd service with `HOMEHUB_SECRET_KEY`, `HOMEHUB_DB` and `HOMEHUB_BIND=<Pi LAN IP>`. See `deploy/homehub.service.example`, `deploy/homehub-backup.service.example` and `deploy/homehub-backup.timer.example`; edit paths and user before installation. Install the backup unit files, then run `sudo systemctl daemon-reload` and `sudo systemctl enable --now homehub.service homehub-backup.timer`. The timer catches up after downtime and checks the Admin-configured interval. If you choose a backup folder outside `/var/lib/homehub`, allow it in `ReadWritePaths=` in both service units. Do not open a router port to this service. Restrict the allowed LAN subnet with your firewall. If you use an HTTP connection for the initial prototype, passwords and cookies travel unencrypted over the LAN; arrange HTTPS before household use.
 
 ## Important limitations / follow-up work
 
