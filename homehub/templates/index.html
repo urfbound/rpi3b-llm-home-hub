@@ -227,11 +227,24 @@
 
   <section class="panel" id="recipes">
     <h2>Recipe book</h2>
-    <form method="post" action="{{ url_for('add_recipe') }}">
+    <form method="post" action="{{ url_for('add_recipe') }}" class="recipe-create">
       <input type="hidden" name="_csrf" value="{{ csrf_token }}">
-      <label>Name<input name="title" placeholder="Favourite dinner" maxlength="160" required></label>
-      <label>Ingredients<textarea name="ingredients" rows="3" placeholder="One ingredient per line"></textarea></label>
-      <label>Instructions<textarea name="instructions" rows="3"></textarea></label>
+      <label>Name<input name="title" placeholder="Favourite dinner" maxlength="128" required></label>
+      <label>Description<input name="description" maxlength="256"></label>
+      <label>Default servings<input name="default_servings" type="number" min="1" max="99" value="4" required></label>
+      <h3>Ingredients <small>(up to 64)</small></h3>
+      <div id="recipe-ingredients">
+        <div class="recipe-ingredient-row">
+          <input name="ingredient_quantity" maxlength="32" aria-label="Ingredient quantity" placeholder="Quantity">
+          <input name="ingredient_unit" maxlength="16" aria-label="Ingredient unit" placeholder="Unit">
+          <input name="ingredient_name" maxlength="128" aria-label="Ingredient name" placeholder="Ingredient" required>
+          <input name="ingredient_note" maxlength="128" aria-label="Ingredient note" placeholder="Note">
+        </div>
+      </div>
+      <button type="button" id="add-recipe-ingredient">Add ingredient</button>
+      <h3>Method <small>(up to 64 steps, 256 characters each)</small></h3>
+      <div id="recipe-steps"><textarea name="step" maxlength="256" aria-label="Method step" required></textarea></div>
+      <button type="button" id="add-recipe-step">Add step</button>
       <button class="primary">Save recipe</button>
     </form>
     <ul>{% for r in recipes %}<li><a href="{{ url_for('recipe_detail', recipe_id=r['id']) }}">{{ r['title'] }}</a></li>{% else %}<li>Your recipe book is waiting.</li>{% endfor %}</ul>
@@ -243,4 +256,24 @@
     <p class="muted">This starter intentionally doesn't include external network requests or a running model yet.</p>
   </section>
 </div>
+<script>
+const ingredientRows = document.getElementById('recipe-ingredients');
+document.getElementById('add-recipe-ingredient')?.addEventListener('click', () => {
+  if (ingredientRows.children.length >= 64) return;
+  const row = document.createElement('div');
+  row.className = 'recipe-ingredient-row';
+  row.innerHTML = '<input name="ingredient_quantity" maxlength="32" aria-label="Ingredient quantity" placeholder="Quantity"><input name="ingredient_unit" maxlength="16" aria-label="Ingredient unit" placeholder="Unit"><input name="ingredient_name" maxlength="128" aria-label="Ingredient name" placeholder="Ingredient" required><input name="ingredient_note" maxlength="128" aria-label="Ingredient note" placeholder="Note"><button type="button" aria-label="Remove ingredient">Remove</button>';
+  row.querySelector('button').addEventListener('click', () => row.remove());
+  ingredientRows.append(row);
+});
+const recipeSteps = document.getElementById('recipe-steps');
+document.getElementById('add-recipe-step')?.addEventListener('click', () => {
+  if (recipeSteps.children.length >= 64) return;
+  const row = document.createElement('div');
+  row.className = 'recipe-step-row';
+  row.innerHTML = '<textarea name="step" maxlength="256" aria-label="Method step" required></textarea><button type="button" aria-label="Remove step">Remove</button>';
+  row.querySelector('button').addEventListener('click', () => row.remove());
+  recipeSteps.append(row);
+});
+</script>
 {% endblock %}

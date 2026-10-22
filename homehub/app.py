@@ -20,7 +20,7 @@ from .backups import (BackupError, backup_filename, create_backup,
                       prune_backups, restore_backup, validate_backup_directory)
 
 PH = PasswordHasher(memory_cost=16384, time_cost=2, parallelism=1)
-SCHEMA_VERSION = 4
+SCHEMA_VERSION = 5
 LOGIN_WINDOW_SECONDS = 15 * 60
 LOGIN_USERNAME_LIMIT = 5
 LOGIN_ADDRESS_LIMIT = 30
@@ -49,6 +49,19 @@ CREATE TABLE IF NOT EXISTS recipes (
  id INTEGER PRIMARY KEY, title TEXT NOT NULL, ingredients TEXT NOT NULL DEFAULT '',
  instructions TEXT NOT NULL DEFAULT '', created_by INTEGER NOT NULL REFERENCES users(id)
 );
+CREATE TABLE IF NOT EXISTS recipe_ingredients (
+ id INTEGER PRIMARY KEY, recipe_id INTEGER NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+ position INTEGER NOT NULL, quantity TEXT NOT NULL DEFAULT '' CHECK(length(quantity)<=32),
+ unit TEXT NOT NULL DEFAULT '' CHECK(length(unit)<=16),
+ name TEXT NOT NULL CHECK(length(trim(name)) BETWEEN 1 AND 128),
+ note TEXT NOT NULL DEFAULT '' CHECK(length(note)<=128), UNIQUE(recipe_id,position)
+);
+CREATE TABLE IF NOT EXISTS recipe_steps (
+ id INTEGER PRIMARY KEY, recipe_id INTEGER NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+ position INTEGER NOT NULL, text TEXT NOT NULL CHECK(length(trim(text)) BETWEEN 1 AND 256),
+ UNIQUE(recipe_id,position)
+);
+CREATE INDEX IF NOT EXISTS recipes_owner ON recipes(created_by);
 CREATE TABLE IF NOT EXISTS shopping_items (
  id INTEGER PRIMARY KEY, text TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0,
  created_by INTEGER NOT NULL REFERENCES users(id),
@@ -244,6 +257,13 @@ def initialize_database(db_path):
             ):
                 if column not in item_columns:
                     db.execute(f'ALTER TABLE shopping_items ADD COLUMN {column} {definition}')
+            recipe_columns = {row[1] for row in db.execute('PRAGMA table_info(recipes)')}
+            for column, definition in (
+                ('description', "TEXT NOT NULL DEFAULT ''"),
+                ('default_servings', 'INTEGER NOT NULL DEFAULT 4'),
+            ):
+                if column not in recipe_columns:
+                    db.execute(f'ALTER TABLE recipes ADD COLUMN {column} {definition}')
             default_list = db.execute(
                 "SELECT id FROM household_lists WHERE kind='shopping' AND is_default=1"
             ).fetchone()
@@ -275,7 +295,7 @@ def create_app(test_config=None):
         SESSION_COOKIE_SAMESITE='Lax',
         SESSION_COOKIE_SECURE=os.environ.get('HOMEHUB_COOKIE_SECURE', '').strip().lower()
             in {'1', 'true', 'yes', 'on'},
-        MAX_CONTENT_LENGTH=64*1024,
+        MAX_CONTENT_LENGTH=1024*1024,
     )
     if test_config:
         app.config.update(test_config)
@@ -1037,18 +1057,73 @@ def create_app(test_config=None):
     @app.post('/recipes')
     @login_required
     def add_recipe():
-        title=request.form.get('title','').strip()
-        if title and len(title)<=160:
-            db=get_db();db.execute('INSERT INTO recipes(title,ingredients,instructions,created_by) VALUES(?,?,?,?)',
-              (title,request.form.get('ingredients','')[:8000],request.form.get('instructions','')[:12000],g.user['id']));db.commit()
+        title = request.form.get('title', '').strip()
+        description = request.form.get('description', '').strip()
+        try:
+            servings = int(request.form.get('default_servings', ''))
+        except ValueError:
+            abort(400)
+        quantities = request.form.getlist('ingredient_quantity')
+        units = request.form.getlist('ingredient_unit')
+        names = request.form.getlist('ingredient_name')
+        notes = request.form.getlist('ingredient_note')
+        steps = request.form.getlist('step')
+        if (not title or len(title) > 128 or len(description) > 256
+                or not 1 <= servings <= 99 or not 1 <= len(names) <= 64
+                or len(quantities) != len(names) or len(units) != len(names)
+                or len(notes) != len(names) or not 1 <= len(steps) <= 64):
+            abort(400)
+        ingredients = []
+        for quantity, unit, name, note in zip(quantities, units, names, notes):
+            ingredient = (quantity.strip(), unit.strip(), name.strip(), note.strip())
+            if (not ingredient[2] or len(ingredient[0]) > 32 or len(ingredient[1]) > 16
+                    or len(ingredient[2]) > 128 or len(ingredient[3]) > 128):
+                abort(400)
+            ingredients.append(ingredient)
+        clean_steps = [step.strip() for step in steps]
+        if any(not step or len(step) > 256 for step in clean_steps):
+            abort(400)
+        db = get_db()
+        count = db.execute('SELECT COUNT(*) FROM recipes WHERE created_by=?',
+                           (g.user['id'],)).fetchone()[0]
+        if count >= 128:
+            abort(409, description='Your recipe book is full (128 recipes).')
+        with db:
+            cursor = db.execute(
+                'INSERT INTO recipes(title,description,default_servings,created_by) VALUES(?,?,?,?)',
+                (title, description, servings, g.user['id'])
+            )
+            recipe_id = cursor.lastrowid
+            db.executemany(
+                'INSERT INTO recipe_ingredients(recipe_id,position,quantity,unit,name,note) '
+                'VALUES(?,?,?,?,?,?)',
+                [(recipe_id, position, *ingredient)
+                 for position, ingredient in enumerate(ingredients)]
+            )
+            db.executemany(
+                'INSERT INTO recipe_steps(recipe_id,position,text) VALUES(?,?,?)',
+                [(recipe_id, position, step) for position, step in enumerate(clean_steps)]
+            )
         return redirect(url_for('index')+'#recipes')
 
     @app.get('/recipes/<int:recipe_id>')
     @login_required
     def recipe_detail(recipe_id):
-        recipe=get_db().execute('SELECT * FROM recipes WHERE id=?',(recipe_id,)).fetchone()
+        db = get_db()
+        recipe = db.execute('SELECT * FROM recipes WHERE id=?', (recipe_id,)).fetchone()
         if not recipe: abort(404)
-        return render_template('recipe.html', recipe=recipe)
+        ingredients = db.execute(
+            'SELECT quantity,unit,name,note FROM recipe_ingredients WHERE recipe_id=? ORDER BY position',
+            (recipe_id,)
+        ).fetchall()
+        steps = db.execute(
+            'SELECT text FROM recipe_steps WHERE recipe_id=? ORDER BY position', (recipe_id,)
+        ).fetchall()
+        legacy_ingredients = not ingredients and bool(recipe['ingredients'])
+        legacy_steps = not steps and bool(recipe['instructions'])
+        return render_template('recipe.html', recipe=recipe, ingredients=ingredients,
+                               steps=steps, legacy_ingredients=legacy_ingredients,
+                               legacy_steps=legacy_steps)
 
     @app.post('/events')
     @login_required
