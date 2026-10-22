@@ -32,5 +32,5 @@ Install a minimal Raspberry Pi OS (Python 3.11+), create a Python virtual enviro
 - Recipe creation and viewing exist, but editing, ingredient normalization, linking recipes to dates, deletion, and shopping-list aggregation remain to build.
 - Calendar `.ics` downloads are a one-way snapshot, not two-way synchronization. The basic export covers all-day events only.
 - Weather, RSS, games, outbound email, and LLM chat are not wired up yet.
-- Login rate limits, TLS, routine backup/restore, audit logging, and reliable timezone rules must be added before production. Initial schema versioning and pre-upgrade backups are implemented; later releases still need their own migrations and upgrade tests.
+- Login rate limits are in place. TLS, routine backup/restore, audit logging, and reliable timezone rules are still needed before production. Schema versioning and pre-upgrade backups are implemented; later releases still need their own migrations and upgrade tests.
 - Do not store sensitive information until further security hardening. For now, run on localhost for development.

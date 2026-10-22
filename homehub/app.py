@@ -1,4 +1,6 @@
 """Home Hub phase 1: accounts, sessions, recipes, lists, calendar and ICS exports."""
+import hashlib
+import hmac
 import os
 import secrets
 import sqlite3
@@ -13,7 +15,10 @@ from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError, VerificationError
 
 PH = PasswordHasher(memory_cost=16384, time_cost=2, parallelism=1)
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
+LOGIN_WINDOW_SECONDS = 15 * 60
+LOGIN_USERNAME_LIMIT = 5
+LOGIN_ADDRESS_LIMIT = 30
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
  id INTEGER PRIMARY KEY, username TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -23,6 +28,14 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS app_settings (
  key TEXT PRIMARY KEY, value TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS login_failures (
+ id INTEGER PRIMARY KEY, username_key TEXT NOT NULL, address_key TEXT NOT NULL,
+ attempted_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS login_failures_username_time
+ ON login_failures(username_key, attempted_at);
+CREATE INDEX IF NOT EXISTS login_failures_address_time
+ ON login_failures(address_key, attempted_at);
 CREATE TABLE IF NOT EXISTS recipes (
  id INTEGER PRIMARY KEY, title TEXT NOT NULL, ingredients TEXT NOT NULL DEFAULT '',
  instructions TEXT NOT NULL DEFAULT '', created_by INTEGER NOT NULL REFERENCES users(id)
@@ -69,6 +82,12 @@ def setting(db, key, default):
 
 def temporary_password():
     return secrets.token_urlsafe(18)
+
+def login_key(secret_key, purpose, value):
+    """Derive a stable, keyed identifier without storing login data in plaintext."""
+    secret = secret_key.encode('utf-8') if isinstance(secret_key, str) else secret_key
+    message = f'{purpose}:{value}'.encode('utf-8')
+    return hmac.new(secret, message, hashlib.sha256).hexdigest()
 
 def temporary_password_page(username, password, change_required):
     response = make_response(render_template('temporary_password.html', username=username,
@@ -194,7 +213,25 @@ def create_app(test_config=None):
     @app.route('/login', methods=['GET','POST'])
     def login():
         if request.method == 'POST':
-            user = get_db().execute('SELECT * FROM users WHERE username=? AND active=1',(request.form.get('username',''),)).fetchone()
+            db = get_db()
+            username = request.form.get('username', '').strip()
+            username_key = login_key(app.config['SECRET_KEY'], 'username', username.casefold())
+            address_key = login_key(app.config['SECRET_KEY'], 'address', request.remote_addr or 'unknown')
+            now = int(time.time())
+            cutoff = now - LOGIN_WINDOW_SECONDS
+            db.execute('DELETE FROM login_failures WHERE attempted_at < ?', (cutoff,))
+            username_failures = db.execute(
+                'SELECT COUNT(*) FROM login_failures WHERE username_key=? AND attempted_at>=?',
+                (username_key, cutoff)).fetchone()[0]
+            address_failures = db.execute(
+                'SELECT COUNT(*) FROM login_failures WHERE address_key=? AND attempted_at>=?',
+                (address_key, cutoff)).fetchone()[0]
+            if username_failures >= LOGIN_USERNAME_LIMIT or address_failures >= LOGIN_ADDRESS_LIMIT:
+                db.commit()
+                flash('Too many sign-in attempts. Wait a few minutes and try again.')
+                return render_template('login.html'), 429
+
+            user = db.execute('SELECT * FROM users WHERE username=? AND active=1', (username,)).fetchone()
             ok = False
             if user:
                 try:
@@ -202,11 +239,16 @@ def create_app(test_config=None):
                 except (VerifyMismatchError, VerificationError):
                     pass
             if ok:
+                db.execute('DELETE FROM login_failures WHERE username_key=?', (username_key,))
+                db.commit()
                 session.clear()
                 session['uid'],session['sv'] = user['id'],user['session_version']
                 session['signed_in'] = session['last_seen'] = int(time.time())
                 session['csrf_token'] = secrets.token_urlsafe(24)
                 return redirect(url_for('change_password') if user['must_change_password'] else url_for('index'))
+            db.execute('INSERT INTO login_failures(username_key,address_key,attempted_at) VALUES(?,?,?)',
+                       (username_key, address_key, now))
+            db.commit()
             flash('Incorrect username or password.')
         return render_template('login.html')
 

@@ -22,9 +22,11 @@ without modifying it. Migration errors roll back the schema change.
 4. Start the service and confirm that login, recipes, shopping items, and
    calendar events are present. Check service logs if startup fails.
 
-For the current prototype, only the initial schema migration to version 1 is
-implemented. Later releases must add ordered migrations and upgrade tests for
-each supported prior release.
+Schema version 2 adds the persistent login-attempt table and indexes. The
+upgrade preserves existing users and household content, and creates a
+verified pre-v2 copy before changing a populated version 1 database. Later
+releases must continue adding ordered migrations and upgrade tests for each
+supported prior release.
 
 ## If an upgrade fails
 
