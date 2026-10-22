@@ -73,8 +73,10 @@ by feature before implementation.
   their own passwords. Password resets issue a one-time temporary password
   and force a change. Reset and deletion revoke existing sessions.
 - Sessions expire after 24 hours idle or seven days absolute by default.
-  Both limits are configurable by admins. Add login rate limiting and CSRF
-  protection before household deployment.
+  Both limits are configurable by admins. Require CSRF tokens for state
+  changes. Limit failed sign-ins to five per username and 30 per source
+  address in a rolling 15-minute window; retain no raw usernames or addresses
+  in the limiter and expire old attempts.
 - Items are shared by default; private items can have a per-user allowlist.
   Admins may view all content and delete any content. Ordinary users edit or
   delete only content they created, except that participants may freely edit
@@ -425,15 +427,16 @@ the three games where it breaks ties.
   by the user. Other first-release feature visuals need approval before
   implementation.
 - [Lists and navigation preview](design/lists-navigation-preview.html):
-  awaiting user review before list and tab-order implementation.
+  approved by the user before list and tab-order implementation.
 - [Recipes preview](design/recipes-preview.html): approved by the user before
   recipe implementation.
-- [Calendar preview](design/calendar-preview.html): awaiting user review
+- [Calendar preview](design/calendar-preview.html): approved by the user
   before calendar implementation.
 - [Weather preview](design/weather-preview.html): approved by the user before
   weather implementation.
 - [RSS preview](design/rss-preview.html): approved by the user before RSS
   implementation.
+- Games visual design remains to be reviewed before implementation.
 
 ## Deferred features
 

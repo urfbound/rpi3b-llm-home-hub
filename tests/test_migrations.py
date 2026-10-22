@@ -47,7 +47,7 @@ def test_legacy_upgrade_preserves_data_and_creates_backup(tmp_path):
     legacy_database(path)
     create_app(config(path))
     with sqlite3.connect(path) as db:
-        assert db.execute('PRAGMA user_version').fetchone()[0] == 1
+        assert db.execute('PRAGMA user_version').fetchone()[0] == 2
         user = db.execute('SELECT id,username,display_name,password_hash FROM users').fetchone()
         assert user[:3] == (7, 'alex', 'alex')
         assert PH.verify(user[3], 'correct horse battery')
@@ -56,14 +56,14 @@ def test_legacy_upgrade_preserves_data_and_creates_backup(tmp_path):
             (17, 'Milk', 1, 7)]
         assert db.execute('SELECT id,recipe_id,created_by FROM events').fetchall() == [(23, 13, 7)]
         assert db.execute('PRAGMA foreign_key_check').fetchall() == []
-    backups = list(tmp_path.glob('hub.pre-v1-*.sqlite3'))
+    backups = list(tmp_path.glob('hub.pre-v2-*.sqlite3'))
     assert len(backups) == 1
     with sqlite3.connect(backups[0]) as db:
         assert db.execute('PRAGMA integrity_check').fetchone()[0] == 'ok'
         assert db.execute('PRAGMA user_version').fetchone()[0] == 0
         assert db.execute('SELECT title FROM recipes WHERE id=13').fetchone()[0] == 'Soup'
     create_app(config(path))
-    assert list(tmp_path.glob('hub.pre-v1-*.sqlite3')) == backups
+    assert list(tmp_path.glob('hub.pre-v2-*.sqlite3')) == backups
 
 
 def test_newer_database_is_not_changed(tmp_path):
@@ -77,7 +77,7 @@ def test_newer_database_is_not_changed(tmp_path):
     with sqlite3.connect(path) as db:
         assert db.execute('PRAGMA user_version').fetchone()[0] == 99
         assert db.execute('SELECT value FROM marker').fetchone()[0] == 'keep me'
-    assert not list(tmp_path.glob('future.pre-v1-*.sqlite3'))
+    assert not list(tmp_path.glob('future.pre-v2-*.sqlite3'))
 
 
 def test_failed_upgrade_rolls_back(tmp_path):
@@ -91,4 +91,28 @@ def test_failed_upgrade_rolls_back(tmp_path):
         assert db.execute('PRAGMA user_version').fetchone()[0] == 0
         assert 'display_name' not in [row[1] for row in db.execute('PRAGMA table_info(users)')]
         assert db.execute('SELECT title FROM recipes WHERE id=14').fetchone()[0] == 'Orphan'
-    assert len(list(tmp_path.glob('broken.pre-v1-*.sqlite3'))) == 1
+    assert len(list(tmp_path.glob('broken.pre-v2-*.sqlite3'))) == 1
+
+
+def test_version_one_upgrade_adds_login_limiter_without_losing_data(tmp_path):
+    path = tmp_path / 'v1.sqlite3'
+    create_app(config(path))
+    with sqlite3.connect(path) as db:
+        db.execute("INSERT INTO users(username,display_name,password_hash,role) "
+                   "VALUES('alex','Alex',?,'admin')", (PH.hash('correct horse battery'),))
+        db.execute("INSERT INTO recipes(title,created_by) VALUES('Soup',1)")
+        db.execute('DROP TABLE login_failures')
+        db.execute('PRAGMA user_version=1')
+
+    create_app(config(path))
+    with sqlite3.connect(path) as db:
+        assert db.execute('PRAGMA user_version').fetchone()[0] == 2
+        assert db.execute('SELECT title FROM recipes').fetchall() == [('Soup',)]
+        assert db.execute("SELECT name FROM sqlite_master WHERE type='table' "
+                           "AND name='login_failures'").fetchone() == ('login_failures',)
+        assert db.execute('PRAGMA foreign_key_check').fetchall() == []
+    backups = list(tmp_path.glob('v1.pre-v2-*.sqlite3'))
+    assert len(backups) == 1
+    with sqlite3.connect(backups[0]) as db:
+        assert db.execute('PRAGMA user_version').fetchone()[0] == 1
+        assert db.execute('SELECT title FROM recipes').fetchall() == [('Soup',)]

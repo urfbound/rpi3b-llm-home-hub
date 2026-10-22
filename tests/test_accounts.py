@@ -133,6 +133,39 @@ def test_session_expiry_and_settings(app):
     assert client.get('/admin/accounts').status_code == 302
 
 
+def test_login_rate_limit_is_persisted_hashed_and_expires(app, monkeypatch):
+    now = [1_800_000_000]
+    monkeypatch.setattr('homehub.app.time.time', lambda: now[0])
+    client = app.test_client()
+    client.get('/login')
+    for _ in range(5):
+        response = post(client, '/login', username='alex', password='wrong')
+        assert response.status_code == 200
+    blocked = post(client, '/login', username='alex', password='correct horse battery')
+    assert blocked.status_code == 429
+    assert b'Too many sign-in attempts' in blocked.data
+    rows = db_rows(app, 'SELECT username_key,address_key FROM login_failures')
+    assert len(rows) == 5
+    assert rows[0][0] != 'alex'
+    assert rows[0][1] != '127.0.0.1'
+
+    now[0] += 15 * 60 + 1
+    recovered = post(client, '/login', username='alex', password='correct horse battery')
+    assert recovered.status_code == 302
+    assert recovered.headers['Location'].endswith('/')
+    assert db_rows(app, 'SELECT COUNT(*) FROM login_failures') == [(0,)]
+
+
+def test_login_rate_limit_caps_failures_from_one_address(app):
+    client = app.test_client()
+    client.get('/login')
+    for attempt in range(30):
+        response = post(client, '/login', username=f'unknown{attempt}', password='wrong')
+        assert response.status_code == 200
+    blocked = post(client, '/login', username='sam', password='another long password')
+    assert blocked.status_code == 429
+
+
 def test_migrates_existing_user_table(tmp_path):
     path = tmp_path / 'old.sqlite3'
     with sqlite3.connect(path) as db:
