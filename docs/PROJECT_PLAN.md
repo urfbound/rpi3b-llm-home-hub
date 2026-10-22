@@ -215,13 +215,14 @@ by feature before implementation.
   illuminated. Do not add a separate routine Moon data poll. Use local
   almanac rules for traditional names such as Harvest or Hunter's Moon; apply
   a name only to its full Moon or label the next named full Moon separately.
-  Show predictions for the nearest available tide station, including its
-  name, distance from the household town, and
-  high/low times and heights, even for an inland town. Use an authoritative
-  station prediction source for tides; do not present gridded sea-level
-  estimates as tide tables. Mark data age and source clearly, and cache these
-  optional values for offline display. Tide readings are for planning, not
-  navigation.
+  For a Canadian household town, show predictions for the nearest Canadian
+  Hydrographic Service station with valid high/low tide predictions, including
+  the station name, distance, times and heights, even for an inland town. Hide
+  the tide card when no supported station predictions are available, including
+  for locations outside Canada. Do not substitute Open-Meteo's gridded marine
+  sea-level estimates for station tide tables. Mark data age and source
+  clearly, and cache these optional values for offline display. Tide readings
+  are for planning, not navigation.
   An almanac sub-tab, on-demand historical weather, and alternative providers
   are deferred features.
 - Users manage personal RSS feeds; admins manage feeds for the house-wide
