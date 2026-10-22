@@ -8,7 +8,9 @@ Home Hub to the Internet.
 ## 1. Give the Pi a stable home-network name
 
 Reserve a stable address for the Pi in the router, then add a local DNS entry
-such as `homehub.home.arpa` pointing to that address. Configure household
+such as `homehub.home.arpa` pointing to that address. `home.arpa` is the
+special-use DNS domain reserved for residential home networks by
+[RFC 8375](https://www.rfc-editor.org/rfc/rfc8375.html). Configure household
 devices to use that local name. The name must resolve to the Pi on the LAN.
 Replace it in [Caddyfile.example](../deploy/Caddyfile.example) if you choose a
 different name.
@@ -118,3 +120,4 @@ certificate warning by disabling certificate checks.
 - [Caddy TLS internal issuer](https://caddyserver.com/docs/caddyfile/directives/tls)
 - [Caddy reverse proxy](https://caddyserver.com/docs/caddyfile/directives/reverse_proxy)
 - [Flask cookie security settings](https://flask.palletsprojects.com/en/stable/web-security/)
+- [RFC 8375: Special-Use Domain `home.arpa`](https://www.rfc-editor.org/rfc/rfc8375.html)
