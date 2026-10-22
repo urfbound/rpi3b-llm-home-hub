@@ -160,7 +160,7 @@ initial model-only Raspberry Pi 3B benchmarks support an optional feature.
 - Limit each user to 128 recipes, each recipe to 64 structured ingredients and
   64 ordered steps, and each step to 256 characters. Give each user at most
   one attributed note per recipe, editable or removable by that user and
-  limited to 256 characters. Show notes as text by default; provide Edit
+  limited to 128 characters. Show notes as text by default; provide Edit
   and Delete controls with at least 44 px touch targets beside a user's own
   note and reveal the editor beneath it only when requested. Confirm before
   deleting a note. Recipe viewers can read the notes. When sharing
@@ -171,9 +171,10 @@ initial model-only Raspberry Pi 3B benchmarks support an optional feature.
   note to 32, 16, 128, and 128 characters respectively.
   At 32 users filling every recipe, ingredient, step, and note slot, this is
   4,096 recipes, 262,144 ingredients, 262,144 steps, and up to 131,072 notes.
-  A SQLite layout with these text caps is roughly 200–220 MiB for one-byte
-  UTF-8 text, or around 715–765 MiB if text fills every field with four-byte
-  UTF-8 characters. This estimate excludes images, other features, backups,
+  With the agreed 128-character note limit, a SQLite layout with these text
+  caps is roughly 184–204 MiB for one-byte UTF-8 text, or around 651–701 MiB
+  if text fills every field with four-byte UTF-8 characters. This estimate
+  excludes images, other features, backups,
   and SQLite WAL files.
 - A deliberate **Add to list** action copies recipe ingredients into an
   editable shopping-list snapshot. Combine matching ingredient names only

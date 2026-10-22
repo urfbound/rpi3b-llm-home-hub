@@ -1,1 +1,35 @@
-{% extends 'base.html' %}{% block content %}<section class="panel"><p><a href="/">← Dashboard</a></p><h1>{{recipe['title']}}</h1><h2>Ingredients</h2><p class="preserve">{{recipe['ingredients']}}</p><h2>Instructions</h2><p class="preserve">{{recipe['instructions']}}</p></section>{% endblock %}
+{% extends 'base.html' %}
+{% block content %}
+<section class="panel recipe-detail">
+  <p><a href="{{ url_for('index') }}#recipes">← Recipes</a></p>
+  <p class="eyebrow">Your recipe book</p>
+  <h1>{{ recipe['title'] }}</h1>
+  {% if recipe['description'] %}<p class="muted">{{ recipe['description'] }}</p>{% endif %}
+  <p class="recipe-servings">Default serving count: <strong>{{ recipe['default_servings'] }}</strong></p>
+  <div class="recipe-detail-grid">
+    <section>
+      <h2>Ingredients</h2>
+      {% if legacy_ingredients %}
+      <p class="preserve">{{ recipe['ingredients'] }}</p>
+      {% else %}
+      <ul class="recipe-ingredient-list">
+        {% for ingredient in ingredients %}
+        <li><strong>{{ ingredient['quantity'] }}{% if ingredient['unit'] %} {{ ingredient['unit'] }}{% endif %}</strong>
+          <span>{{ ingredient['name'] }}{% if ingredient['note'] %}<small>{{ ingredient['note'] }}</small>{% endif %}</span></li>
+        {% endfor %}
+      </ul>
+      {% endif %}
+    </section>
+    <section>
+      <h2>Method</h2>
+      {% if legacy_steps %}
+      <p class="preserve">{{ recipe['instructions'] }}</p>
+      {% else %}
+      <ol class="recipe-method">
+        {% for step in steps %}<li>{{ step['text'] }}</li>{% endfor %}
+      </ol>
+      {% endif %}
+    </section>
+  </div>
+</section>
+{% endblock %}

@@ -15,12 +15,11 @@ to `main` only after the user approves the completed change.
   measurements on the Raspberry Pi 3B are recorded in
   [CHAT_PI_BENCHMARK.md](CHAT_PI_BENCHMARK.md). App-only and app-plus-model
   profiling remain to be done.
-- **Lists is the active workstream:** schema version 4, Shopping, To-do list
-  creation/access, and Weekly Chores are merged to main. Copy/Paste is
-  implemented on `feature/list-copy-paste` and awaits review. To-do item
-  assignment, due dates, and collaborative editing are implemented on
-  `feature/todo-item-assignment-due-dates` and await review. Weekend, weather,
-  and system status cards remain.
+- **Lists and Recipes are active workstreams:** Shopping, To-do lists and task
+  assignment/editing, and Weekly Chores are merged to main. Copy/Paste is
+  implemented on `feature/list-copy-paste` and awaits review. Structured
+  recipe creation and display are in progress on `feature/structured-recipes`.
+  Weekend, weather, and system status cards remain.
 - **Current app prototype:** login/admin, a single shopping list, recipe
   create/view, basic event creation and ICS export, and light/dark theme exist.
   The approved full tab designs are not yet implemented as complete features.
@@ -53,13 +52,13 @@ to `main` only after the user approves the completed change.
 ### Lists
 
 1. Versioned schema migrations and legacy shopping-item preservation are
-   implemented through v4; continue adding tests for every future upgrade.
+   implemented through v5; continue adding tests for every future upgrade.
 2. Complete Shopping and To-do flows: list creation, selection, sharing,
    private allowlists, static shopping categories, item ownership, To-do
    assignment/due dates, collaborative editing, and item/list deletion
    authorization. Creation, selection, access controls, item assignment/due
-   dates, and collaborative To-do editing are implemented on the active
-   feature branch; deletion edge cases and responsive visual review remain.
+   dates, and collaborative To-do editing are merged to main; deletion edge
+   cases and responsive visual review remain.
 3. Copy/Paste implementation is ready for review: matching ignores case and
    repeated whitespace; checked imports complete unique matches without
    changing ownership, while new items belong to the importing user. Malformed
@@ -76,6 +75,10 @@ to `main` only after the user approves the completed change.
 
 ### Recipes
 
+- Structured recipe creation and detail display are in progress on
+  `feature/structured-recipes`, including an upgrade that preserves existing
+  recipe text. Remaining work includes editing/deletion, visibility and
+  per-user notes, serving scaling, Add to list, and Add to calendar.
 - Add create, edit, view, and delete flows; structured ingredients and ordered
   steps; serving scaling; limits and validation; per-user notes and sharing
   privacy; Add to list snapshots; and Add to calendar with serving count.
