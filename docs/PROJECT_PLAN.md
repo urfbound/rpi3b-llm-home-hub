@@ -306,8 +306,10 @@ by feature before implementation.
   article content once with separate per-user state.
   If favourites alone fill the quota, stop saving new articles for that user
   until they free space; do not silently delete favourites.
-- Dashboard system status includes RAM use, CPU use, one hour of CPU history
-  sampled each minute and reset on restart, Pi temperature, and app RSS.
+- Dashboard system status includes the used percentage of the disk partition
+  containing the running server installation, RAM use, CPU use, one hour of
+  CPU history sampled each minute and reset on restart, Pi temperature, and
+  app RSS.
   Normalize CPU use across all logical cores to a 0–100% per-core average
   before plotting. Color history bars green below 60%, warm yellow from 60%
   through 80%, and muted red above 80%, in both light and dark themes.
