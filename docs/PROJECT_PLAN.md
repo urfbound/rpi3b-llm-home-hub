@@ -7,9 +7,9 @@ implementing it. Implementation will proceed in small, tested feature
 increments on feature or ticket branches. Merging into `main` requires the
 user's explicit confirmation.
 
-The previously planned functional scope and game rules are agreed. New list
-and navigation details are being settled. Visual designs are reviewed feature
-by feature before implementation.
+The first-release scope and game rules are agreed. Lists and navigation are
+approved; Home, Games, and Chat are the remaining visual reviews before those
+tabs are implemented.
 
 ## Product and release
 
@@ -341,8 +341,16 @@ by feature before implementation.
   per game, curated or reproducibly randomized as appropriate, adding more
   through updates; curated content may repeat after the bank is exhausted.
   Games suited to randomized play, such as Hunt the Wumpus, may generate a
-  daily puzzle from a visible seed without separately storing that seed.
-  Practice play may accept a user-entered seed or choose a random one.
+  daily puzzle from a visible 64-bit seed without separately storing that
+  seed. Use a stable household-day seed so every player gets the same cave,
+  and avoid repeating a generated map within a rolling 365-day window. Show
+  daily and practice seed controls only for games that use them.
+- Random Sudoku generation is feasible without an LLM: generate a solved
+  grid, remove clues, then rate the puzzle with a deterministic solver that
+  records which techniques are needed and whether the solution is unique.
+  Keep the curated bank as the first-release source; a later Pi benchmark can
+  tune generation attempts and difficulty bands, with curated puzzles as a
+  fallback if a target difficulty is not found within a bounded CPU budget.
 - Everyone gets the same puzzle for each game on each household day; the
   day changes at midnight in the household time zone. One puzzle per game
   per day in the first release. Issue #1 tracks support for multiple daily
@@ -403,7 +411,18 @@ the three games where it breaks ties.
   chat access.
 - Chat may read only data the requesting user can see and may propose list
   or calendar changes. Applying a change requires visible confirmation and
-  a fresh server-side authorization check.
+  a fresh server-side authorization check. Show the selected model name on
+  each response. Keep a provider interface so an optional remote model can be
+  added later; remote use is off by default and must disclose that prompts
+  leave the home network.
+- Database access must use narrow, read-only tools scoped to the requesting
+  user's permissions. A small MCP-style tool interface is feasible, but avoid
+  another always-on service: start in-process first, or launch a stdio helper
+  only while a chat request is active. Proposed incremental budget: no more
+  than 16 MiB RSS, under 1% of one CPU core averaged over a minute, and under
+  5% of one core for a one-second query burst; cap each result at 100 rows or
+  16 KiB. Measure this on the Pi before enabling database access. Any write
+  proposal still requires explicit confirmation and fresh authorization.
 
 ## Delivery sequence
 
@@ -411,11 +430,12 @@ the three games where it breaks ties.
    account administration and data migration, roles, sessions, login rate
    limiting, CSRF, backup/restore, TLS deployment guide, and baseline memory
    measurement.
-2. Show the user a visual design for dashboard and navigation, then build
-   the shared shell and status cards.
-3. For each remaining feature, show its visual design, incorporate feedback,
-   then implement it in a focused branch with relevant tests and profiling:
-   lists, recipes, calendar, weather, RSS, and games.
+2. Home, Games, and Chat visual designs are approved. Chat remains hidden
+   until an admin enables it and local model feasibility is established. The
+   proposed scoped, read-only database-tool budget is approved; measure it
+   on the Pi before enabling database access.
+3. Implement the approved Lists, Recipes, Calendar, Weather, and RSS designs
+   in focused branches with relevant tests and profiling.
 4. Spike Ollama on the target Pi, then design and implement Chat if feasible;
    otherwise keep it hidden for first release.
 5. Verify permissions, privacy, resource use, backup/restore, and household
@@ -424,8 +444,8 @@ the three games where it breaks ties.
 ## Open design reviews
 
 - [Account administration preview](design/account-admin-preview.html): approved
-  by the user. Other first-release feature visuals need approval before
-  implementation.
+  by the user.
+- [Home preview](design/home-preview.html): approved; the user had no comments.
 - [Lists and navigation preview](design/lists-navigation-preview.html):
   approved by the user before list and tab-order implementation.
 - [Recipes preview](design/recipes-preview.html): approved by the user before
@@ -436,7 +456,12 @@ the three games where it breaks ties.
   weather implementation.
 - [RSS preview](design/rss-preview.html): approved by the user before RSS
   implementation.
-- Games visual design remains to be reviewed before implementation.
+- [Games preview](design/games-preview.html): approved after adding conditional seeds, expandable score/progress cards,
+  and a distinct Today progress card.
+- [Chat preview](design/chat-preview.html): updated with model names,
+  optional remote-provider support, and scoped database-tool disclosure;
+  approved by the user; Chat implementation still requires a local-model
+  feasibility check on the Raspberry Pi. The database-access budget is approved.
 
 ## Deferred features
 
