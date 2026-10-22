@@ -189,7 +189,10 @@ by feature before implementation.
   the first provider, with required attribution. Admins can turn outbound
   weather and RSS access off. Show a five-day forecast by default; admins
   can choose one to 15 days and switch between metric (default) and imperial
-  units. Daily cards show high/low temperature, conditions, and precipitation
+  units. Keep the household town visible. The current-day summary shows
+  high/low temperature, wind, precipitation chance and predicted daily
+  accumulation ("None" when zero), plus pressure reading and three-hour
+  trend. Daily cards show high/low temperature, conditions, and precipitation
   chance. Today's hourly view shows temperature, conditions, precipitation
   chance, wind conditions, and barometric pressure with a
   rising/steady/falling trend based on the preceding three
@@ -204,6 +207,12 @@ by feature before implementation.
   Refresh the shared weather cache no more often than every 30 minutes.
   When fetches fail or outbound access is off, show cached data with its age
   and mark it stale after two hours; explain when no cached forecast exists.
+  Beneath the daily forecast, show moon phase and a coastal tide-station card
+  with the station name and predicted high/low times and heights. Use an
+  authoritative station prediction source for tides; do not present gridded
+  sea-level estimates as tide tables. Mark data age and source clearly, and
+  cache these optional values for offline display. Tide readings are for
+  planning, not navigation.
   An almanac sub-tab, on-demand historical weather, and alternative providers
   are deferred features.
 - Users manage personal RSS feeds; admins manage feeds for the house-wide
