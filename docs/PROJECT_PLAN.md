@@ -7,9 +7,9 @@ implementing it. Implementation will proceed in small, tested feature
 increments on feature or ticket branches. Merging into `main` requires the
 user's explicit confirmation.
 
-The previously planned functional scope and game rules are agreed. New list
-and navigation details are being settled. Visual designs are reviewed feature
-by feature before implementation.
+The first-release scope and game rules are agreed. Lists and navigation are
+approved; Home, Games, and Chat are the remaining visual reviews before those
+tabs are implemented.
 
 ## Product and release
 
@@ -411,11 +411,12 @@ the three games where it breaks ties.
    account administration and data migration, roles, sessions, login rate
    limiting, CSRF, backup/restore, TLS deployment guide, and baseline memory
    measurement.
-2. Show the user a visual design for dashboard and navigation, then build
-   the shared shell and status cards.
-3. For each remaining feature, show its visual design, incorporate feedback,
-   then implement it in a focused branch with relevant tests and profiling:
-   lists, recipes, calendar, weather, RSS, and games.
+2. Review and approve the Home, Games, and Chat visual designs before
+   implementing those tabs. The standalone Home preview includes the agreed
+   dashboard card order and responsive layout. Chat remains hidden until an
+   admin enables it and until local model feasibility is established.
+3. Implement the approved Lists, Recipes, Calendar, Weather, and RSS designs
+   in focused branches with relevant tests and profiling.
 4. Spike Ollama on the target Pi, then design and implement Chat if feasible;
    otherwise keep it hidden for first release.
 5. Verify permissions, privacy, resource use, backup/restore, and household
@@ -424,7 +425,9 @@ the three games where it breaks ties.
 ## Open design reviews
 
 - [Account administration preview](design/account-admin-preview.html): approved
-  by the user. Other first-release feature visuals need approval before
+  by the user. Home, Games, and Chat previews still need review before their
+  implementation.
+- [Home preview](design/home-preview.html): awaiting user review before Home
   implementation.
 - [Lists and navigation preview](design/lists-navigation-preview.html):
   approved by the user before list and tab-order implementation.
@@ -436,7 +439,11 @@ the three games where it breaks ties.
   weather implementation.
 - [RSS preview](design/rss-preview.html): approved by the user before RSS
   implementation.
-- Games visual design remains to be reviewed before implementation.
+- [Games preview](design/games-preview.html): awaiting user review before
+  game implementation.
+- [Chat preview](design/chat-preview.html): awaiting user review before Chat
+  implementation. Chat also depends on a successful local-model feasibility
+  check on the Raspberry Pi.
 
 ## Deferred features
 
