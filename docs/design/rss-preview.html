@@ -16,6 +16,8 @@
   @media(max-width:1050px){.site-head{flex-wrap:wrap;gap:6px 18px}.nav{order:3;width:100%}}@media(max-width:760px){.feed-grid{grid-template-columns:1fr}.intro,.preview{width:100%}.intro{padding:18px 16px}.preview{border-radius:0;margin-top:0;border-left:0;border-right:0}.site-head{padding:10px 16px 0}.nav{margin:4px -16px 0;padding:0 12px 8px}.head-actions span:last-child{display:none}main{padding:21px 16px 28px}.page-head{align-items:start;flex-direction:column}.preview-controls label{flex:1;min-width:160px}}@media(max-width:450px){.add-row{flex-direction:column}.add-row .primary{width:100%}.feed-head{flex-wrap:wrap}.feed-tools{margin-left:auto}}
   .page-actions{display:flex;gap:8px;flex-wrap:wrap}.panel{display:grid;gap:12px;margin:0 0 20px;padding:18px;border:1px solid var(--line);border-radius:15px;background:var(--soft)}.panel h2{font-size:1.3rem;margin:0}.panel p{margin:0;color:var(--muted);font-size:.84rem}.manage-head,.manage-row{display:flex;align-items:center;justify-content:space-between;gap:12px}.manage-row{padding:10px 0;border-top:1px solid var(--line)}.manage-row strong{display:block;font-size:.9rem}.manage-row small{color:var(--muted)}.manage-actions{display:flex;gap:5px;flex-wrap:wrap}.manage-actions button{padding:5px 9px}.manage-actions button:disabled{opacity:.4;cursor:default}.story.read h4{color:var(--muted)}.story .summary{color:var(--muted);font-size:.84rem;margin:0;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden}.story-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap;margin-top:10px}.story-actions button{border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);padding:5px 8px;font-size:.75rem;font-weight:700}.story-actions .favourite[aria-pressed=true]{background:var(--amber-soft);border-color:var(--amber);color:var(--amber)}.story-actions .delete{margin-left:auto;color:var(--muted)}dialog{max-width:min(430px,calc(100vw - 32px));border:1px solid var(--line);border-radius:17px;padding:22px;background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}dialog::backdrop{background:rgb(17 28 20 / 46%)}dialog h2{font-size:1.35rem;margin-bottom:8px}dialog p{color:var(--muted);font-size:.9rem}.dialog-actions{display:flex;justify-content:end;gap:8px;flex-wrap:wrap}
   @media(max-width:450px){.manage-head{align-items:start}.manage-row{align-items:start;flex-direction:column}.page-actions{width:100%}.page-actions button{flex:1}.story-actions .delete{margin-left:0}}
+  .setting{display:flex;align-items:center;gap:9px;font-size:.87rem;font-weight:650}.setting input{width:17px;height:17px;accent-color:var(--green)}.dialog-setting{margin:12px 0 19px}.favourites-card{margin-top:28px;border:1px solid var(--line);border-radius:17px;overflow:hidden}.favourites-head{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:17px 19px;background:var(--amber-soft)}.favourites-head h2{font-size:1.35rem;margin:0}.favourites-head p{font-size:.79rem;color:var(--muted);margin:0}.favourite-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 19px;border-top:1px solid var(--line)}.favourite-row strong{display:block;font-size:.9rem}.favourite-row small{color:var(--muted)}.favourite-row button{flex:none}.favourites-empty{color:var(--muted);font-size:.87rem;padding:15px 19px;margin:0}
+  @media(max-width:450px){.favourites-head,.favourite-row{align-items:start;flex-direction:column}}
 </style>
 </head>
 <body>
@@ -23,10 +25,11 @@
 <div class="preview"><header class="site-head"><a class="brand" href="lists-navigation-preview.html#home"><span class="mark">⌂</span> Home Hub</a><nav class="nav" aria-label="Main navigation"><a href="lists-navigation-preview.html#home">Home</a><a href="lists-navigation-preview.html">Lists</a><a href="#">Recipes</a><a href="#">Calendar</a><a href="weather-preview.html">Weather</a><a href="#" class="active" aria-current="page">RSS</a><a href="#">Games</a><a href="account-admin-preview.html">Admin</a></nav><div class="head-actions"><button class="theme" type="button" onclick="toggleTheme()">◐ Theme</button><span class="avatar" id="avatar">AP</span><span id="user-name">Alex</span></div></header>
 <main><div class="crumb">Home / <strong>RSS</strong></div><div class="page-head"><div><p class="eyebrow">Good things to read</p><h1>RSS feeds</h1><p id="page-description">Recent stories from your feeds and the household feeds.</p></div><div class="page-actions"><button class="primary" id="add-button" type="button" onclick="togglePanel('add-panel')">+ Add a feed</button><button class="secondary" id="manage-button" type="button" onclick="togglePanel('manage-panel')">Manage feeds</button></div></div><div class="data-status" id="data-status" role="status"></div><p class="helper" id="role-help"></p>
 <form class="panel" id="add-panel" hidden onsubmit="addFeed(event)"><div><h2>Add a feed</h2><p>Paste an HTTP or HTTPS RSS or Atom URL. The hub will discover its name after checking the feed.</p></div><div class="add-row"><input id="feed-url" type="url" placeholder="https://example.org/feed.xml" aria-label="Feed URL" required><button class="primary" type="submit">Add feed</button><button class="secondary" type="button" onclick="togglePanel('add-panel')">Cancel</button></div><span class="form-feedback" id="form-feedback" role="status"></span></form>
-<section class="panel" id="manage-panel" hidden aria-label="Manage feeds"><div class="manage-head"><div><h2>Manage feeds</h2><p id="manage-description">Reorder or remove your feeds. House-wide feeds stay below them.</p></div><button class="secondary" type="button" onclick="togglePanel('manage-panel')">Done</button></div><div id="manage-list"></div><p id="storage-note">Saved for your account: 1.8 MB / 64 MB · 90 days · 0 / 32 favourites. Oldest unread articles clear first, then oldest read articles. Favourites are protected.</p></section>
+<section class="panel" id="manage-panel" hidden aria-label="Manage feeds"><div class="manage-head"><div><h2>Manage feeds</h2><p id="manage-description">Reorder or remove your feeds. House-wide feeds stay below them.</p></div><button class="secondary" type="button" onclick="togglePanel('manage-panel')">Done</button></div><div id="manage-list"></div><label class="setting"><input id="ask-done-setting" type="checkbox" checked onchange="setDonePrompt(this.checked)"> Ask whether to keep or delete after Done reading</label><p id="done-choice-note"></p><p id="storage-note">Saved for your account: 1.8 MB / 64 MB · 90 days · 0 / 32 favourites. Oldest unread articles clear first, then oldest read articles. Favourites are protected.</p></section>
 <div id="feed-content"><section id="primary-section"><div class="section-head"><div><p class="eyebrow" id="primary-eyebrow">Your reading shelf</p><h2 id="section-title">My feeds</h2></div><p id="feed-count"></p></div><div class="feed-grid" id="feed-grid" aria-label="RSS feed cards"></div></section><section id="house-section"><div class="section-head"><div><p class="eyebrow">Shared with the household</p><h2>House-wide feeds</h2></div><p id="house-feed-count"></p></div><div class="feed-grid" id="house-grid" aria-label="House-wide RSS feed cards"></div></section></div>
-<section class="empty-state" id="empty-state" hidden><h2>No saved articles yet</h2><p id="empty-copy">Add a feed and the first articles will appear after a successful refresh.</p></section><p class="preview-note">Illustrative content for design review. The app will store only short article summaries, not remote images. Opening a story takes you to its source site.</p></main></div>
-<dialog id="done-dialog" aria-labelledby="done-title"><h2 id="done-title">Done reading?</h2><p>This article is marked read. Keep it on your shelf, or delete it from your account?</p><div class="dialog-actions"><button class="secondary" type="button" onclick="closeDone(false)">Keep article</button><button class="primary" type="button" onclick="closeDone(true)">Delete article</button></div></dialog>
+<section class="favourites-card" id="favourites-card"><div class="favourites-head"><h2>★ Favourites</h2><p id="favourite-count">0 / 32 saved</p></div><div id="favourites-list"></div></section><section class="empty-state" id="empty-state" hidden><h2>No saved articles yet</h2><p id="empty-copy">Add a feed and the first articles will appear after a successful refresh.</p></section><p class="preview-note">Illustrative content for design review. The app will store only short article summaries, not remote images. Opening a story takes you to its source site.</p></main></div>
+<dialog id="done-dialog" aria-labelledby="done-title"><h2 id="done-title">Done reading?</h2><p id="done-copy">This article is marked read. Keep it on your shelf, or delete it from your account?</p><label class="setting dialog-setting"><input id="skip-done-prompt" type="checkbox"> Don't ask me again</label><div class="dialog-actions"><button class="secondary" type="button" onclick="closeDone(false)">Keep article</button><button class="primary" type="button" id="done-delete-button" onclick="closeDone(true)">Delete article</button></div></dialog>
+<dialog id="delete-dialog" aria-labelledby="delete-title"><h2 id="delete-title">Delete favourite?</h2><p id="delete-copy">Remove this article from your favourites and delete it from your account?</p><div class="dialog-actions"><button class="secondary" type="button" onclick="closeDelete(false)">Cancel</button><button class="primary" type="button" onclick="closeDelete(true)">Delete favourite</button></div></dialog>
 <script>
 const personalFeeds=[
   {name:'Garden Journal',source:'garden.example.org',items:[['Planning a small autumn herb garden','Today · 9:20 AM','A few hardy herbs can keep the kitchen supplied even as the days get shorter.'],['Putting the beds to rest','Yesterday · 4:10 PM','Simple end-of-season care for soil, tools, and perennial plants.']]},
@@ -41,7 +44,8 @@ const articleStates=new Map([
   ['personal|personal|garden.example.org|Putting the beds to rest',{read:true,favourite:true,deleted:false}],
   ['personal|house|bulletin.example.org|A guide to local autumn trails',{read:true,favourite:false,deleted:false}]
 ]);
-let pendingDone=null;
+let pendingDone=null,pendingDelete=null;
+const doneChoices=new Map();
 function account(){return document.getElementById('account').value;}
 function toggleTheme(){document.documentElement.dataset.theme=document.documentElement.dataset.theme==='light'?'dark':'light';}
 function togglePanel(id){const panel=document.getElementById(id),other=document.getElementById(id==='add-panel'?'manage-panel':'add-panel');other.hidden=true;panel.hidden=!panel.hidden;if(!panel.hidden&&id==='add-panel')document.getElementById('feed-url').focus();}
@@ -52,13 +56,34 @@ function articleKey(scope,feed,item){return account()+'|'+scope+'|'+feed.source+
 function stateFor(key){if(!articleStates.has(key))articleStates.set(key,{read:false,favourite:false,deleted:false});return articleStates.get(key);}
 function favouriteCount(){return [...articleStates].filter(([key,state])=>key.startsWith(account()+'|')&&state.favourite&&!state.deleted).length;}
 function toggleFavourite(key){const state=stateFor(key);if(!state.favourite&&favouriteCount()>=32){alert('You can favourite up to 32 articles. Remove a favourite before adding another.');return;}state.favourite=!state.favourite;renderFeeds();}
-function deleteArticle(key){stateFor(key).deleted=true;renderFeeds();}
-function doneReading(key){stateFor(key).read=true;pendingDone=key;renderFeeds();document.getElementById('done-dialog').showModal();}
-function closeDone(shouldDelete){document.getElementById('done-dialog').close();if(shouldDelete&&pendingDone)deleteArticle(pendingDone);pendingDone=null;}
+function deleteArticle(key,confirmed=false){
+  if(stateFor(key).favourite&&!confirmed){pendingDelete=key;document.getElementById('delete-dialog').showModal();return;}
+  stateFor(key).deleted=true;renderFeeds();
+}
+function closeDelete(confirmed){document.getElementById('delete-dialog').close();if(confirmed&&pendingDelete)deleteArticle(pendingDelete,true);pendingDelete=null;}
+function setDonePrompt(checked){doneChoices.set(account(),checked?null:'keep');renderManage();}
+function doneReading(key){
+  stateFor(key).read=true;renderFeeds();
+  const choice=doneChoices.get(account());
+  if(choice==='keep')return;
+  if(choice==='delete'){deleteArticle(key);return;}
+  document.getElementById('done-copy').textContent=stateFor(key).favourite?'This favourite is marked read. Keep it, or delete the favourite from your account?':'This article is marked read. Keep it on your shelf, or delete it from your account?';
+  document.getElementById('done-delete-button').textContent=stateFor(key).favourite?'Delete favourite':'Delete article';
+  pendingDone=key;document.getElementById('skip-done-prompt').checked=false;
+  document.getElementById('done-dialog').showModal();
+}
+function closeDone(shouldDelete){
+  document.getElementById('done-dialog').close();
+  if(document.getElementById('skip-done-prompt').checked)doneChoices.set(account(),shouldDelete?'delete':'keep');
+  if(shouldDelete&&pendingDone)deleteArticle(pendingDone,true);
+  pendingDone=null;renderManage();
+}
 function makeButton(label,action,cssClass){const button=document.createElement('button');button.type='button';button.textContent=label;if(cssClass)button.className=cssClass;button.onclick=action;return button;}
 function renderManage(){
   const feeds=account()==='personal'?personalFeeds:houseFeeds,list=document.getElementById('manage-list');
   list.replaceChildren();
+  document.getElementById('ask-done-setting').checked=!doneChoices.has(account())||doneChoices.get(account())===null;
+  document.getElementById('done-choice-note').textContent=doneChoices.get(account())==='delete'?'Done reading deletes the article automatically, except favourites still need confirmation.':doneChoices.get(account())==='keep'?'Done reading keeps the article automatically.':'You will choose whether to keep or delete each time.';
   document.getElementById('manage-description').textContent=account()==='personal'?'Reorder or remove your feeds. House-wide feeds stay below them.':'Reorder or remove feeds shown to the household.';
   document.getElementById('storage-note').textContent='Saved for your account: 1.8 MB / 64 MB · 90 days · '+favouriteCount()+' / 32 favourites. Oldest unread articles clear first, then oldest read articles. Favourites are protected.';
   feeds.forEach((feed,index)=>{
@@ -107,6 +132,24 @@ function renderGrid(gridId,feeds,scope,readOnly){
     foot.append(more);card.append(foot);grid.append(card);
   });
 }
+function renderFavourites(){
+  const list=document.getElementById('favourites-list');list.replaceChildren();
+  const feeds=account()==='personal'?[...personalFeeds.map(feed=>['personal',feed]),...houseFeeds.map(feed=>['house',feed])]:houseFeeds.map(feed=>['house',feed]);
+  let count=0;
+  feeds.forEach(([scope,feed])=>feed.items.forEach(item=>{
+    const key=articleKey(scope,feed,item),state=stateFor(key);
+    if(!state.favourite||state.deleted)return;
+    count++;
+    const row=document.createElement('div');row.className='favourite-row';
+    const detail=document.createElement('div'),title=document.createElement('strong'),source=document.createElement('small');
+    title.textContent=item[0];source.textContent=feed.name+' · '+item[1];detail.append(title,source);
+    const actions=document.createElement('div');actions.className='manage-actions';
+    actions.append(makeButton('Remove favourite',()=>toggleFavourite(key),'secondary'),makeButton('Delete',()=>deleteArticle(key),'secondary'));
+    row.append(detail,actions);list.append(row);
+  }));
+  if(!count){const empty=document.createElement('p');empty.className='favourites-empty';empty.textContent='Favourite an article to keep it here and protect it from automatic cleanup.';list.append(empty);}
+  document.getElementById('favourite-count').textContent=count+' / 32 saved';
+}
 function renderFeeds(){
   const mode=account(),state=document.getElementById('state').value,isHouse=mode!=='personal',canManage=mode!=='house',primary=isHouse?houseFeeds:personalFeeds;
   document.getElementById('avatar').textContent=mode==='house'?'HW':mode==='admin'?'AD':'AP';
@@ -130,7 +173,8 @@ function renderFeeds(){
   document.getElementById('house-feed-count').textContent=houseFeeds.length+' shared feed'+(houseFeeds.length===1?'':'s');
   renderGrid('feed-grid',primary,isHouse?'house':'personal',mode==='house');
   if(mode==='personal')renderGrid('house-grid',houseFeeds,'house',false);
-  renderManage();
+  document.getElementById('favourites-card').hidden=mode==='house'||state==='empty';
+  renderFavourites();renderManage();
 }
 renderFeeds();
 </script>

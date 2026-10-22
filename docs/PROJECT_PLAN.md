@@ -241,10 +241,14 @@ by feature before implementation.
 - Track read/unread, favourites, and article deletion per user, including for
   house-wide feeds, so one person's actions do not change another's shelf.
   Provide a deliberate Done reading action that marks an article read and
-  prompts whether to keep or delete it. Users can also delete articles at any
-  time. Allow at most 32 favourites per user and never automatically delete
-  them. Retain ordinary articles for at most 90 days and cap each user's
-  visible saved articles at 64 MB. At capacity, remove the oldest unread
+  prompts whether to keep or delete it. The prompt has a Don't ask me again
+  option that repeats the chosen action; users can restore prompting in
+  Manage feeds. Users can also delete articles at any
+  time; deleting a favourite requires confirmation. Show all of a user's
+  favourites together in a card below the feed groups. Allow at most 32
+  favourites per user and never automatically delete them. Retain ordinary
+  articles for at most 90 days and cap each user's visible saved articles at
+  64 MB. At capacity, remove the oldest unread
   ordinary article first; once none remain, remove the oldest read ordinary
   article. Store shared article content once with separate per-user state.
   If favourites alone fill the quota, stop saving new articles for that user
