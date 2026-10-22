@@ -99,7 +99,25 @@
         {% endif %}</li>
         {% else %}<li>{{ 'Nothing to buy.' if list_kind == 'shopping' else 'No tasks yet.' }}</li>{% endfor %}
       </ul>
-      {% if list_kind == 'shopping' %}<a href="{{ url_for('shopping_text', list_id=selected_list['id']) }}">Download list</a>{% endif %}
+      <div class="list-transfer">
+        <button type="button" class="button" data-copy-url="{{ url_for('list_text', list_id=selected_list['id']) }}">Copy list</button>
+        {% if current_user['account_kind'] != 'house' %}
+        <button type="button" class="button" onclick="document.getElementById('paste-list-dialog').showModal()">Paste list</button>
+        <dialog id="paste-list-dialog">
+          <form method="post" action="{{ url_for('paste_list', list_id=selected_list['id']) }}" class="dialog-form">
+            <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+            <p class="eyebrow">Merge plain text</p>
+            <h2>Paste list</h2>
+            <p>Checked lines mark matching items complete. New items will be added to this list under your name.</p>
+            <label for="paste-list-text">List text</label>
+            <textarea id="paste-list-text" name="text" rows="8" maxlength="65536" required></textarea>
+            <div class="dialog-actions"><button type="button" onclick="this.closest('dialog').close()">Cancel</button><button class="primary">Merge list</button></div>
+          </form>
+        </dialog>
+        {% endif %}
+        <a href="{{ url_for('shopping_text', list_id=selected_list['id']) if list_kind == 'shopping' else url_for('list_text', list_id=selected_list['id']) }}">Download text</a>
+        <span class="muted" id="copy-list-status" role="status" aria-live="polite"></span>
+      </div>
     {% elif list_kind == 'todo' %}
       <p>Create a To-do list to get started.</p>
     {% endif %}
@@ -123,4 +141,33 @@
     <p class="muted">This starter intentionally doesn't include external network requests or a running model yet.</p>
   </section>
 </div>
+<script>
+document.querySelectorAll('[data-copy-url]').forEach((button) => {
+  button.addEventListener('click', async () => {
+    const status = document.getElementById('copy-list-status');
+    try {
+      const response = await fetch(button.dataset.copyUrl, {credentials: 'same-origin'});
+      if (!response.ok) throw new Error('Could not read list');
+      const text = await response.text();
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const fallback = document.createElement('textarea');
+        fallback.value = text;
+        fallback.setAttribute('readonly', '');
+        fallback.style.position = 'fixed';
+        fallback.style.opacity = '0';
+        document.body.appendChild(fallback);
+        fallback.select();
+        const copied = document.execCommand('copy');
+        fallback.remove();
+        if (!copied) throw new Error('Clipboard unavailable');
+      }
+      status.textContent = 'List copied.';
+    } catch (_) {
+      status.textContent = 'Could not copy list. Try downloading the text.';
+    }
+  });
+});
+</script>
 {% endblock %}

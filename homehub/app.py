@@ -798,6 +798,79 @@ def create_app(test_config=None):
         ) + '\n'
         return Response(body,mimetype='text/plain',headers={'Content-Disposition':'attachment; filename="shopping.txt"'})
 
+    @app.get('/lists/<int:list_id>/text')
+    @login_required
+    def list_text(list_id):
+        db = get_db()
+        target = visible_list(db, g.user, list_id)
+        items = db.execute('SELECT text,done FROM shopping_items WHERE list_id=? ORDER BY id',
+                           (target['id'],)).fetchall()
+        body = target['title'] + '\n\n' + '\n'.join(
+            ('[x] ' if item['done'] else '[ ] ') + item['text'] for item in items
+        ) + '\n'
+        return Response(body, mimetype='text/plain', headers={'Cache-Control': 'no-store'})
+
+    @app.post('/lists/<int:list_id>/paste')
+    @login_required
+    def paste_list(list_id):
+        raw_text = request.form.get('text', '')
+        if not raw_text.strip() or len(raw_text) > 65536:
+            abort(400)
+        db = get_db()
+        target = visible_list(db, g.user, list_id)
+        lines = raw_text.splitlines()
+        first_content = next((i for i, line in enumerate(lines) if line.strip()), None)
+        if first_content is not None and (
+                lines[first_content].strip().casefold() == target['title'].casefold()):
+            lines.pop(first_content)
+
+        imported = []
+        for line in lines:
+            line = line.strip()
+            if not line:
+                continue
+            if len(line) >= 3 and line[0] == '[' and line[2] == ']':
+                checked = bool(line[1].strip())
+                item_text = line[3:].strip()
+            else:
+                checked = False
+                item_text = line
+            if not item_text or len(item_text) > 240:
+                abort(400)
+            imported.append((item_text, checked))
+
+        def normalized(value):
+            return ' '.join(value.casefold().split())
+
+        with db:
+            # Recheck authorization inside the write transaction.
+            target = visible_list(db, g.user, list_id)
+            existing = db.execute(
+                'SELECT id,text,done FROM shopping_items WHERE list_id=?',
+                (target['id'],)
+            ).fetchall()
+            by_text = {normalized(row['text']): row for row in existing}
+            for item_text, checked in imported:
+                key = normalized(item_text)
+                row = by_text.get(key)
+                if row:
+                    if checked and not row['done']:
+                        db.execute('UPDATE shopping_items SET done=1,updated_at=CURRENT_TIMESTAMP '
+                                   'WHERE id=?', (row['id'],))
+                        row = dict(row)
+                        row['done'] = 1
+                        by_text[key] = row
+                else:
+                    cursor = db.execute(
+                        'INSERT INTO shopping_items(text,done,created_by,list_id,updated_at) '
+                        'VALUES(?,?,?,?,CURRENT_TIMESTAMP)',
+                        (item_text, int(checked), g.user['id'], target['id'])
+                    )
+                    by_text[key] = {'id': cursor.lastrowid, 'text': item_text,
+                                    'done': int(checked)}
+        return redirect(url_for('index', kind=target['kind'], list_id=target['id']) +
+                        ('#shopping' if target['kind'] == 'shopping' else '#todo'))
+
     @app.post('/recipes')
     @login_required
     def add_recipe():

@@ -15,8 +15,9 @@ to `main` only after the user approves the completed change.
   measurements on the Raspberry Pi 3B are recorded in
   [CHAT_PI_BENCHMARK.md](CHAT_PI_BENCHMARK.md). App-only and app-plus-model
   profiling remain to be done.
-- **Lists is the active workstream:** schema version 3 and the first list
-  workflows are in progress on `feature/lists-implementation`. The migration
+- **Lists is the active workstream:** schema version 3, Shopping and To-do
+  workflows, and Copy/Paste are implemented on feature branches and merged to
+  main. The migration
   creates named-list/private-access tables and links legacy shopping items to
   a shared Groceries list without changing item IDs or content. Shopping and
   To-do lists can be created and selected, with shared/private visibility,
@@ -61,9 +62,11 @@ to `main` only after the user approves the completed change.
    selection, and access controls are implemented on the active branch; full
    editing, assignment, deletion edge cases, and responsive visual review
    remain.
-3. Implement plain-text Copy list and reviewed Paste list. Match normalized
-   names conservatively, preserve existing ownership and metadata, add new
-   items under the importing user, and recheck permissions at apply time.
+3. Implemented plain-text Copy list and reviewed Paste list. Matching ignores
+   case and repeated whitespace; checked imports complete existing items
+   without changing their owner, while new items belong to the importing user.
+   Private-list access is rechecked at apply time, and exported text is
+   non-cacheable.
 4. Implement seven persistent weekday Chores lists, user and Everyone
    assignments, independent completion, creator/admin deletion, and a Sunday
    midnight reset in the household timezone. Add the Home chores card and
