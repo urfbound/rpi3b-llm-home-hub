@@ -7,9 +7,10 @@ implementing it. Implementation will proceed in small, tested feature
 increments on feature or ticket branches. Merging into `main` requires the
 user's explicit confirmation.
 
-The first-release scope and game rules are agreed. Lists and navigation are
-approved; Home, Games, and Chat are the remaining visual reviews before those
-tabs are implemented.
+The first-release scope and game rules are agreed. Visual designs for the
+account administration, Home, Lists and navigation, Recipes, Calendar,
+Weather, RSS, Games, and Chat tabs are approved. Chat remains contingent on
+the local-model feasibility check described below.
 
 ## Product and release
 

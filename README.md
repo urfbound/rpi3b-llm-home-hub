@@ -36,7 +36,19 @@ Backups contain account hashes and private household data.
 
 ## Run on the Pi
 
-Install a minimal Raspberry Pi OS (Python 3.11+), create a Python virtual environment, install the app using `pip install .`, and configure a systemd service with `HOMEHUB_SECRET_KEY`, `HOMEHUB_DB` and `HOMEHUB_BIND=<Pi LAN IP>`. See `deploy/homehub.service.example`, `deploy/homehub-backup.service.example` and `deploy/homehub-backup.timer.example`; edit paths and user before installation. Install the backup unit files, then run `sudo systemctl daemon-reload` and `sudo systemctl enable --now homehub.service homehub-backup.timer`. The timer catches up after downtime and checks the Admin-configured interval. If you choose a backup folder outside `/var/lib/homehub`, allow it in `ReadWritePaths=` in both service units. Do not open a router port to this service. Restrict the allowed LAN subnet with your firewall. If you use an HTTP connection for the initial prototype, passwords and cookies travel unencrypted over the LAN; arrange HTTPS before household use.
+Install a minimal Raspberry Pi OS (Python 3.11+), create a Python virtual
+environment, install the app using `pip install .`, and configure a systemd
+service with `HOMEHUB_SECRET_KEY`, `HOMEHUB_DB` and `HOMEHUB_BIND`.
+`deploy/homehub.service.example` keeps Waitress on loopback for the Caddy
+reverse proxy. See [the TLS guide](docs/TLS_DEPLOYMENT.md) before household
+use. For routine backups, install `deploy/homehub-backup.service.example`
+and `deploy/homehub-backup.timer.example`, then run
+`sudo systemctl daemon-reload` and
+`sudo systemctl enable --now homehub.service homehub-backup.timer`. The timer
+catches up after downtime and checks the Admin-configured interval. If you
+choose a backup folder outside `/var/lib/homehub`, allow it in `ReadWritePaths=`
+in both service units. Do not open a router port to this service; restrict
+HTTPS to the household LAN with the firewall.
 
 ## Uninstall from the Pi
 
@@ -53,12 +65,15 @@ sudo systemctl reset-failed
 
 This removes scheduled work while leaving the database and backup files in
 place for manual recovery or a later reinstall.
-
 ## Important limitations / follow-up work
 
 - Admins can now create and remove accounts, reset passwords, and configure session limits. Account deletion can transfer or remove owned prototype content.
 - Recipe creation and viewing exist, but editing, ingredient normalization, linking recipes to dates, deletion, and shopping-list aggregation remain to build.
 - Calendar `.ics` downloads are a one-way snapshot, not two-way synchronization. The basic export covers all-day events only.
 - Weather, RSS, games, outbound email, and LLM chat are not wired up yet.
-- Login rate limits and routine backup/restore are in place. TLS deployment, audit logging, and reliable timezone rules are still needed before production. Schema versioning and pre-upgrade backups are implemented; later releases still need their own migrations and upgrade tests.
-- Do not store sensitive information until further security hardening. For now, run on localhost for development.
+- Login rate limits, backup/restore, and the TLS deployment guide are in
+  place. Audit logging and reliable timezone rules are still needed before
+  production. Schema versioning and pre-upgrade backups are implemented;
+  later releases still need their own migrations and upgrade tests.
+- Until TLS is configured, keep the app on localhost for development; do not
+  sign in over plain HTTP on the LAN.
