@@ -110,6 +110,15 @@
     .setting-line span:last-child { text-align: right; font-weight: 750; }
     .callout { padding: 12px 14px; border-radius: 12px; background: var(--amber-soft); color: var(--ink); font-size: .83rem; }
     .callout strong { color: var(--amber); }
+    .backup-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+    .backup-folder-status { margin: 0 0 12px; color: var(--green); font-size: .84rem; font-weight: 750; }
+    .backup-rows { margin-top: 14px; border-top: 1px solid var(--line); }
+    .backup-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line); }
+    .backup-row strong { display: block; }
+    .backup-row small { display: block; color: var(--muted); }
+    .backup-row .button { justify-self: end; }
+    .backup-check { display: flex; align-items: center; gap: 9px; margin: 12px 0; font-size: .85rem; }
+    .backup-check input { width: 18px; height: 18px; accent-color: var(--green); }
     .mobile-section { width: calc(100% - 64px); max-width: 1440px; margin: 0 auto 56px; padding: 0; }
     .mobile-section h2 { font-family: Georgia, "Times New Roman", serif; font-size: 1.65rem; margin-bottom: 4px; }
     .mobile-section p { color: var(--muted); }
@@ -223,7 +232,34 @@
           <section class="panel side-panel" id="games-section"><p class="eyebrow">Games</p><h2>Games settings</h2><p>Household game settings will live here. Daily puzzles and scoreboards remain in the Games tab.</p></section>
           <section class="panel side-panel" id="chat-section"><p class="eyebrow">Chat</p><h2>Chat settings</h2><p>When local chat is enabled, installed model selection, prompt limits, and queue settings will live here. The Chat tab remains hidden until enabled.</p></section>
           <section class="panel side-panel" id="house-wide-section"><p class="eyebrow">Shared display</p><h2>House-wide access</h2><p>The house-wide login can see shared content and play games. Its scores stay off leaderboards.</p><div class="callout"><strong>Privacy note</strong><br>Admins can view all household content, including private chats.</div></section>
-          <section class="panel side-panel" id="admin-settings-section"><p class="eyebrow">Admin</p><h2>Admin settings</h2><p>Backups, calendar archive downloads, and other administration controls belong here as the related features are designed.</p></section>
+          <section id="admin-settings-section" aria-labelledby="admin-settings-heading">
+            <p class="eyebrow">Admin</p><h2 id="admin-settings-heading">Admin settings</h2>
+            <div class="sidebar-stack">
+            <section class="panel side-panel" aria-labelledby="backup-settings-heading">
+              <h3 id="backup-settings-heading">Backup settings</h3>
+              <p>Choose where routine and on-demand database backups are stored, and how often the app creates them.</p>
+              <label class="calendar-setting">Backup folder<input type="text" value="/var/lib/homehub/backups" aria-label="Backup folder"></label>
+              <p class="backup-folder-status" role="status">✓ Backup folder available</p>
+              <label class="calendar-setting">Automatic backup interval (days)<input id="backup-frequency" type="number" min="1" max="31" value="1"></label>
+              <label class="backup-check"><input id="backups-off" type="checkbox" onchange="toggleBackupFrequency()"> Turn automatic backups off</label>
+              <label class="calendar-setting">Keep most recent backups<input id="backup-retention" type="number" min="1" max="365" value="14"></label>
+              <p>Archive files are stored separately from the active database where possible. The resolved folder is shown here.</p>
+              <div class="backup-actions"><button class="button small" type="button" onclick="saveBackupSettings()">Save settings</button><button class="button small primary" type="button" onclick="createBackup()">Create backup now</button></div>
+              <p id="backup-settings-feedback" role="status"></p>
+            </section>
+            <section class="panel side-panel" aria-labelledby="recent-backups-heading">
+              <h3 id="recent-backups-heading">Recent backups</h3>
+              <p>Latest backup: today at 02:00 · Verified · Integrity check passed · 18.4 MB</p>
+              <p><strong>Before restoring:</strong> Restoring replaces the current database with the selected copy and signs everyone out. Changes made after that backup will be lost. Verify the selected copy before restoring; keep a separate copy of important data.</p>
+              <div class="backup-rows">
+                <div class="backup-row"><div><strong>Today · 02:00</strong><small>Verified · Integrity check passed · 18.4 MB</small></div><button class="button small danger" type="button" onclick="askRestore('Today at 02:00')">Restore</button></div>
+                <div class="backup-row"><div><strong>Yesterday · 02:00</strong><small>Verified · Integrity check passed · 18.2 MB</small></div><button class="button small danger" type="button" onclick="askRestore('Yesterday at 02:00')">Restore</button></div>
+                <div class="backup-row"><div><strong>October 20 · 02:00</strong><small>Verified · Integrity check passed · 18.1 MB</small></div><button class="button small danger" type="button" onclick="askRestore('October 20 at 02:00')">Restore</button></div>
+              </div>
+              <p id="backup-feedback" role="status"></p>
+            </section>
+            </div>
+          </section>
         </div>
       </div>
     </main>
@@ -242,6 +278,18 @@
 
   <script>
     let savedRetention = 3;
+    function toggleBackupFrequency() {
+      const disabled = document.getElementById('backups-off').checked;
+      document.getElementById('backup-frequency').disabled = disabled;
+      document.getElementById('backup-retention').disabled = disabled;
+    }
+    function saveBackupSettings() { document.getElementById('backup-settings-feedback').textContent = 'Preview only: backup settings would be saved.'; }
+    function createBackup() { document.getElementById('backup-feedback').textContent = 'Preview only: a backup would be created and verified.'; }
+    function askRestore(copy) {
+      if (window.confirm('Restore the backup from ' + copy + '? This replaces the current database, signs everyone out, and loses changes made since that backup.')) {
+        document.getElementById('backup-feedback').textContent = 'Preview only: the selected backup would be restored after verification.';
+      }
+    }
     function previewSaveRetention() {
       const next = Number(document.getElementById('calendar-retention').value);
       const years = [];

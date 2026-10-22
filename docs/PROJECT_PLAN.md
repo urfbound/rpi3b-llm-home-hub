@@ -444,7 +444,8 @@ the three games where it breaks ties.
 ## Open design reviews
 
 - [Account administration preview](design/account-admin-preview.html): approved
-  by the user.
+  for account controls; backup/restore controls have been added to the Admin
+  settings section and are awaiting review.
 - [Home preview](design/home-preview.html): approved; the user had no comments.
 - [Lists and navigation preview](design/lists-navigation-preview.html):
   approved by the user before list and tab-order implementation.
@@ -462,8 +463,6 @@ the three games where it breaks ties.
   optional remote-provider support, and scoped database-tool disclosure;
   approved by the user; Chat implementation still requires a local-model
   feasibility check on the Raspberry Pi. The database-access budget is approved.
-- [Backup and restore preview](design/backup-restore-preview.html): awaiting
-  user review before implementing routine backup and restore controls.
 
 ## Deferred features
 
