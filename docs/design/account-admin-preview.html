@@ -101,6 +101,10 @@
     .side-panel { padding: 19px 20px; }
     .side-panel h2 { font-family: Georgia, "Times New Roman", serif; font-size: 1.24rem; margin-bottom: 8px; }
     .side-panel p { color: var(--muted); font-size: .86rem; margin-bottom: 12px; }
+    .calendar-setting { display: grid; gap: 8px; margin: 14px 0; min-width: 0; font-size: .85rem; font-weight: 700; }
+    .calendar-setting select, .calendar-setting input { display: block; width: 100%; min-width: 0; max-width: 100%; min-height: 42px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 9px; background: var(--page); color: var(--ink); }
+    .archive-path { overflow-wrap: anywhere; }
+    .archive-path code { display: block; margin-top: 5px; font-size: .79rem; color: var(--ink); }
     .setting-line { display: flex; justify-content: space-between; gap: 16px; padding: 9px 0; border-top: 1px solid var(--line); font-size: .85rem; }
     .setting-line span:last-child { text-align: right; font-weight: 750; }
     .callout { padding: 12px 14px; border-radius: 12px; background: var(--amber-soft); color: var(--ink); font-size: .83rem; }
@@ -209,8 +213,15 @@
         <div class="sidebar-stack">
           <section class="panel side-panel"><p class="eyebrow">Access</p><h2>Passwords & sessions</h2><p>People can change their own password. Admin resets use a one-time temporary password and ask for a new password on login.</p><div class="setting-line"><span>Idle session limit</span><span>24 hours</span></div><div class="setting-line"><span>Absolute session limit</span><span>7 days</span></div><div style="margin-top:13px"><button class="button small" type="button">Edit session settings</button></div></section>
           <section class="panel side-panel"><p class="eyebrow">Navigation</p><h2>Household tab order</h2><p>One order for everyone. Home always comes first; Admin stays last for admins.</p><button class="button small" type="button" onclick="openOrder()">Reorder tabs</button></section>
+          <section class="panel side-panel"><p class="eyebrow">Calendar</p><h2>Calendar retention</h2><p>Keep the current calendar year and up to ten previous years available for browsing.</p>
+            <label class="calendar-setting">Previous years to keep<select id="calendar-retention" aria-label="Previous calendar years to keep" onchange="document.getElementById('calendar-retention-summary').textContent='Current year plus '+this.value+' previous year'+(this.value==='1'?'':'s')+' retained.'"><option>0</option><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option></select></label>
+            <p id="calendar-retention-summary" class="callout">Current year plus 3 previous years retained.</p>
+            <label class="calendar-setting">When a year leaves the active calendar<select id="calendar-expiry" aria-label="Expired calendar action"><option selected>Archive to ICS first</option><option>Delete without archive</option></select></label>
+            <p>Archive files can be downloaded from Admin settings. Reducing retention tries to export each affected year first; a failed export leaves its events in place.</p>
+            <p class="archive-path"><strong>Archive folder</strong><code>/home/homehub/.local/share/homehub/calendar-archives/</code><small>Example shown; the app displays the resolved folder beside its configured database.</small></p>
+            <button class="button small" type="button" onclick="previewSaveRetention()">Save retention</button><p id="calendar-retention-feedback" role="status"></p></section>
+          <section class="panel side-panel"><p class="eyebrow">Event budgets</p><h2>Calendar limits</h2><label class="calendar-setting">Events per user per day<input type="number" min="1" value="8"></label><label class="calendar-setting">Events per user per month<input id="monthly-budget" type="number" min="7" max="512" value="128"></label><p>Monthly limits can be set from 7 to 512. Repeating occurrences count.</p><button class="button small" type="button" onclick="previewSaveEventLimits()">Save limits</button><p id="event-limits-feedback" role="status"></p></section>
           <section class="panel side-panel"><p class="eyebrow">Shared display</p><h2>House-wide access</h2><p>The house-wide login can see shared content and play games. Its scores stay off leaderboards.</p><div class="callout"><strong>Privacy note</strong><br>Admins can view all household content, including private chats.</div></section>
-          <section class="panel side-panel"><p class="eyebrow">Calendar</p><h2>Calendar retention</h2><p>Keep the current calendar year and up to ten previous years available for browsing.</p><label>Previous years to keep<select id="calendar-retention" aria-label="Previous calendar years to keep" onchange="document.getElementById('calendar-retention-summary').textContent='Current year plus '+this.value+' previous year'+(this.value==='1'?'':'s')+' retained.'"><option>0</option><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option></select></label><p id="calendar-retention-summary" class="callout">Current year plus 3 previous years retained.</p><label>When a year leaves the active calendar<select id="calendar-expiry" aria-label="Expired calendar action"><option selected>Archive to a downloadable ICS file, then remove</option><option>Delete its events</option></select></label><p>Archives remain available to admins from settings.</p><button class="button small" type="button" onclick="document.getElementById('calendar-retention-feedback').textContent='Preview only: retention would be updated.'">Save retention</button><p id="calendar-retention-feedback" role="status"></p></section>
         </div>
       </div>
     </main>
@@ -228,6 +239,22 @@
   <dialog id="order-dialog" aria-labelledby="order-title"><div class="dialog-body"><p class="eyebrow">Admin · Navigation</p><h2 id="order-title">Reorder household tabs</h2><p>Move the middle tabs with the arrow buttons. This order applies to everyone. Tabs for unavailable features remain hidden.</p><ol class="order-list" id="order-list"></ol></div><div class="dialog-actions"><button class="button" type="button" onclick="closeDialog('order-dialog')">Cancel</button><button class="button primary" type="button" onclick="saveOrder()">Save order</button></div></dialog>
 
   <script>
+    let savedRetention = 3;
+    function previewSaveRetention() {
+      const next = Number(document.getElementById('calendar-retention').value);
+      const years = [];
+      for (let year = 2026 - savedRetention; year < 2026 - next; year++) years.push(year);
+      document.getElementById('calendar-retention-feedback').textContent = years.length
+        ? 'Preview only: export ' + years.join(', ') + ' to ICS before removing those years. If any export fails, keep its events and show an error.'
+        : 'Preview only: calendar retention settings would be saved.';
+      savedRetention = next;
+    }
+    function previewSaveEventLimits() {
+      const monthly = Number(document.getElementById('monthly-budget').value);
+      document.getElementById('event-limits-feedback').textContent = monthly >= 7 && monthly <= 512
+        ? 'Preview only: event limits would be saved.'
+        : 'Choose a monthly limit from 7 to 512.';
+    }
     let tabOrder = ['Lists', 'Recipes', 'Calendar', 'Weather', 'RSS', 'Games'];
     let draftOrder = [];
     function openOrder() { draftOrder = [...tabOrder]; renderOrder(); openDialog('order-dialog'); }

@@ -178,8 +178,10 @@ by feature before implementation.
   Recurrence requires an end date, defaulting to one year.
 - Admins set the household time zone. Calendar views and event budgets use
   that zone. Add month view and local, one-way downloadable ICS; no cloud
-  synchronization in the first release. The month view has a year dropdown
-  covering every retained previous year and future years. Admins choose how
+  synchronization in the first release. The month view has month and year
+  dropdowns, with previous/next buttons around the month and a Today button
+  alongside them. The year dropdown covers every retained previous year and
+  future years. Admins choose how
   many previous calendar years remain active, from zero to ten; default three
   previous years plus the current year.
 - Events may link to recipes. A visible event linked to a private recipe
@@ -192,15 +194,17 @@ by feature before implementation.
   with **Meal prep**. Authorized viewers can see the linked recipe in event
   details; other viewers see **Private recipe**.
 - Each user, including admins, has a configurable budget, initially eight
-  event occurrences per day and 32 per month. Recurring occurrences count.
-  At the default monthly budget and 32 users, a full year has at most 12,288
-  occurrences. For sizing, assume a title cap of 128 characters, description
-  cap of 512, no attachments, and all 32 users attached to every event (up to
-  393,216 event-participant links). A representative SQLite layout with
-  indexes measured about 25 MiB with one-byte text or 64 MiB with all text
-  fields filled by four-byte UTF-8 characters. Budget roughly 30–40 MiB or
-  70–90 MiB per full year to allow schema overhead. These are estimates under
-  the default event budgets; admins can configure higher limits.
+  event occurrences per day and 128 per month. Admins can set the monthly
+  budget from seven to 512. Recurring occurrences count. Limit event titles
+  to 128 characters and descriptions to 256 characters; show the remaining
+  description character budget while editing. At the default monthly budget
+  and 32 users, a full year has at most 49,152 occurrences. For sizing, assume
+  no attachments and all 32 users attached to every event (up to 1,572,864
+  event-participant links). A representative SQLite layout with indexes
+  measured about 85 MiB with one-byte text or 160 MiB with all text fields
+  filled by four-byte UTF-8 characters. Budget roughly 100–120 MiB or
+  180–220 MiB per full year to allow schema overhead. The configured maximum
+  of 512 occurrences per month can use roughly four times this space.
 - Users can be added to events. A private event appears as **Busy** to people
   without access. ICS downloads contain only event details the downloading
   user may view. The creator and admins can add or remove event participants;
@@ -210,12 +214,16 @@ by feature before implementation.
   release. An optional **Only events requiring me** ICS filter includes
   events the user created or was added to, and excludes generally shared
   events without that user's participation.
-- Proposed default when a year leaves the active calendar retention window:
-  archive it to a downloadable local ICS file, then remove its active events.
-  Confirm this default before implementation. Admins may choose direct
-  deletion instead. Admins may also choose an earlier
-  cleanup age in months or years. Archives are downloadable by admins from
-  settings and are not searchable in the active calendar. Store archive period
+- When a year leaves the active calendar retention window, archive it to a
+  downloadable local ICS file, then remove its active events. When an admin
+  reduces retention, first attempt to archive every newly excluded year;
+  keep its events and report the error if export fails. Show the resolved
+  archive folder in the Admin Calendar retention card; by default use a
+  `calendar-archives` folder beside the configured database. Admins may
+  choose direct deletion for automatic age cleanup, but a deliberate
+  reduction of retention still attempts ICS export first. Admins may choose
+  an earlier cleanup age in months or years. Archives are downloadable by
+  admins from settings and are not searchable in the active calendar. Store archive period
   and file metadata so a later outbound-email feature can send them without
   changing the archival flow. Emailing archives is a future feature dependent
   on outbound email.
