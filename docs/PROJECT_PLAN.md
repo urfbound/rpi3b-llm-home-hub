@@ -149,7 +149,9 @@ by feature before implementation.
 - Limit each user to 128 recipes, each recipe to 64 structured ingredients and
   64 ordered steps, and each step to 256 characters. Give each user at most
   one attributed note per recipe, editable or removable by that user and
-  limited to 256 characters. Recipe viewers can read the notes. When sharing
+  limited to 256 characters. Show notes as text by default; provide small Edit
+  and Delete controls beside a user's own note and reveal the editor beneath
+  it only when requested. Recipe viewers can read the notes. When sharing
   is narrowed, keep notes from people who retain access and warn before
   removing notes belonging to people who lose access. The house-wide account
   can read shared recipes and notes but cannot add notes. Limit titles to 128
