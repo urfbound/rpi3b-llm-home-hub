@@ -11,8 +11,8 @@ from datetime import date, datetime, timedelta, timezone
 from functools import wraps
 from pathlib import Path
 from urllib.parse import urlsplit
-from flask import (Flask, Response, abort, flash, g, make_response, redirect,
-                   render_template, request, send_file, session, url_for)
+from flask import (Flask, Response, abort, flash, g, jsonify, make_response, redirect,
+                   render_template, request, send_file, send_from_directory, session, url_for)
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError, VerificationError
 from .backups import (BackupError, backup_filename, create_backup,
@@ -398,7 +398,7 @@ def create_app(test_config=None):
             abort(403)
         if request.method in ('POST','PUT','PATCH','DELETE'):
             token = session.get('csrf_token')
-            supplied = request.form.get('_csrf', '')
+            supplied = request.form.get('_csrf', '') or request.headers.get('X-CSRF-Token', '')
             if not token or not secrets.compare_digest(token, supplied):
                 abort(400, description='Invalid CSRF token')
 
@@ -497,6 +497,20 @@ def create_app(test_config=None):
           selected_weekday=selected_weekday, chore_filter=chore_filter,
           chore_groups=chore_groups, home_weekday=home_weekday,
           home_chore_groups=home_chore_groups, just_my_chores=just_my_chores)
+
+    @app.get('/offline.html')
+    def offline_shell():
+        response = send_from_directory(app.static_folder, 'offline.html')
+        response.headers['Cache-Control'] = 'public, max-age=0, must-revalidate'
+        return response
+
+    @app.get('/service-worker.js')
+    def service_worker():
+        response = send_from_directory(app.static_folder, 'service-worker.js',
+                                       mimetype='application/javascript')
+        response.headers['Service-Worker-Allowed'] = '/'
+        response.headers['Cache-Control'] = 'no-cache'
+        return response
 
     @app.route('/login', methods=['GET','POST'])
     def login():
@@ -1044,7 +1058,8 @@ def create_app(test_config=None):
         if target['kind'] not in ('shopping', 'todo'):
             abort(404)
         with db:
-            db.execute('UPDATE shopping_items SET done=1-done,updated_at=CURRENT_TIMESTAMP '
+            db.execute("UPDATE shopping_items SET done=1-done,updated_at="
+                       "strftime('%Y-%m-%d %H:%M:%f','now') "
                        'WHERE id=?', (item_id,))
         return redirect(url_for('index', kind=target['kind'], list_id=target['id']) +
                         ('#shopping' if target['kind'] == 'shopping' else '#todo'))
@@ -1097,6 +1112,93 @@ def create_app(test_config=None):
             ('[x] ' if item['done'] else '[ ] ') + item['text'] for item in items
         ) + '\n'
         return Response(body,mimetype='text/plain',headers={'Content-Disposition':'attachment; filename="shopping.txt"'})
+
+    @app.get('/shopping/sync')
+    @login_required
+    def shopping_sync_snapshot():
+        db = get_db()
+        target = visible_list(db, g.user, request.args.get('list_id'))
+        if target['kind'] != 'shopping':
+            abort(404)
+        items = db.execute(
+            'SELECT id,text,done,updated_at FROM shopping_items WHERE list_id=? ORDER BY id',
+            (target['id'],)
+        ).fetchall()
+        response = jsonify({
+            'list': {'id': target['id'], 'title': target['title']},
+            'items': [{'id': row['id'], 'text': row['text'], 'done': bool(row['done']),
+                       'updated_at': row['updated_at']} for row in items],
+        })
+        response.headers['Cache-Control'] = 'no-store'
+        return response
+
+    @app.post('/shopping/sync')
+    @login_required
+    def shopping_sync_apply():
+        if g.user['account_kind'] == 'house':
+            abort(403)
+        payload = request.get_json(silent=True)
+        if not isinstance(payload, dict):
+            abort(400)
+        list_id = payload.get('list_id')
+        changes = payload.get('changes')
+        if (not isinstance(list_id, int) or isinstance(list_id, bool)
+                or not isinstance(changes, list) or len(changes) > 500):
+            abort(400)
+        target = visible_list(get_db(), g.user, list_id)
+        if target['kind'] != 'shopping':
+            abort(404)
+        ids = set()
+        for change in changes:
+            if not isinstance(change, dict):
+                abort(400)
+            item_id = change.get('id')
+            base_updated_at = change.get('base_updated_at')
+            if (not isinstance(item_id, int) or isinstance(item_id, bool) or item_id < 1
+                    or item_id in ids or not isinstance(change.get('done'), bool)
+                    or not isinstance(change.get('base_done'), bool)
+                    or (base_updated_at is not None and
+                        (not isinstance(base_updated_at, str) or len(base_updated_at) > 64))):
+                abort(400)
+            ids.add(item_id)
+
+        db = get_db()
+        results = []
+        with db:
+            db.execute('BEGIN IMMEDIATE')
+            for change in changes:
+                item = db.execute(
+                    'SELECT id,done,updated_at FROM shopping_items WHERE id=? AND list_id=?',
+                    (change['id'], target['id'])
+                ).fetchone()
+                if not item:
+                    results.append({'id': change['id'], 'status': 'deleted'})
+                    continue
+                requested = change['done']
+                current = bool(item['done'])
+                if ((item['updated_at'] != change['base_updated_at']
+                     or current != change['base_done']) and current != requested):
+                    results.append({'id': item['id'], 'status': 'conflict',
+                                    'server_done': current, 'requested_done': requested})
+                    continue
+                if current == requested:
+                    results.append({'id': item['id'], 'status': 'unchanged', 'done': current})
+                    continue
+                db.execute("UPDATE shopping_items SET done=?,updated_at="
+                           "strftime('%Y-%m-%d %H:%M:%f','now') WHERE id=?",
+                           (int(requested), item['id']))
+                results.append({'id': item['id'], 'status': 'updated', 'done': requested})
+            items = db.execute(
+                'SELECT id,text,done,updated_at FROM shopping_items WHERE list_id=? ORDER BY id',
+                (target['id'],)
+            ).fetchall()
+        response = jsonify({
+            'results': results,
+            'items': [{'id': row['id'], 'text': row['text'], 'done': bool(row['done']),
+                       'updated_at': row['updated_at']} for row in items],
+        })
+        response.headers['Cache-Control'] = 'no-store'
+        return response
 
     @app.post('/recipes')
     @login_required

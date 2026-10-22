@@ -18,9 +18,11 @@ to `main` only after the user approves the completed change.
 - **Lists and Recipes are active workstreams:** Shopping, To-do lists and task
   assignment/editing, Weekly Chores, and structured recipe creation/display
   are merged to main. Copy/Paste is implemented on `feature/list-copy-paste`
-  and awaits review. Recipe editing and deletion are implemented on
-  `feature/recipe-edit-delete` and await review. Weekend, weather, and system
-  status cards remain.
+  and awaits review. Recipe editing and deletion are merged to main. Recipe
+  privacy and notes await review on `feature/recipe-sharing-notes`. Away-mode
+  caching and checkmark sync are in progress on
+  `feature/list-away-mode-sync`. Weekend, weather, and system status cards
+  remain.
 - **Current app prototype:** login/admin, a single shopping list, recipe
   create/view, basic event creation and ICS export, and light/dark theme exist.
   The approved full tab designs are not yet implemented as complete features.
@@ -53,8 +55,9 @@ to `main` only after the user approves the completed change.
 ### Lists
 
 1. Versioned schema migrations, legacy shopping-item preservation, and the
-   v5 structured recipe tables are merged to main; continue adding tests for
-   every future upgrade.
+   v5 structured recipe tables are merged to main. The v6 recipe privacy and
+   notes migration awaits review on `feature/recipe-sharing-notes`; continue
+   adding tests for every future upgrade.
 2. Complete Shopping and To-do flows: list creation, selection, sharing,
    private allowlists, static shopping categories, item ownership, To-do
    assignment/due dates, collaborative editing, and item/list deletion
@@ -71,17 +74,19 @@ to `main` only after the user approves the completed change.
    independent completion, creator/admin deletion, Sunday reset based on the
    Pi's configured local date, and Just my chores filtering. The remaining Home
    cards depend on calendar, weather, and system-status work.
-5. Implement phone away-mode cache and checkmark-only sync by stable item ID,
-   including login renewal, permission checks, conflicts, deleted items, and
-   retained pending changes.
+5. Phone away-mode caching and checkmark-only sync by stable item ID are in
+   progress on `feature/list-away-mode-sync`; pending changes persist across
+   reconnects, while sync rechecks login and list permissions and reports
+   concurrent edits and deleted items for review. Browser QA remains for the
+   service-worker/offline flow on an HTTPS phone browser.
 
 ### Recipes
 
-- Structured recipe creation and detail display are merged to main, including
-  an upgrade that preserves existing recipe text. Recipe editing and deletion
-  are implemented on `feature/recipe-edit-delete` and await review. Remaining
-  work includes visibility and per-user notes, serving scaling, Add to list,
-  and Add to calendar.
+- Structured recipe creation, editing, and deletion are merged to main,
+  including an upgrade that preserves existing recipe text. Recipe privacy and
+  per-user notes are implemented on `feature/recipe-sharing-notes` and await
+  review. Remaining work includes serving scaling, Add to list, and Add to
+  calendar.
 - Add create, edit, view, and delete flows; structured ingredients and ordered
   steps; serving scaling; limits and validation; per-user notes and sharing
   privacy; Add to list snapshots; and Add to calendar with serving count.
@@ -176,6 +181,11 @@ to `main` only after the user approves the completed change.
   boundaries. Verify old supported databases upgrade without data loss.
 - Verify every approved tab at desktop and narrow-phone sizes, in light and
   dark themes, with keyboard/touch access and server-rendered fallback paths.
+- Verify away mode on an HTTPS phone browser: open a shopping list while
+  connected, reload once so the service worker controls it, turn on airplane
+  mode, check items, then reconnect and test login expiry, concurrent changes,
+  deleted items, and list access changes. Pending changes must remain visible
+  until they are synced or explicitly discarded.
 - Profile the Pi deployment, backup/restore and recovery, TLS and LAN-only
   exposure, and the LLM separately and alongside the app. Do not release until
   account, data, resource, and upgrade checks pass.
