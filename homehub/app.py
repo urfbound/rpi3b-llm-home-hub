@@ -4,15 +4,20 @@ import hmac
 import os
 import secrets
 import sqlite3
+import threading
 import time
 from contextlib import closing
 from datetime import date, datetime, timezone
 from functools import wraps
 from pathlib import Path
 from urllib.parse import urlsplit
-from flask import Flask, abort, flash, g, make_response, redirect, render_template, request, session, url_for, Response
+from flask import (Flask, Response, abort, flash, g, make_response, redirect,
+                   render_template, request, send_file, session, url_for)
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError, VerificationError
+from .backups import (BackupError, backup_filename, create_backup,
+                      default_backup_directory, delete_backup, list_backups,
+                      prune_backups, restore_backup, validate_backup_directory)
 
 PH = PasswordHasher(memory_cost=16384, time_cost=2, parallelism=1)
 SCHEMA_VERSION = 2
@@ -159,6 +164,29 @@ def create_app(test_config=None):
     db_path = Path(app.config['DATABASE'])
     db_path.parent.mkdir(parents=True, exist_ok=True)
     initialize_database(db_path)
+    maintenance = threading.Condition()
+    request_state = {'active': 0, 'restoring': False}
+
+    @app.before_request
+    def enter_request():
+        with maintenance:
+            if request_state['restoring']:
+                return 'The hub is restoring a verified backup. Try again shortly.', 503
+            request_state['active'] += 1
+            g.request_counted = True
+
+    def begin_restore():
+        with maintenance:
+            if request_state['restoring']:
+                abort(409, description='Another restore is already in progress.')
+            request_state['restoring'] = True
+            while request_state['active'] > 1:
+                maintenance.wait()
+
+    def end_restore():
+        with maintenance:
+            request_state['restoring'] = False
+            maintenance.notify_all()
 
     @app.before_request
     def load_context():
@@ -201,6 +229,10 @@ def create_app(test_config=None):
         db = g.pop('db', None)
         if db is not None:
             db.close()
+        if g.pop('request_counted', False):
+            with maintenance:
+                request_state['active'] -= 1
+                maintenance.notify_all()
 
     @app.get('/')
     @login_required
@@ -298,10 +330,122 @@ def create_app(test_config=None):
             ownership[user['id']] = {table: db.execute(
                 f'SELECT COUNT(*) FROM {table} WHERE created_by=?', (user['id'],)).fetchone()[0]
                 for table in ('shopping_items', 'recipes', 'events')}
+        stored_folder = db.execute('SELECT value FROM app_settings WHERE key=?',
+                                    ('backup_folder',)).fetchone()
+        configured_folder = (Path(stored_folder['value']) if stored_folder
+                             else default_backup_directory(db_path))
+        try:
+            backup_folder = validate_backup_directory(configured_folder)
+            backup_folder_available = True
+        except BackupError:
+            backup_folder = configured_folder
+            backup_folder_available = False
+        backup_frequency = setting(db, 'backup_interval_days', 1)
+        backup_retention = setting(db, 'backup_retention', 14)
+        backups = list_backups(backup_folder, backup_retention) if backup_folder_available else []
         return render_template('accounts.html', users=users, counts=counts,
                                ownership=ownership,
                                idle_hours=setting(db, 'session_idle_hours', 24),
-                               absolute_days=setting(db, 'session_absolute_days', 7))
+                               absolute_days=setting(db, 'session_absolute_days', 7),
+                               backup_folder=str(configured_folder),
+                               backup_folder_available=backup_folder_available,
+                               backup_frequency=backup_frequency,
+                               backup_retention=backup_retention,
+                               backups=backups)
+
+    def configured_backup_directory(db):
+        row = db.execute('SELECT value FROM app_settings WHERE key=?',
+                         ('backup_folder',)).fetchone()
+        configured = Path(row['value']) if row else default_backup_directory(db_path)
+        return validate_backup_directory(configured)
+
+    @app.post('/admin/backups/settings')
+    @admin_required
+    def update_backup_settings():
+        db = get_db()
+        backups_off = request.form.get('backups_off') == 'on'
+        try:
+            frequency = 0 if backups_off else int(
+                request.form.get('backup_frequency', ''))
+            retention = int(request.form.get('backup_retention') or
+                            setting(db, 'backup_retention', 14))
+            folder = validate_backup_directory(request.form.get('backup_folder', ''))
+        except (ValueError, BackupError):
+            flash('Enter a writable absolute backup folder, an interval from 1 to 31 days, '
+                  'and a retention count from 1 to 365, or turn automatic backups off.')
+            return redirect(url_for('accounts'))
+        if ((not backups_off and not 1 <= frequency <= 31)
+                or not 1 <= retention <= 365):
+            flash('Enter a backup interval from 1 to 31 days and a retention count from 1 to 365.')
+            return redirect(url_for('accounts'))
+        with db:
+            db.executemany('INSERT INTO app_settings(key,value) VALUES(?,?) '
+                           'ON CONFLICT(key) DO UPDATE SET value=excluded.value',
+                           (('backup_folder', str(folder)),
+                            ('backup_interval_days', str(frequency)),
+                            ('backup_retention', str(retention))))
+        flash('Backup settings updated.')
+        return redirect(url_for('accounts'))
+
+    @app.post('/admin/backups/create')
+    @admin_required
+    def create_backup_now():
+        db = get_db()
+        try:
+            folder = configured_backup_directory(db)
+            path = create_backup(db_path, folder)
+            prune_backups(folder, setting(db, 'backup_retention', 14))
+        except BackupError as exc:
+            flash(str(exc))
+        else:
+            flash(f'Backup created and verified: {path.name}.')
+        return redirect(url_for('accounts'))
+
+    @app.get('/admin/backups/<filename>/download')
+    @admin_required
+    def download_backup(filename):
+        try:
+            backup_filename(filename)
+            path = configured_backup_directory(get_db()) / filename
+            if (path.is_symlink() or path.resolve().parent != path.parent.resolve()
+                    or not path.is_file()):
+                abort(404)
+            return send_file(path, as_attachment=True, download_name=path.name,
+                             mimetype='application/vnd.sqlite3', max_age=0)
+        except BackupError:
+            abort(404)
+
+    @app.post('/admin/backups/<filename>/delete')
+    @admin_required
+    def remove_backup(filename):
+        try:
+            delete_backup(configured_backup_directory(get_db()), filename)
+        except BackupError as exc:
+            abort(400, description=str(exc))
+        flash(f'Backup {filename} deleted.')
+        return redirect(url_for('accounts'))
+
+    @app.post('/admin/backups/<filename>/restore')
+    @admin_required
+    def restore_selected_backup(filename):
+        db = get_db()
+        restore_started = False
+        try:
+            folder = configured_backup_directory(db)
+            begin_restore()
+            restore_started = True
+            db.close()
+            g.pop('db', None)
+            restore_backup(db_path, folder, filename, initialize_database, SCHEMA_VERSION)
+        except BackupError as exc:
+            flash(str(exc))
+            return redirect(url_for('accounts'))
+        finally:
+            if restore_started:
+                end_restore()
+        session.clear()
+        flash('Backup restored and verified. Please sign in again.')
+        return redirect(url_for('login'))
 
     @app.post('/admin/accounts')
     @admin_required
