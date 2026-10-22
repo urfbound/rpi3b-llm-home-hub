@@ -209,12 +209,14 @@ by feature before implementation.
   Refresh the shared weather cache no more often than every 30 minutes.
   When fetches fail or outbound access is off, show cached data with its age
   and mark it stale after two hours; explain when no cached forecast exists.
-  Beneath the daily forecast, show moon phase and a tide-station card. Draw
-  the actual illuminated Moon shape for the household date and hemisphere,
-  matching its phase and illumination; include traditional names such as
-  Harvest or Hunter's Moon only for the applicable full Moon, or label the
-  next named full Moon separately. Show predictions for the nearest available
-  tide station, including its name, distance from the household town, and
+  Beneath the daily forecast, show moon phase and a tide-station card. Use
+  Open-Meteo's daily moon phase value to draw a representative illuminated
+  Moon for the household date and hemisphere, with an approximate percent
+  illuminated. Do not add a separate routine Moon data poll. Use local
+  almanac rules for traditional names such as Harvest or Hunter's Moon; apply
+  a name only to its full Moon or label the next named full Moon separately.
+  Show predictions for the nearest available tide station, including its
+  name, distance from the household town, and
   high/low times and heights, even for an inland town. Use an authoritative
   station prediction source for tides; do not present gridded sea-level
   estimates as tide tables. Mark data age and source clearly, and cache these
