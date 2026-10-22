@@ -207,12 +207,17 @@ by feature before implementation.
   Refresh the shared weather cache no more often than every 30 minutes.
   When fetches fail or outbound access is off, show cached data with its age
   and mark it stale after two hours; explain when no cached forecast exists.
-  Beneath the daily forecast, show moon phase and a coastal tide-station card
-  with the station name and predicted high/low times and heights. Use an
-  authoritative station prediction source for tides; do not present gridded
-  sea-level estimates as tide tables. Mark data age and source clearly, and
-  cache these optional values for offline display. Tide readings are for
-  planning, not navigation.
+  Beneath the daily forecast, show moon phase and a tide-station card. Draw
+  the actual illuminated Moon shape for the household date and hemisphere,
+  matching its phase and illumination; include traditional names such as
+  Harvest or Hunter's Moon only for the applicable full Moon, or label the
+  next named full Moon separately. Show predictions for the nearest available
+  tide station, including its name, distance from the household town, and
+  high/low times and heights, even for an inland town. Use an authoritative
+  station prediction source for tides; do not present gridded sea-level
+  estimates as tide tables. Mark data age and source clearly, and cache these
+  optional values for offline display. Tide readings are for planning, not
+  navigation.
   An almanac sub-tab, on-demand historical weather, and alternative providers
   are deferred features.
 - Users manage personal RSS feeds; admins manage feeds for the house-wide
