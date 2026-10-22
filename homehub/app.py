@@ -20,10 +20,14 @@ from .backups import (BackupError, backup_filename, create_backup,
                       prune_backups, restore_backup, validate_backup_directory)
 
 PH = PasswordHasher(memory_cost=16384, time_cost=2, parallelism=1)
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 LOGIN_WINDOW_SECONDS = 15 * 60
 LOGIN_USERNAME_LIMIT = 5
 LOGIN_ADDRESS_LIMIT = 30
+SHOPPING_CATEGORIES = (
+    'Groceries', 'Gifts', 'Household', 'Health & Personal Care', 'Pets',
+    'Home & Garden', 'School & Activities', 'Other',
+)
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
  id INTEGER PRIMARY KEY, username TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -47,8 +51,30 @@ CREATE TABLE IF NOT EXISTS recipes (
 );
 CREATE TABLE IF NOT EXISTS shopping_items (
  id INTEGER PRIMARY KEY, text TEXT NOT NULL, done INTEGER NOT NULL DEFAULT 0,
- created_by INTEGER NOT NULL REFERENCES users(id)
+ created_by INTEGER NOT NULL REFERENCES users(id),
+ list_id INTEGER REFERENCES household_lists(id) ON DELETE CASCADE,
+ due_date TEXT, assignee_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+ updated_at TEXT
 );
+CREATE TABLE IF NOT EXISTS household_lists (
+ id INTEGER PRIMARY KEY,
+ kind TEXT NOT NULL CHECK(kind IN ('shopping','todo')),
+ title TEXT NOT NULL CHECK(length(trim(title)) BETWEEN 1 AND 80),
+ category TEXT NOT NULL DEFAULT 'Other',
+ visibility TEXT NOT NULL DEFAULT 'shared' CHECK(visibility IN ('shared','private')),
+ created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+ is_default INTEGER NOT NULL DEFAULT 0 CHECK(is_default IN (0,1)),
+ created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE UNIQUE INDEX IF NOT EXISTS household_lists_one_shopping_default
+ ON household_lists(kind) WHERE kind='shopping' AND is_default=1;
+CREATE TABLE IF NOT EXISTS list_access (
+ list_id INTEGER NOT NULL REFERENCES household_lists(id) ON DELETE CASCADE,
+ user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ added_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ PRIMARY KEY(list_id,user_id)
+);
+CREATE INDEX IF NOT EXISTS list_access_user ON list_access(user_id,list_id);
 CREATE TABLE IF NOT EXISTS events (
  id INTEGER PRIMARY KEY, title TEXT NOT NULL, event_date TEXT NOT NULL,
  recipe_id INTEGER REFERENCES recipes(id) ON DELETE SET NULL,
@@ -84,6 +110,39 @@ def admin_required(fn):
 def setting(db, key, default):
     row = db.execute('SELECT value FROM app_settings WHERE key=?', (key,)).fetchone()
     return int(row['value']) if row else default
+
+def visible_lists(db, user, kind=None):
+    """Return lists visible to this account without leaking private titles."""
+    clauses = []
+    params = []
+    if kind:
+        clauses.append('l.kind=?')
+        params.append(kind)
+    if user['role'] != 'admin':
+        clauses.append('(l.visibility=\'shared\' OR l.created_by=? OR EXISTS '
+                       '(SELECT 1 FROM list_access a WHERE a.list_id=l.id AND a.user_id=?))')
+        params.extend((user['id'], user['id']))
+    where = ' WHERE ' + ' AND '.join(clauses) if clauses else ''
+    return db.execute(
+        'SELECT l.* FROM household_lists l' + where +
+        ' ORDER BY l.is_default DESC, l.created_at, l.id', params
+    ).fetchall()
+
+def visible_list(db, user, list_id):
+    try:
+        list_id = int(list_id)
+    except (TypeError, ValueError):
+        abort(404)
+    row = db.execute('SELECT * FROM household_lists WHERE id=?', (list_id,)).fetchone()
+    if not row:
+        abort(404)
+    if user['role'] == 'admin' or row['visibility'] == 'shared' or row['created_by'] == user['id']:
+        return row
+    allowed = db.execute('SELECT 1 FROM list_access WHERE list_id=? AND user_id=?',
+                         (list_id, user['id'])).fetchone()
+    if not allowed:
+        abort(404)
+    return row
 
 def temporary_password():
     return secrets.token_urlsafe(18)
@@ -137,6 +196,26 @@ def initialize_database(db_path):
                 if column not in columns:
                     db.execute(f'ALTER TABLE users ADD COLUMN {column} {definition}')
             db.execute("UPDATE users SET display_name=username WHERE display_name=''")
+            item_columns = {row[1] for row in db.execute('PRAGMA table_info(shopping_items)')}
+            for column, definition in (
+                ('list_id', 'INTEGER REFERENCES household_lists(id) ON DELETE CASCADE'),
+                ('due_date', 'TEXT'),
+                ('assignee_id', 'INTEGER REFERENCES users(id) ON DELETE SET NULL'),
+                ('updated_at', 'TEXT'),
+            ):
+                if column not in item_columns:
+                    db.execute(f'ALTER TABLE shopping_items ADD COLUMN {column} {definition}')
+            default_list = db.execute(
+                "SELECT id FROM household_lists WHERE kind='shopping' AND is_default=1"
+            ).fetchone()
+            if default_list is None:
+                db.execute("INSERT INTO household_lists(kind,title,category,visibility,is_default) "
+                           "VALUES('shopping','Groceries','Groceries','shared',1)")
+                default_list_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
+            else:
+                default_list_id = default_list[0]
+            db.execute('UPDATE shopping_items SET list_id=? WHERE list_id IS NULL',
+                       (default_list_id,))
             if db.execute('PRAGMA foreign_key_check').fetchone():
                 raise RuntimeError('Database relationships failed verification')
             db.execute(f'PRAGMA user_version={SCHEMA_VERSION}')
@@ -240,9 +319,34 @@ def create_app(test_config=None):
     @login_required
     def index():
         db = get_db()
+        list_kind = request.args.get('kind', 'shopping')
+        if list_kind not in ('shopping', 'todo'):
+            abort(400)
+        lists = visible_lists(db, g.user, list_kind)
+        selected_id = request.args.get('list_id')
+        if selected_id:
+            selected_list = visible_list(db, g.user, selected_id)
+            if selected_list['kind'] != list_kind:
+                abort(404)
+        else:
+            selected_list = next((item for item in lists if item['is_default']), None)
+            if selected_list is None and lists:
+                selected_list = lists[0]
+        items = []
+        if selected_list and selected_list['kind'] in ('shopping', 'todo'):
+            items = db.execute(
+                'SELECT * FROM shopping_items WHERE list_id=? ORDER BY done,id DESC',
+                (selected_list['id'],)
+            ).fetchall()
+        list_users = db.execute(
+            "SELECT id,username,display_name FROM users "
+            "WHERE active=1 AND account_kind='person' ORDER BY display_name COLLATE NOCASE, id"
+        ).fetchall()
         return render_template('index.html', recipes=db.execute('SELECT * FROM recipes ORDER BY id DESC LIMIT 6').fetchall(),
           events=db.execute('SELECT events.*,recipes.title AS recipe_title FROM events LEFT JOIN recipes ON recipes.id=events.recipe_id ORDER BY event_date LIMIT 12').fetchall(),
-          items=db.execute('SELECT * FROM shopping_items ORDER BY done,id DESC').fetchall(), today=date.today().isoformat())
+          items=items, lists=lists, selected_list=selected_list, list_kind=list_kind,
+          list_users=list_users, shopping_categories=SHOPPING_CATEGORIES,
+          today=date.today().isoformat())
 
     @app.route('/login', methods=['GET','POST'])
     def login():
@@ -551,31 +655,147 @@ def create_app(test_config=None):
         flash('Session settings updated.')
         return redirect(url_for('accounts'))
 
+    @app.post('/lists')
+    @login_required
+    def create_list():
+        kind = request.form.get('kind', 'shopping').strip()
+        title = request.form.get('title', '').strip()
+        visibility = request.form.get('visibility', 'shared').strip()
+        category = request.form.get('category', 'Other').strip()
+        if kind not in ('shopping', 'todo') or visibility not in ('shared', 'private'):
+            abort(400)
+        if not title or len(title) > 80:
+            abort(400)
+        if kind == 'shopping' and category not in SHOPPING_CATEGORIES:
+            abort(400)
+        if kind == 'todo':
+            category = 'Other'
+
+        allowed_ids = []
+        if visibility == 'private':
+            try:
+                allowed_ids = list(dict.fromkeys(
+                    int(value) for value in request.form.getlist('allowed_user_ids')
+                ))
+            except ValueError:
+                abort(400)
+        db = get_db()
+        if allowed_ids:
+            placeholders = ','.join('?' for _ in allowed_ids)
+            valid_ids = {row['id'] for row in db.execute(
+                f"SELECT id FROM users WHERE active=1 AND account_kind='person' "
+                f"AND id IN ({placeholders})", allowed_ids
+            ).fetchall()}
+            if valid_ids != set(allowed_ids):
+                abort(400)
+        with db:
+            cursor = db.execute(
+                'INSERT INTO household_lists(kind,title,category,visibility,created_by) '
+                'VALUES(?,?,?,?,?)',
+                (kind, title, category, visibility, g.user['id'])
+            )
+            list_id = cursor.lastrowid
+            if visibility == 'private' and allowed_ids:
+                db.executemany('INSERT INTO list_access(list_id,user_id) VALUES(?,?)',
+                               ((list_id, user_id) for user_id in allowed_ids))
+        return redirect(url_for('index', kind=kind, list_id=list_id))
+
+    def add_list_item(expected_kind):
+        text = request.form.get('text','').strip()
+        if not text or len(text) > 240:
+            abort(400)
+        db = get_db()
+        selected_id = request.form.get('list_id')
+        if selected_id:
+            target = visible_list(db, g.user, selected_id)
+        elif expected_kind == 'shopping':
+            target = db.execute(
+                "SELECT * FROM household_lists WHERE kind='shopping' AND is_default=1"
+            ).fetchone()
+        else:
+            abort(400)
+        if not target or target['kind'] != expected_kind:
+            abort(404)
+        with db:
+            db.execute('INSERT INTO shopping_items(text,created_by,list_id,updated_at) '
+                       'VALUES(?,?,?,CURRENT_TIMESTAMP)',
+                       (text, g.user['id'], target['id']))
+        return redirect(url_for('index', kind=expected_kind, list_id=target['id']) +
+                        ('#shopping' if expected_kind == 'shopping' else '#todo'))
+
     @app.post('/shopping')
     @login_required
     def add_item():
-        text = request.form.get('text','').strip()
-        if text and len(text)<=240:
-            db=get_db(); db.execute('INSERT INTO shopping_items(text,created_by) VALUES(?,?)',(text,g.user['id']));db.commit()
-        return redirect(url_for('index')+'#shopping')
+        return add_list_item('shopping')
+
+    @app.post('/todo')
+    @login_required
+    def add_todo_item():
+        return add_list_item('todo')
 
     @app.post('/shopping/<int:item_id>/toggle')
     @login_required
     def toggle_item(item_id):
-        db=get_db();db.execute('UPDATE shopping_items SET done=1-done WHERE id=?',(item_id,));db.commit()
-        return redirect(url_for('index')+'#shopping')
+        db = get_db()
+        item = db.execute('SELECT * FROM shopping_items WHERE id=?', (item_id,)).fetchone()
+        if not item or not item['list_id']:
+            abort(404)
+        target = visible_list(db, g.user, item['list_id'])
+        if target['kind'] not in ('shopping', 'todo'):
+            abort(404)
+        with db:
+            db.execute('UPDATE shopping_items SET done=1-done,updated_at=CURRENT_TIMESTAMP '
+                       'WHERE id=?', (item_id,))
+        return redirect(url_for('index', kind=target['kind'], list_id=target['id']) +
+                        ('#shopping' if target['kind'] == 'shopping' else '#todo'))
 
-    @app.post('/shopping/clear')
+    @app.post('/shopping/<int:item_id>/delete')
     @login_required
-    def clear_items():
-        db=get_db();db.execute('DELETE FROM shopping_items');db.commit()
-        return redirect(url_for('index')+'#shopping')
+    def delete_list_item(item_id):
+        db = get_db()
+        item = db.execute('SELECT * FROM shopping_items WHERE id=?', (item_id,)).fetchone()
+        if not item or not item['list_id']:
+            abort(404)
+        target = visible_list(db, g.user, item['list_id'])
+        if item['created_by'] != g.user['id'] and g.user['role'] != 'admin':
+            abort(403)
+        with db:
+            db.execute('DELETE FROM shopping_items WHERE id=?', (item_id,))
+        return redirect(url_for('index', kind=target['kind'], list_id=target['id']) +
+                        ('#shopping' if target['kind'] == 'shopping' else '#todo'))
+
+    @app.post('/lists/<int:list_id>/delete')
+    @login_required
+    def delete_list(list_id):
+        db = get_db()
+        target = db.execute('SELECT * FROM household_lists WHERE id=?', (list_id,)).fetchone()
+        if not target:
+            abort(404)
+        if target['created_by'] != g.user['id'] and g.user['role'] != 'admin':
+            abort(403)
+        kind = target['kind']
+        with db:
+            db.execute('DELETE FROM household_lists WHERE id=?', (list_id,))
+        return redirect(url_for('index', kind=kind))
 
     @app.get('/shopping.txt')
     @login_required
     def shopping_text():
-        items=get_db().execute('SELECT text FROM shopping_items WHERE done=0 ORDER BY id').fetchall()
-        body='Shopping list\n\n'+'\n'.join('- '+i['text'] for i in items)+'\n'
+        db = get_db()
+        selected_id = request.args.get('list_id')
+        if selected_id:
+            target = visible_list(db, g.user, selected_id)
+        else:
+            target = db.execute(
+                "SELECT * FROM household_lists WHERE kind='shopping' AND is_default=1"
+            ).fetchone()
+        if not target or target['kind'] != 'shopping':
+            abort(404)
+        items = db.execute('SELECT text,done FROM shopping_items WHERE list_id=? ORDER BY id',
+                           (target['id'],)).fetchall()
+        body = target['title'] + '\n\n' + '\n'.join(
+            ('[x] ' if item['done'] else '[ ] ') + item['text'] for item in items
+        ) + '\n'
         return Response(body,mimetype='text/plain',headers={'Content-Disposition':'attachment; filename="shopping.txt"'})
 
     @app.post('/recipes')

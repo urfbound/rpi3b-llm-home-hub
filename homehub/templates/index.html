@@ -1,1 +1,126 @@
-{% extends 'base.html' %}{% block content %}<section class="intro"><h1>A little home for everything.</h1><p>Your family's recipes, plans, and shopping list, all in one place.</p></section><div class="grid"><section class="panel" id="calendar"><h2>📅 Calendar</h2><form method="post" action="{{ url_for('add_event') }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><label>Date<input type="date" name="event_date" value="{{ today }}" required></label><label>Event<input name="title" placeholder="An event or dinner plan" required maxlength="160"></label><button class="primary">Add event</button></form><ul>{% for e in events %}<li><b>{{e['event_date']}}</b> · {{e['title']}}</li>{% else %}<li>No plans yet.</li>{% endfor %}</ul><a href="{{ url_for('export_calendar') }}">Download calendar (.ics)</a></section><section class="panel" id="shopping"><h2>🧺 Shopping list</h2><form method="post" action="{{url_for('add_item')}}" class="inline"><input type="hidden" name="_csrf" value="{{csrf_token}}"><input name="text" placeholder="What do we need?" maxlength="240" required><button class="primary">Add</button></form><ul class="checks">{% for item in items %}<li><form method="post" action="{{url_for('toggle_item',item_id=item['id'])}}"><input type="hidden" name="_csrf" value="{{csrf_token}}"><button aria-label="Toggle purchased">{{'☑' if item['done'] else '☐'}}</button> <span class="{{'done' if item['done'] else ''}}">{{item['text']}}</span></form></li>{% else %}<li>Nothing to buy.</li>{% endfor %}</ul><div class="actions"><a href="{{url_for('shopping_text')}}">Download list</a><form method="post" action="{{url_for('clear_items')}}" onsubmit="return confirm('Clear every item?')"><input type="hidden" name="_csrf" value="{{csrf_token}}"><button>Clear all</button></form></div></section><section class="panel" id="recipes"><h2>🍲 Recipe book</h2><form method="post" action="{{url_for('add_recipe')}}"><input type="hidden" name="_csrf" value="{{csrf_token}}"><label>Name<input name="title" placeholder="Favourite dinner" maxlength="160" required></label><label>Ingredients<textarea name="ingredients" rows="3" placeholder="One ingredient per line"></textarea></label><label>Instructions<textarea name="instructions" rows="3"></textarea></label><button class="primary">Save recipe</button></form><ul>{% for r in recipes %}<li><a href="{{url_for('recipe_detail',recipe_id=r['id'])}}">{{r['title']}}</a></li>{% else %}<li>Your recipe book is waiting.</li>{% endfor %}</ul></section><section class="panel"><h2>🌤️ Coming next</h2><p>Weather, RSS headlines, games, and local LLM chat will plug into this lightweight foundation.</p><p class="muted">This starter intentionally doesn't include external network requests or a running model yet.</p></section></div>{% endblock %}
+{% extends 'base.html' %}
+{% block content %}
+<section class="intro">
+  <h1>A little home for everything.</h1>
+  <p>Your family's recipes, plans, and shopping lists, all in one place.</p>
+</section>
+<div class="grid">
+  <section class="panel" id="calendar">
+    <h2>Calendar</h2>
+    <form method="post" action="{{ url_for('add_event') }}">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <label>Date<input type="date" name="event_date" value="{{ today }}" required></label>
+      <label>Event<input name="title" placeholder="An event or dinner plan" required maxlength="160"></label>
+      <button class="primary">Add event</button>
+    </form>
+    <ul>
+      {% for e in events %}<li><b>{{ e['event_date'] }}</b> · {{ e['title'] }}</li>
+      {% else %}<li>No plans yet.</li>{% endfor %}
+    </ul>
+    <a href="{{ url_for('export_calendar') }}">Download calendar (.ics)</a>
+  </section>
+
+  <section class="panel" id="shopping">
+    <h2>Lists</h2>
+    <nav aria-label="List categories" class="list-tabs">
+      <a href="{{ url_for('index', kind='shopping') }}" {% if list_kind == 'shopping' %}aria-current="page"{% endif %}>Shopping</a>
+      <a href="{{ url_for('index', kind='todo') }}" {% if list_kind == 'todo' %}aria-current="page"{% endif %}>To-do</a>
+      <span aria-disabled="true">Chores (coming next)</span>
+    </nav>
+
+    {% if lists %}
+    <form method="get" action="{{ url_for('index') }}" class="inline">
+      <input type="hidden" name="kind" value="{{ list_kind }}">
+      <label for="list-picker">Choose a list</label>
+      <select id="list-picker" name="list_id">
+        {% for list in lists %}<option value="{{ list['id'] }}" {% if selected_list and selected_list['id'] == list['id'] %}selected{% endif %}>{{ list['title'] }}{% if list['visibility'] == 'private' %} · Private{% endif %}</option>{% endfor %}
+      </select>
+      <button>Open</button>
+    </form>
+    {% endif %}
+
+    {% if current_user['account_kind'] != 'house' %}
+    <details>
+      <summary>Create a list</summary>
+      <form method="post" action="{{ url_for('create_list') }}">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        <input type="hidden" name="kind" value="{{ list_kind }}">
+        <label>List name<input name="title" maxlength="80" required></label>
+        {% if list_kind == 'shopping' %}
+        <label>Category<select name="category">{% for category in shopping_categories %}<option>{{ category }}</option>{% endfor %}</select></label>
+        {% endif %}
+        <label>Sharing<select name="visibility"><option value="shared">Shared with household</option><option value="private">Private</option></select></label>
+        <label>Allow access to users (for private lists)<select name="allowed_user_ids" multiple size="3">{% for user in list_users if user['id'] != current_user['id'] %}<option value="{{ user['id'] }}">{{ user['display_name'] or user['username'] }}</option>{% endfor %}</select></label>
+        <button class="primary">Create list</button>
+      </form>
+    </details>
+    {% endif %}
+
+    {% if selected_list %}
+      <div class="list-heading">
+        <h3>{{ selected_list['title'] }}</h3>
+        {% if selected_list['created_by'] == current_user['id'] or current_user['role'] == 'admin' %}
+        <button type="button" class="danger" onclick="document.getElementById('delete-list-dialog').showModal()">Delete list</button>
+        {% endif %}
+      </div>
+      {% if selected_list['created_by'] == current_user['id'] or current_user['role'] == 'admin' %}
+      <dialog id="delete-list-dialog">
+        <form method="post" action="{{ url_for('delete_list', list_id=selected_list['id']) }}" class="dialog-form">
+          <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+          <p class="eyebrow">Permanent removal</p>
+          <h2>Delete {{ selected_list['title'] }}?</h2>
+          <p>This will permanently remove this list and all {{ items|length }} items on it, including items added by other household members.</p>
+          <div class="dialog-actions"><button type="button" onclick="this.closest('dialog').close()">Cancel</button><button class="danger">Delete list</button></div>
+        </form>
+      </dialog>
+      {% endif %}
+      {% if current_user['account_kind'] != 'house' %}
+      <form method="post" action="{{ url_for('add_item') if list_kind == 'shopping' else url_for('add_todo_item') }}" class="inline">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        <input type="hidden" name="list_id" value="{{ selected_list['id'] }}">
+        <input name="text" placeholder="{{ 'What do we need?' if list_kind == 'shopping' else 'Add a task' }}" maxlength="240" required>
+        <button class="primary">Add</button>
+      </form>
+      {% endif %}
+      <ul class="checks">
+        {% for item in items %}
+        <li><form method="post" action="{{ url_for('toggle_item', item_id=item['id']) }}">
+          <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+          <button aria-label="{{ 'Mark incomplete' if item['done'] else 'Mark complete' }}">{{ '✓' if item['done'] else '○' }}</button>
+          <span class="{{ 'done' if item['done'] else '' }}">{{ item['text'] }}</span>
+        </form>
+        {% if item['created_by'] == current_user['id'] or current_user['role'] == 'admin' %}
+        <button type="button" class="danger" onclick="document.getElementById('delete-item-{{ item['id'] }}').showModal()">Delete</button>
+        <dialog id="delete-item-{{ item['id'] }}"><form method="post" action="{{ url_for('delete_list_item', item_id=item['id']) }}" class="dialog-form">
+          <input type="hidden" name="_csrf" value="{{ csrf_token }}"><p class="eyebrow">Remove item</p><h2>Delete this item?</h2>
+          <p>Remove “{{ item['text'] }}” from {{ selected_list['title'] }}?</p>
+          <div class="dialog-actions"><button type="button" onclick="this.closest('dialog').close()">Cancel</button><button class="danger">Delete item</button></div>
+        </form></dialog>
+        {% endif %}</li>
+        {% else %}<li>{{ 'Nothing to buy.' if list_kind == 'shopping' else 'No tasks yet.' }}</li>{% endfor %}
+      </ul>
+      {% if list_kind == 'shopping' %}<a href="{{ url_for('shopping_text', list_id=selected_list['id']) }}">Download list</a>{% endif %}
+    {% elif list_kind == 'todo' %}
+      <p>Create a To-do list to get started.</p>
+    {% endif %}
+  </section>
+
+  <section class="panel" id="recipes">
+    <h2>Recipe book</h2>
+    <form method="post" action="{{ url_for('add_recipe') }}">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <label>Name<input name="title" placeholder="Favourite dinner" maxlength="160" required></label>
+      <label>Ingredients<textarea name="ingredients" rows="3" placeholder="One ingredient per line"></textarea></label>
+      <label>Instructions<textarea name="instructions" rows="3"></textarea></label>
+      <button class="primary">Save recipe</button>
+    </form>
+    <ul>{% for r in recipes %}<li><a href="{{ url_for('recipe_detail', recipe_id=r['id']) }}">{{ r['title'] }}</a></li>{% else %}<li>Your recipe book is waiting.</li>{% endfor %}</ul>
+  </section>
+
+  <section class="panel">
+    <h2>Coming next</h2>
+    <p>Weather, RSS headlines, games, and local LLM chat will plug into this lightweight foundation.</p>
+    <p class="muted">This starter intentionally doesn't include external network requests or a running model yet.</p>
+  </section>
+</div>
+{% endblock %}

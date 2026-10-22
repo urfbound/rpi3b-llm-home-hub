@@ -22,11 +22,13 @@ without modifying it. Migration errors roll back the schema change.
 4. Start the service and confirm that login, recipes, shopping items, and
    calendar events are present. Check service logs if startup fails.
 
-Schema version 2 adds the persistent login-attempt table and indexes. The
-upgrade preserves existing users and household content, and creates a
-verified pre-v2 copy before changing a populated version 1 database. Later
-releases must continue adding ordered migrations and upgrade tests for each
-supported prior release.
+Schema version 2 adds the persistent login-attempt table and indexes.
+Schema version 3 adds the named-list and private-access tables, then links
+existing shopping items to a shared **Groceries** list without changing their
+IDs, text, completion states, or owners. The v3 upgrade creates a verified
+pre-v3 copy before changing a populated earlier database. Later releases must
+continue adding ordered migrations and upgrade tests for each supported prior
+release.
 
 ## If an upgrade fails
 
