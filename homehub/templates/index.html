@@ -118,6 +118,15 @@
         <a href="{{ url_for('shopping_text', list_id=selected_list['id']) if list_kind == 'shopping' else url_for('list_text', list_id=selected_list['id']) }}">Download text</a>
         <span class="muted" id="copy-list-status" role="status" aria-live="polite"></span>
       </div>
+      <dialog id="copy-fallback-dialog">
+        <div class="dialog-form">
+          <p class="eyebrow">Clipboard access unavailable</p>
+          <h2>Copy list text</h2>
+          <p>The text is selected below. Copy it, then paste it wherever you need it.</p>
+          <textarea id="copy-fallback-text" rows="8" readonly></textarea>
+          <div class="dialog-actions"><button type="button" onclick="this.closest('dialog').close()">Done</button></div>
+        </div>
+      </dialog>
     {% elif list_kind == 'todo' %}
       <p>Create a To-do list to get started.</p>
     {% endif %}
@@ -149,21 +158,23 @@ document.querySelectorAll('[data-copy-url]').forEach((button) => {
       const response = await fetch(button.dataset.copyUrl, {credentials: 'same-origin'});
       if (!response.ok) throw new Error('Could not read list');
       const text = await response.text();
+      let copied = false;
       if (navigator.clipboard && window.isSecureContext) {
-        await navigator.clipboard.writeText(text);
-      } else {
-        const fallback = document.createElement('textarea');
-        fallback.value = text;
-        fallback.setAttribute('readonly', '');
-        fallback.style.position = 'fixed';
-        fallback.style.opacity = '0';
-        document.body.appendChild(fallback);
-        fallback.select();
-        const copied = document.execCommand('copy');
-        fallback.remove();
-        if (!copied) throw new Error('Clipboard unavailable');
+        try {
+          await navigator.clipboard.writeText(text);
+          copied = true;
+        } catch (_) {}
       }
-      status.textContent = 'List copied.';
+      if (copied) {
+        status.textContent = 'List copied.';
+      } else {
+        const fallback = document.getElementById('copy-fallback-text');
+        fallback.value = text;
+        document.getElementById('copy-fallback-dialog').showModal();
+        fallback.focus();
+        fallback.select();
+        status.textContent = 'Select and copy the list text.';
+      }
     } catch (_) {
       status.textContent = 'Could not copy list. Try downloading the text.';
     }

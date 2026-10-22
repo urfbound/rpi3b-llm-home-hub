@@ -1,4 +1,5 @@
 import sqlite3
+import re
 
 import pytest
 from homehub.app import create_app, PH
@@ -71,7 +72,9 @@ def test_shopping(client):
     sign_in(client)
     with client.session_transaction() as sess: token=sess['csrf_token']
     client.post('/shopping',data={'text':'Milk','_csrf':token})
-    assert b'[ ] Milk' in client.get('/shopping.txt').data
+    export = client.get('/shopping.txt')
+    assert b'[ ] Milk' in export.data
+    assert export.headers['Cache-Control'] == 'no-store'
     with sqlite3.connect(client.application.config['DATABASE']) as db:
         list_id = db.execute('SELECT list_id FROM shopping_items WHERE text="Milk"').fetchone()[0]
         assert db.execute('SELECT title,kind FROM household_lists WHERE id=?',
@@ -91,9 +94,21 @@ def test_paste_list_merges_checkmarks_and_adds_items_owned_by_importer(client):
         milk_id = db.execute("SELECT id FROM shopping_items WHERE text='Milk'").fetchone()[0]
 
     token = csrf_token(client)
+    pasted_text = 'List copied away from home\n\n[*]  milk  \n[ ] Bread\n[*] Eggs\n[ ] Tea\n[ ] eggs'
     response = client.post(f'/lists/{list_id}/paste', data={
         '_csrf': token,
-        'text': 'Groceries\n\n[*]  milk  \n[ ] Bread\n[*] Eggs\n[ ] Tea\n[ ] eggs',
+        'text': pasted_text,
+    })
+    assert response.status_code == 200
+    assert b'Review list changes' in response.data
+    assert response.headers['Cache-Control'] == 'no-store'
+    with sqlite3.connect(db_path) as db:
+        assert db.execute('SELECT text,done FROM shopping_items WHERE list_id=? ORDER BY id',
+                          (list_id,)).fetchall() == [('Milk', 0), ('Bread', 1)]
+    review_token = re.search(rb'name="review_token" value="([^"]+)"',
+                             response.data).group(1).decode()
+    response = client.post(f'/lists/{list_id}/paste/apply', data={
+        '_csrf': csrf_token(client), 'text': pasted_text, 'review_token': review_token,
     })
     assert response.status_code == 302
     with sqlite3.connect(db_path) as db:
@@ -130,6 +145,7 @@ def test_list_page_offers_copy_and_paste_controls(client):
     page = client.get('/')
     assert b'Copy list' in page.data
     assert b'Paste list' in page.data
+    assert b'Clipboard access unavailable' in page.data
 
 def test_list_text_exports_the_selected_todo_list(client):
     sign_in(client)
@@ -158,8 +174,78 @@ def test_paste_list_rejects_invalid_item_without_partial_changes(client):
     response = client.post(f'/lists/{list_id}/paste', data={
         '_csrf': token, 'text': 'Groceries\n\n[ ] Apples\n[ ] ' + ('x' * 241),
     })
-    assert response.status_code == 400
+    assert response.status_code == 200
+    assert b'need attention' in response.data
+    assert b'Merge list' not in response.data
     with sqlite3.connect(client.application.config['DATABASE']) as db:
+        assert db.execute('SELECT COUNT(*) FROM shopping_items WHERE list_id=?',
+                          (list_id,)).fetchone() == (0,)
+
+def test_paste_list_flags_ambiguous_existing_matches(client):
+    sign_in(client)
+    db_path = client.application.config['DATABASE']
+    with sqlite3.connect(db_path) as db:
+        list_id = db.execute('SELECT id FROM household_lists WHERE is_default=1').fetchone()[0]
+        db.executemany('INSERT INTO shopping_items(text,created_by,list_id) VALUES(?,?,?)', [
+            ('Green apples', 1, list_id), (' green   apples ', 1, list_id),
+        ])
+    response = client.post(f'/lists/{list_id}/paste', data={
+        '_csrf': csrf_token(client), 'text': 'Groceries\n\n[x] GREEN apples',
+    })
+    assert response.status_code == 200
+    assert b'ambiguous match' in response.data
+    assert b'Merge list' not in response.data
+
+def test_paste_apply_requires_a_fresh_review_when_list_changes(client):
+    sign_in(client)
+    db_path = client.application.config['DATABASE']
+    with sqlite3.connect(db_path) as db:
+        list_id = db.execute('SELECT id FROM household_lists WHERE is_default=1').fetchone()[0]
+    text = 'Groceries\n\n[ ] Apples'
+    review = client.post(f'/lists/{list_id}/paste', data={
+        '_csrf': csrf_token(client), 'text': text,
+    })
+    review_token = re.search(rb'name="review_token" value="([^"]+)"',
+                             review.data).group(1).decode()
+    with sqlite3.connect(db_path) as db:
+        db.execute('INSERT INTO shopping_items(text,created_by,list_id) VALUES(?,?,?)',
+                   ('Apples', 1, list_id))
+    response = client.post(f'/lists/{list_id}/paste/apply', data={
+        '_csrf': csrf_token(client), 'text': text, 'review_token': review_token,
+    })
+    assert response.status_code == 409
+    assert b'list changed after the preview' in response.data
+    with sqlite3.connect(db_path) as db:
+        assert db.execute('SELECT COUNT(*) FROM shopping_items WHERE list_id=?',
+                          (list_id,)).fetchone() == (1,)
+
+def test_paste_apply_rechecks_private_list_access(client):
+    sign_in(client)
+    db_path = client.application.config['DATABASE']
+    with sqlite3.connect(db_path) as db:
+        db.execute("INSERT INTO users(username,display_name,password_hash,role) "
+                   "VALUES('bob','Bob',?,'user')", (PH.hash('bob test password'),))
+        bob_id = db.execute("SELECT id FROM users WHERE username='bob'").fetchone()[0]
+        db.execute("INSERT INTO household_lists(kind,title,category,visibility,created_by) "
+                   "VALUES('shopping','Bob private','Gifts','private',1)")
+        list_id = db.execute("SELECT id FROM household_lists WHERE title='Bob private'").fetchone()[0]
+        db.execute('INSERT INTO list_access(list_id,user_id) VALUES(?,?)', (list_id, bob_id))
+    bob = client.application.test_client()
+    sign_in_as(bob, 'bob', 'bob test password')
+    text = 'Bob private\n\n[x] Secret'
+    review = bob.post(f'/lists/{list_id}/paste', data={
+        '_csrf': csrf_token(bob), 'text': text,
+    })
+    review_token = re.search(rb'name="review_token" value="([^"]+)"',
+                             review.data).group(1).decode()
+    with sqlite3.connect(db_path) as db:
+        db.execute('DELETE FROM list_access WHERE list_id=? AND user_id=?',
+                   (list_id, bob_id))
+    response = bob.post(f'/lists/{list_id}/paste/apply', data={
+        '_csrf': csrf_token(bob), 'text': text, 'review_token': review_token,
+    })
+    assert response.status_code == 404
+    with sqlite3.connect(db_path) as db:
         assert db.execute('SELECT COUNT(*) FROM shopping_items WHERE list_id=?',
                           (list_id,)).fetchone() == (0,)
 

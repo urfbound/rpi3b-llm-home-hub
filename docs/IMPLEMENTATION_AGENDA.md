@@ -15,14 +15,13 @@ to `main` only after the user approves the completed change.
   measurements on the Raspberry Pi 3B are recorded in
   [CHAT_PI_BENCHMARK.md](CHAT_PI_BENCHMARK.md). App-only and app-plus-model
   profiling remain to be done.
-- **Lists is the active workstream:** schema version 3, Shopping and To-do
-  workflows, and Copy/Paste are implemented on feature branches and merged to
-  main. The migration
-  creates named-list/private-access tables and links legacy shopping items to
-  a shared Groceries list without changing item IDs or content. Shopping and
-  To-do lists can be created and selected, with shared/private visibility,
-  private allowlists, item creation/completion, and creator/admin deletion
-  controls. This work is not yet merged.
+- **Lists is the active workstream:** schema version 3 and the initial Shopping
+  and To-do workflows are merged to main. Copy/Paste is implemented on
+  `feature/list-copy-paste` and awaiting review. The migration creates
+  named-list/private-access tables and links legacy shopping items to a shared
+  Groceries list without changing item IDs or content. Shopping and To-do lists
+  support shared/private visibility, private allowlists, item creation and
+  completion, and creator/admin deletion controls.
 - **Current app prototype:** login/admin, a single shopping list, recipe
   create/view, basic event creation and ICS export, and light/dark theme exist.
   The approved full tab designs are not yet implemented as complete features.
@@ -62,7 +61,8 @@ to `main` only after the user approves the completed change.
    selection, and access controls are implemented on the active branch; full
    editing, assignment, deletion edge cases, and responsive visual review
    remain.
-3. Implemented plain-text Copy list and reviewed Paste list. Matching ignores
+3. Implemented on the feature branch: plain-text Copy list and reviewed Paste
+   list. Matching ignores
    case and repeated whitespace; checked imports complete existing items
    without changing their owner, while new items belong to the importing user.
    Private-list access is rechecked at apply time, and exported text is
