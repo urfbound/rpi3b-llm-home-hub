@@ -25,8 +25,12 @@ by feature before implementation.
   RSS, and all six games below. It can ship with Chat hidden if the Pi cannot
   run useful local answers within acceptable resource use.
 - Home shows preview cards in two columns when space permits. Put today's
-  Chores and **This weekend** (calendar items for the upcoming Saturday and
+  Chores and **This weekend** (calendar items for the upcoming Friday through
   Sunday) in the first row, followed by current weather and system status cards.
+  The weekend card can filter to events created by or requiring the signed-in
+  user. Each event title links directly to its Calendar detail, with a smaller
+  end time immediately after the start time and indented lines for invitees
+  and the description. Apply event and recipe privacy rules to these lines.
   The chores card groups tasks by person and can filter to the signed-in user;
   open and completed tasks use circle and checkmark markers without list
   bullets or strikethrough. Cards stack on narrow
@@ -37,6 +41,9 @@ by feature before implementation.
   only. Keep Home fixed at the start and Admin fixed at the end; the feature
   tabs between them can be reordered. The control's visual design still needs
   approval.
+- Stack all Admin cards vertically, with Accounts first. Provide jump links
+  to each feature's household configuration section; keep Admin's own settings
+  in the Admin tab. Show Calendar limits before Calendar retention.
 - Target at most 32 users and four admins. Aim for under 256 MB application
   steady-state RSS and under 10 GB for application, dependencies, and data,
   excluding the OS and local model files.
@@ -149,9 +156,10 @@ by feature before implementation.
 - Limit each user to 128 recipes, each recipe to 64 structured ingredients and
   64 ordered steps, and each step to 256 characters. Give each user at most
   one attributed note per recipe, editable or removable by that user and
-  limited to 256 characters. Show notes as text by default; provide small Edit
-  and Delete controls beside a user's own note and reveal the editor beneath
-  it only when requested. Recipe viewers can read the notes. When sharing
+  limited to 256 characters. Show notes as text by default; provide Edit
+  and Delete controls with at least 44 px touch targets beside a user's own
+  note and reveal the editor beneath it only when requested. Confirm before
+  deleting a note. Recipe viewers can read the notes. When sharing
   is narrowed, keep notes from people who retain access and warn before
   removing notes belonging to people who lose access. The house-wide account
   can read shared recipes and notes but cannot add notes. Limit titles to 128
@@ -181,9 +189,9 @@ by feature before implementation.
 - Admins set the household time zone. Calendar views and event budgets use
   that zone. Add month view and local, one-way downloadable ICS; no cloud
   synchronization in the first release. The month view has month and year
-  dropdowns, with previous/next buttons around the month and a Today button
-  alongside them. The year dropdown covers every retained previous year and
-  future years. Admins choose how
+  dropdowns, with previous/next buttons around the month on the left, the year
+  dropdown centered, and Today on the right. The year dropdown covers every
+  retained previous year and future years. Admins choose how
   many previous calendar years remain active, from zero to ten; default three
   previous years plus the current year.
 - Events may link to recipes. A visible event linked to a private recipe
