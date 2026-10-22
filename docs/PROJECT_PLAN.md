@@ -371,7 +371,7 @@ the three games where it breaks ties.
   awaiting user review before list and tab-order implementation.
 - [Weather preview](design/weather-preview.html): approved by the user before
   weather implementation.
-- [RSS preview](design/rss-preview.html): awaiting user review before RSS
+- [RSS preview](design/rss-preview.html): approved by the user before RSS
   implementation.
 
 ## Deferred features
