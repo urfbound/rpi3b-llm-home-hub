@@ -430,9 +430,10 @@ the three games where it breaks ties.
    account administration and data migration, roles, sessions, login rate
    limiting, CSRF, backup/restore, TLS deployment guide, and baseline memory
    measurement.
-2. Home visual design is approved. Review and approve the updated Games and
-   Chat visual designs before implementing those tabs. Chat remains hidden
-   until an admin enables it and local model feasibility is established.
+2. Home, Games, and Chat visual designs are approved. Chat remains hidden
+   until an admin enables it and local model feasibility is established. The
+   proposed scoped, read-only database-tool budget is approved; measure it
+   on the Pi before enabling database access.
 3. Implement the approved Lists, Recipes, Calendar, Weather, and RSS designs
    in focused branches with relevant tests and profiling.
 4. Spike Ollama on the target Pi, then design and implement Chat if feasible;
@@ -455,12 +456,12 @@ the three games where it breaks ties.
   weather implementation.
 - [RSS preview](design/rss-preview.html): approved by the user before RSS
   implementation.
-- [Games preview](design/games-preview.html): updated with conditional seeds
-  and expandable score/progress cards; awaiting review before implementation.
+- [Games preview](design/games-preview.html): approved after adding conditional seeds, expandable score/progress cards,
+  and a distinct Today progress card.
 - [Chat preview](design/chat-preview.html): updated with model names,
   optional remote-provider support, and scoped database-tool disclosure;
-  awaiting review before Chat implementation and a local-model feasibility
-  check on the Raspberry Pi.
+  approved by the user; Chat implementation still requires a local-model
+  feasibility check on the Raspberry Pi. The database-access budget is approved.
 
 ## Deferred features
 
