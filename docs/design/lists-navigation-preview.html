@@ -58,7 +58,7 @@ choreLists[selectedDay].push({name:'Put clean clothes away',person:'Everyone',ad
 let pendingChore=null;
 function toggleTheme(){document.documentElement.dataset.theme=document.documentElement.dataset.theme==='light'?'dark':'light';}
 function openCreate(){document.getElementById(kind==='shopping'?'shopping-dialog':'create-dialog').showModal();}
-function renderNav(){document.getElementById('main-nav').innerHTML=['Home','Lists','Recipes','Calendar','Weather','RSS','Games','Admin'].map(name=>`<a href="${name==='Admin'?'account-admin-preview.html':name==='Recipes'?'recipes-preview.html':name==='Calendar'?'calendar-preview.html':name==='Weather'?'weather-preview.html':name==='RSS'?'rss-preview.html':'#'}" ${name==='Home'?'onclick="showHome();return false;"':name==='Lists'?'onclick="showKind(kind);return false;"':''} data-page="${name}">${name}</a>`).join('');}
+function renderNav(){document.getElementById('main-nav').innerHTML=['Home','Lists','Recipes','Calendar','Weather','RSS','Games','Admin'].map(name=>`<a href="${name==='Admin'?'account-admin-preview.html':name==='Recipes'?'recipes-preview.html':name==='Calendar'?'calendar-preview.html':name==='Weather'?'weather-preview.html':name==='RSS'?'rss-preview.html':name==='Games'?'games-preview.html':'#'}" ${name==='Home'?'onclick="showHome();return false;"':name==='Lists'?'onclick="showKind(kind);return false;"':''} data-page="${name}">${name}</a>`).join('');}
 function updateNavActive(page){document.querySelectorAll('#main-nav a').forEach(link=>{const active=link.dataset.page===page;link.classList.toggle('active',active);if(active)link.setAttribute('aria-current','page');else link.removeAttribute('aria-current');});}
 function showHome(){document.getElementById('lists-view').hidden=true;document.getElementById('home-view').hidden=false;updateNavActive('Home');renderHomeChores();renderWeekend();}
 function showKind(next){
@@ -322,7 +322,7 @@ function renderCpuHistory(){
     bar.title=usage+'% average CPU use';bar.setAttribute('aria-hidden','true');history.append(bar);
   });
 }
-renderNav();showKind('shopping');renderCpuHistory();if(location.hash==='#home')showHome();
+renderNav();if(location.hash==='#chores')showKind('chores');else if(location.hash==='#home')showHome();else showKind('shopping');renderCpuHistory();
 </script>
 </body>
 </html>
