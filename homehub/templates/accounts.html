@@ -24,9 +24,48 @@
     <section class="panel"><p class="eyebrow">Shared display</p><h2>House-wide access</h2><p>The house-wide login can see shared content and play games. Its scores stay off leaderboards.</p><p class="callout"><strong>Privacy note</strong><br>Admins can view all household content, including private chats.</p></section>
   </aside>
 </div>
+<section class="backup-admin" id="backup-restore-section" aria-label="Backup and restore">
+  <section class="panel">
+    <h2>Backup settings</h2>
+    <p class="muted">Keep verified copies of household data in a local folder.</p>
+    <form method="post" action="{{ url_for('update_backup_settings') }}">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <label class="backup-check"><input id="backups-off" type="checkbox" name="backups_off" onchange="toggleBackupSettings()" {% if backup_frequency == 0 %}checked{% endif %}> Turn automatic backups off</label>
+      <label>Backup folder<input type="text" name="backup_folder" value="{{ backup_folder }}" maxlength="4096" required></label>
+      <p class="backup-folder-status {{ 'available' if backup_folder_available else 'unavailable' }}" role="status">{% if backup_folder_available %}✓ Backup folder available{% else %}⚠ Backup folder unavailable or not writable{% endif %}</p>
+      <label>Automatic backup interval (days)<input id="backup-frequency" type="number" name="backup_frequency" min="1" max="31" value="{{ backup_frequency if backup_frequency else 1 }}" required {% if backup_frequency == 0 %}disabled{% endif %}></label>
+      <label>Keep most recent backups<input id="backup-retention" type="number" name="backup_retention" min="1" max="365" value="{{ backup_retention }}" required {% if backup_frequency == 0 %}disabled{% endif %}></label>
+      <div class="backup-form-actions"><button type="submit">Save settings</button>
+        <button class="primary" type="submit" formaction="{{ url_for('create_backup_now') }}" formmethod="post">Create backup now</button>
+      </div>
+    </form>
+  </section>
+  <section class="panel">
+    <h2>Recent backups</h2>
+    {% if backups %}
+      {% set newest = backups[0] %}
+      <p class="muted">Latest backup: {{ newest.created_at.strftime('%b %d, %Y at %H:%M UTC') }} · Verified · Integrity check passed · {{ (newest.size / 1048576)|round(1) }} MB</p>
+      <p><strong>Before restoring:</strong> Restoring replaces the current database with the selected copy and signs everyone out. Changes made after that backup will be lost. Verify the selected copy before restoring; keep a separate copy of important data.</p>
+      <div class="backup-list">
+        {% for backup in backups %}<div class="backup-entry">
+          <div><strong>{{ backup.name }}</strong><small>{{ backup.created_at.strftime('%b %d, %Y at %H:%M UTC') }} · Verified · Integrity check passed · {{ (backup.size / 1048576)|round(1) }} MB</small></div>
+          <div class="backup-entry-actions">
+            <a class="button" href="{{ url_for('download_backup', filename=backup.name) }}">Download</a>
+            <button type="button" class="danger" onclick="openBackupAction('restore', {{ backup.name|tojson }})">Restore</button>
+            <button type="button" class="quiet" onclick="openBackupAction('delete', {{ backup.name|tojson }})">Delete</button>
+          </div>
+        </div>{% endfor %}
+      </div>
+    {% else %}
+      <p class="muted">No backups are available yet. Create one now or leave automatic backups enabled.</p>
+      <p><strong>Before restoring:</strong> Restoring replaces the current database with the selected copy and signs everyone out. Changes made after that backup will be lost. Verify the selected copy before restoring; keep a separate copy of important data.</p>
+    {% endif %}
+  </section>
+</section>
 <dialog id="create-dialog"><form method="post" action="{{ url_for('create_account') }}" class="dialog-form"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><p class="eyebrow">New person</p><h2>Add an account</h2><p>Each person gets their own login and private space.</p><label>Display name<input name="display_name" maxlength="80" required></label><label>Username<input name="username" minlength="3" maxlength="32" pattern="[A-Za-z0-9_]+" required></label><label>Role<select name="role"><option value="user">Household member</option><option value="admin">Admin</option></select></label><label>Account type<select name="account_kind"><option value="person">Person</option><option value="house">House-wide display</option></select></label><p class="callout">A temporary password will appear once after creation. Each person must change it at first login.</p><div class="dialog-actions"><button type="button" onclick="this.closest('dialog').close()">Cancel</button><button class="primary">Create account</button></div></form></dialog>
 <dialog id="reset-dialog"><form method="post" id="reset-form" class="dialog-form"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><p class="eyebrow">Account access</p><h2 id="reset-title">Reset password</h2><p>Resetting signs this account out everywhere. A one-time temporary password will appear once.</p><p class="callout">Share the temporary password directly. It will not be shown again after you leave the result page.</p><div class="dialog-actions"><button type="button" onclick="this.closest('dialog').close()">Cancel</button><button class="primary">Reset password</button></div></form></dialog>
 <dialog id="delete-dialog"><form method="post" id="delete-form" class="dialog-form"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><p class="eyebrow">Permanent removal</p><h2 id="delete-title">Remove account?</h2><p>Choose what happens to this person's items, recipes, and events. This cannot be undone.</p><p class="danger-box" id="delete-counts"></p><label class="radio-line"><input type="radio" name="content_choice" value="transfer" checked>Transfer all owned content to another person</label><label>Transfer to<select name="transfer_to" required>{% for user in users if user['account_kind'] == 'person' %}<option value="{{ user['id'] }}">{{ user['display_name'] }} ({{ user['username'] }})</option>{% endfor %}</select></label><label class="radio-line"><input type="radio" name="content_choice" value="delete">Delete all owned content, including items by others in this person's lists</label><label id="confirm-label">Type username to confirm<input name="confirm_username" id="confirm-username" required autocomplete="off"></label><div class="dialog-actions"><button type="button" onclick="this.closest('dialog').close()">Cancel</button><button class="danger">Remove account</button></div></form></dialog>
+<dialog id="backup-action-dialog"><form method="post" id="backup-action-form" class="dialog-form"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><p class="eyebrow">Admin · Backups</p><h2 id="backup-action-title">Restore backup?</h2><p id="backup-action-copy"></p><div class="dialog-actions"><button type="button" onclick="this.closest('dialog').close()">Cancel</button><button class="danger" id="backup-action-submit">Restore backup</button></div></form></dialog>
 <script>
 function filterAccounts(value) { document.querySelectorAll('.person').forEach(row => { row.hidden = !row.dataset.search.includes(value.toLowerCase()); }); }
 function openReset(id, username) {
@@ -45,5 +84,29 @@ function openRemove(id, username, counts) {
   form.querySelector('[name="transfer_to"] option:not(:disabled)').selected = true;
   document.getElementById('delete-dialog').showModal();
 }
+function openBackupAction(action, filename) {
+  const dialog = document.getElementById('backup-action-dialog');
+  const form = document.getElementById('backup-action-form');
+  const encoded = encodeURIComponent(filename);
+  const restoreBase = {{ url_for('restore_selected_backup', filename='__FILENAME__')|tojson }};
+  const deleteBase = {{ url_for('remove_backup', filename='__FILENAME__')|tojson }};
+  form.action = (action === 'restore' ? restoreBase : deleteBase).replace('__FILENAME__', encoded);
+  if (action === 'restore') {
+    document.getElementById('backup-action-title').textContent = 'Restore backup?';
+    document.getElementById('backup-action-copy').textContent = 'Restore the backup from ' + filename + '? This replaces the current database, signs everyone out, and loses changes made since that backup.';
+    document.getElementById('backup-action-submit').textContent = 'Restore backup';
+  } else {
+    document.getElementById('backup-action-title').textContent = 'Delete backup?';
+    document.getElementById('backup-action-copy').textContent = 'Delete the backup from ' + filename + '? This backup will be permanently removed.';
+    document.getElementById('backup-action-submit').textContent = 'Delete backup';
+  }
+  dialog.showModal();
+}
+function toggleBackupSettings() {
+  const disabled = document.getElementById('backups-off').checked;
+  document.getElementById('backup-frequency').disabled = disabled;
+  document.getElementById('backup-retention').disabled = disabled;
+}
+toggleBackupSettings();
 </script>
 {% endblock %}
