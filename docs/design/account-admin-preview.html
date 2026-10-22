@@ -77,11 +77,12 @@
     .button.danger { color: var(--red); border-color: var(--red); background: var(--red-soft); }
     .button:disabled { cursor: not-allowed; opacity: .48; }
     .button.small { min-height: 38px; padding: 7px 11px; font-size: .84rem; }
-    .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 26px 0; }
-    .stat { padding: 16px 18px; border: 1px solid var(--line); border-radius: 16px; background: var(--surface-soft); }
-    .stat .number { display: block; font-size: 1.55rem; line-height: 1.1; font-weight: 800; letter-spacing: -.03em; }
-    .stat .label { display: block; margin-top: 5px; color: var(--muted); font-size: .84rem; }
-    .two-col { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(270px, .8fr); gap: 18px; align-items: start; }
+    .two-col { display: grid; grid-template-columns: 1fr; gap: 18px; align-items: start; }
+    .admin-jumps { display: flex; flex-wrap: wrap; gap: 8px; margin: 22px 0; }
+    .admin-jumps a { display: inline-flex; align-items: center; min-height: 40px; padding: 8px 12px; border: 1px solid var(--line); border-radius: 999px; color: var(--green); background: var(--surface); text-decoration: none; font-size: .85rem; font-weight: 700; }
+    .admin-jumps a:hover { background: var(--green-soft); }
+    .account-counts { display: flex; flex-wrap: wrap; gap: 7px 16px; padding: 0 20px 15px; color: var(--muted); font-size: .82rem; }
+    .account-counts strong { color: var(--ink); }
     .panel { border: 1px solid var(--line); border-radius: 18px; background: var(--surface); overflow: hidden; }
     .panel-head { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 19px 20px 15px; }
     .panel-head h2 { margin: 0; font-family: Georgia, "Times New Roman", serif; font-size: 1.34rem; letter-spacing: -.02em; }
@@ -151,11 +152,7 @@
       .page-heading { align-items: stretch; flex-direction: column; gap: 14px; }
       .page-heading .button { width: 100%; }
       .page-title h1 { font-size: 2.1rem; }
-      .stats { gap: 8px; margin: 20px 0; }
-      .stat { padding: 11px; }
-      .stat .number { font-size: 1.28rem; }
-      .stat .label { font-size: .74rem; }
-      .two-col { grid-template-columns: 1fr; }
+      .account-counts { padding: 0 15px 12px; }
       .person { grid-template-columns: 38px minmax(0, 1fr); padding: 12px 15px; }
       .person .avatar { width: 38px; height: 38px; }
       .person-actions { grid-column: 2; flex-wrap: wrap; }
@@ -193,15 +190,12 @@
         <button class="button primary" type="button" onclick="openDialog('create-dialog')">＋ Add account</button>
       </div>
 
-      <section class="stats" aria-label="Account counts">
-        <div class="stat"><span class="number">5 <small style="font-size:.7em;font-weight:500">/ 32</small></span><span class="label">Accounts</span></div>
-        <div class="stat"><span class="number">2 <small style="font-size:.7em;font-weight:500">/ 4</small></span><span class="label">Admins</span></div>
-        <div class="stat"><span class="number">1</span><span class="label">House-wide login</span></div>
-      </section>
+      <nav class="admin-jumps" aria-label="Jump to admin section"><a href="#accounts-section">Accounts</a><a href="#access-section">Access</a><a href="#navigation-section">Navigation</a><a href="#home-section">Home</a><a href="#lists-section">Lists</a><a href="#recipes-section">Recipes</a><a href="#calendar-limits-section">Calendar</a><a href="#weather-section">Weather</a><a href="#rss-section">RSS</a><a href="#games-section">Games</a><a href="#chat-section">Chat</a><a href="#house-wide-section">House-wide</a><a href="#admin-settings-section">Admin settings</a></nav>
 
       <div class="two-col">
-        <section class="panel" aria-labelledby="accounts-heading">
+        <section class="panel" id="accounts-section" aria-labelledby="accounts-heading">
           <div class="panel-head"><div><h2 id="accounts-heading">Accounts</h2><p>Only admins can create, reset, or remove accounts.</p></div></div>
+          <div class="account-counts" aria-label="Account counts"><span><strong>5 / 32</strong> accounts</span><span><strong>2 / 4</strong> admins</span><span><strong>1</strong> house-wide login</span></div>
           <div class="search"><input type="search" placeholder="Find a person" aria-label="Find a person"></div>
           <div class="person"><span class="avatar">AP</span><div class="person-main"><div class="person-name">Alex P. <span class="chip admin">Admin</span></div><div class="person-meta">alex · Active today · You</div></div><div class="person-actions"><button class="button small" type="button">Change password</button></div></div>
           <div class="person"><span class="avatar" style="background:var(--green-soft);color:var(--green)">SP</span><div class="person-main"><div class="person-name">Sam P. <span class="chip admin">Admin</span></div><div class="person-meta">sam · Active today</div></div><div class="person-actions"><button class="button small" type="button" onclick="openDialog('reset-dialog')">Reset password</button><button class="button small quiet" type="button" onclick="openRemove('Sam', '1 list, 3 recipes, and 4 events')">Remove</button></div></div>
@@ -211,17 +205,25 @@
         </section>
 
         <div class="sidebar-stack">
-          <section class="panel side-panel"><p class="eyebrow">Access</p><h2>Passwords & sessions</h2><p>People can change their own password. Admin resets use a one-time temporary password and ask for a new password on login.</p><div class="setting-line"><span>Idle session limit</span><span>24 hours</span></div><div class="setting-line"><span>Absolute session limit</span><span>7 days</span></div><div style="margin-top:13px"><button class="button small" type="button">Edit session settings</button></div></section>
-          <section class="panel side-panel"><p class="eyebrow">Navigation</p><h2>Household tab order</h2><p>One order for everyone. Home always comes first; Admin stays last for admins.</p><button class="button small" type="button" onclick="openOrder()">Reorder tabs</button></section>
-          <section class="panel side-panel"><p class="eyebrow">Calendar</p><h2>Calendar retention</h2><p>Keep the current calendar year and up to ten previous years available for browsing.</p>
+          <section class="panel side-panel" id="access-section"><p class="eyebrow">Access</p><h2>Passwords & sessions</h2><p>People can change their own password. Admin resets use a one-time temporary password and ask for a new password on login.</p><div class="setting-line"><span>Idle session limit</span><span>24 hours</span></div><div class="setting-line"><span>Absolute session limit</span><span>7 days</span></div><div style="margin-top:13px"><button class="button small" type="button">Edit session settings</button></div></section>
+          <section class="panel side-panel" id="navigation-section"><p class="eyebrow">Navigation</p><h2>Household tab order</h2><p>One order for everyone. Home always comes first; Admin stays last for admins.</p><button class="button small" type="button" onclick="openOrder()">Reorder tabs</button></section>
+          <section class="panel side-panel" id="home-section"><p class="eyebrow">Home</p><h2>Home settings</h2><p>Control whether system status is visible to members and the house-wide account. Admins can always see it.</p></section>
+          <section class="panel side-panel" id="lists-section"><p class="eyebrow">Lists</p><h2>Lists settings</h2><p>Household settings for shopping, to-do lists, and chores will be configured here. List actions remain in the Lists tab.</p></section>
+          <section class="panel side-panel" id="recipes-section"><p class="eyebrow">Recipes</p><h2>Recipes settings</h2><p>Household recipe limits and any future import settings will be configured here. Recipe editing remains in the Recipes tab.</p></section>
+          <section class="panel side-panel" id="calendar-limits-section"><p class="eyebrow">Event budgets</p><h2>Calendar limits</h2><label class="calendar-setting">Events per user per day<input type="number" min="1" value="8"></label><label class="calendar-setting">Events per user per month<input id="monthly-budget" type="number" min="7" max="512" value="128"></label><p>Monthly limits can be set from 7 to 512. Repeating occurrences count.</p><button class="button small" type="button" onclick="previewSaveEventLimits()">Save limits</button><p id="event-limits-feedback" role="status"></p></section>
+          <section class="panel side-panel" id="calendar-retention-section"><p class="eyebrow">Calendar</p><h2>Calendar retention</h2><p>Keep the current calendar year and up to ten previous years available for browsing.</p>
             <label class="calendar-setting">Previous years to keep<select id="calendar-retention" aria-label="Previous calendar years to keep" onchange="document.getElementById('calendar-retention-summary').textContent='Current year plus '+this.value+' previous year'+(this.value==='1'?'':'s')+' retained.'"><option>0</option><option>1</option><option>2</option><option selected>3</option><option>4</option><option>5</option><option>6</option><option>7</option><option>8</option><option>9</option><option>10</option></select></label>
             <p id="calendar-retention-summary" class="callout">Current year plus 3 previous years retained.</p>
             <label class="calendar-setting">When a year leaves the active calendar<select id="calendar-expiry" aria-label="Expired calendar action"><option selected>Archive to ICS first</option><option>Delete without archive</option></select></label>
             <p>Archive files can be downloaded from Admin settings. Reducing retention tries to export each affected year first; a failed export leaves its events in place.</p>
             <p class="archive-path"><strong>Archive folder</strong><code>/home/homehub/.local/share/homehub/calendar-archives/</code><small>Example shown; the app displays the resolved folder beside its configured database.</small></p>
             <button class="button small" type="button" onclick="previewSaveRetention()">Save retention</button><p id="calendar-retention-feedback" role="status"></p></section>
-          <section class="panel side-panel"><p class="eyebrow">Event budgets</p><h2>Calendar limits</h2><label class="calendar-setting">Events per user per day<input type="number" min="1" value="8"></label><label class="calendar-setting">Events per user per month<input id="monthly-budget" type="number" min="7" max="512" value="128"></label><p>Monthly limits can be set from 7 to 512. Repeating occurrences count.</p><button class="button small" type="button" onclick="previewSaveEventLimits()">Save limits</button><p id="event-limits-feedback" role="status"></p></section>
-          <section class="panel side-panel"><p class="eyebrow">Shared display</p><h2>House-wide access</h2><p>The house-wide login can see shared content and play games. Its scores stay off leaderboards.</p><div class="callout"><strong>Privacy note</strong><br>Admins can view all household content, including private chats.</div></section>
+          <section class="panel side-panel" id="weather-section"><p class="eyebrow">Weather</p><h2>Weather settings</h2><p>Set the household town or postal code, forecast length, units, and whether outbound weather access is enabled.</p></section>
+          <section class="panel side-panel" id="rss-section"><p class="eyebrow">RSS</p><h2>RSS settings</h2><p>Manage house-wide feeds and outbound RSS access. Each person manages their own feeds in the RSS tab.</p></section>
+          <section class="panel side-panel" id="games-section"><p class="eyebrow">Games</p><h2>Games settings</h2><p>Household game settings will live here. Daily puzzles and scoreboards remain in the Games tab.</p></section>
+          <section class="panel side-panel" id="chat-section"><p class="eyebrow">Chat</p><h2>Chat settings</h2><p>When local chat is enabled, installed model selection, prompt limits, and queue settings will live here. The Chat tab remains hidden until enabled.</p></section>
+          <section class="panel side-panel" id="house-wide-section"><p class="eyebrow">Shared display</p><h2>House-wide access</h2><p>The house-wide login can see shared content and play games. Its scores stay off leaderboards.</p><div class="callout"><strong>Privacy note</strong><br>Admins can view all household content, including private chats.</div></section>
+          <section class="panel side-panel" id="admin-settings-section"><p class="eyebrow">Admin</p><h2>Admin settings</h2><p>Backups, calendar archive downloads, and other administration controls belong here as the related features are designed.</p></section>
         </div>
       </div>
     </main>
