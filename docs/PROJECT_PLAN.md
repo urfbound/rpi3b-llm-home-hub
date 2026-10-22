@@ -192,8 +192,10 @@ by feature before implementation.
   units. Keep the household town visible. The current-day summary shows
   high/low temperature, wind, precipitation chance and predicted daily
   accumulation ("None" when zero), plus pressure reading and three-hour
-  trend. Daily cards show high/low temperature, conditions, and precipitation
-  chance. Today's hourly view shows temperature, conditions, precipitation
+  trend. Show sunrise and sunset beneath the pressure summary in separate
+  cards, using the household location's local time. Daily cards show high/low
+  temperature, conditions, and precipitation chance. Today's hourly view
+  shows temperature, conditions, precipitation
   chance, wind conditions, and barometric pressure with a
   rising/steady/falling trend based on the preceding three
   hours of provider forecast data. Show the pressure change amount; when a
