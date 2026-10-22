@@ -15,13 +15,12 @@ to `main` only after the user approves the completed change.
   measurements on the Raspberry Pi 3B are recorded in
   [CHAT_PI_BENCHMARK.md](CHAT_PI_BENCHMARK.md). App-only and app-plus-model
   profiling remain to be done.
-- **Lists is the active workstream:** schema version 3 and initial Shopping
-  and To-do workflows are merged to main. Copy/Paste is implemented on
-  `feature/list-copy-paste` and awaits review. Weekly Chores is implemented on
-  `feature/weekly-chores` and awaits review; its v4 migration preserves the
-  existing household data. Chores tab deletion, per-person assignment,
-  independent completion, Sunday reset, and the Home card with Just my chores
-  filter are implemented. Weekend, weather, and system status cards remain.
+- **Lists is the active workstream:** schema version 4, Shopping, To-do list
+  creation/access, and Weekly Chores are merged to main. Copy/Paste is
+  implemented on `feature/list-copy-paste` and awaits review. To-do item
+  assignment, due dates, and collaborative editing are implemented on
+  `feature/todo-item-assignment-due-dates` and await review. Weekend, weather,
+  and system status cards remain.
 - **Current app prototype:** login/admin, a single shopping list, recipe
   create/view, basic event creation and ICS export, and light/dark theme exist.
   The approved full tab designs are not yet implemented as complete features.
@@ -57,17 +56,17 @@ to `main` only after the user approves the completed change.
    implemented through v4; continue adding tests for every future upgrade.
 2. Complete Shopping and To-do flows: list creation, selection, sharing,
    private allowlists, static shopping categories, item ownership, To-do
-   assignment/due dates, and item/list deletion authorization. Basic creation,
-   selection, and access controls are implemented on the active branch; full
-   editing, assignment, deletion edge cases, and responsive visual review
-   remain.
+   assignment/due dates, collaborative editing, and item/list deletion
+   authorization. Creation, selection, access controls, item assignment/due
+   dates, and collaborative To-do editing are implemented on the active
+   feature branch; deletion edge cases and responsive visual review remain.
 3. Copy/Paste implementation is ready for review: matching ignores case and
    repeated whitespace; checked imports complete unique matches without
    changing ownership, while new items belong to the importing user. Malformed
    or ambiguous imports require correction, and changed lists require a fresh
    review before apply.
-4. Weekly Chores and the Home chores card are implemented on the feature
-   branch: seven weekday lists, per-person and Everyone assignments,
+4. Weekly Chores and the Home chores card are merged to main: seven weekday
+   lists, per-person and Everyone assignments,
    independent completion, creator/admin deletion, Sunday reset based on the
    Pi's configured local date, and Just my chores filtering. The remaining Home
    cards depend on calendar, weather, and system-status work.

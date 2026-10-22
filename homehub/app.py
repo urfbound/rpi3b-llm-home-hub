@@ -375,13 +375,23 @@ def create_app(test_config=None):
         items = []
         if selected_list and selected_list['kind'] in ('shopping', 'todo'):
             items = db.execute(
-                'SELECT * FROM shopping_items WHERE list_id=? ORDER BY done,id DESC',
+                'SELECT shopping_items.*, users.display_name AS assignee_name, '
+                'users.username AS assignee_username FROM shopping_items '
+                'LEFT JOIN users ON users.id=shopping_items.assignee_id '
+                'WHERE list_id=? ORDER BY done,id DESC',
                 (selected_list['id'],)
             ).fetchall()
         list_users = db.execute(
             "SELECT id,username,display_name FROM users "
             "WHERE active=1 AND account_kind='person' ORDER BY display_name COLLATE NOCASE, id"
         ).fetchall()
+        todo_assignees = list_users
+        if selected_list and selected_list['kind'] == 'todo' and selected_list['visibility'] == 'private':
+            allowed_ids = {selected_list['created_by']}
+            allowed_ids.update(row['user_id'] for row in db.execute(
+                'SELECT user_id FROM list_access WHERE list_id=?', (selected_list['id'],)
+            ).fetchall())
+            todo_assignees = [user for user in list_users if user['id'] in allowed_ids]
         weekdays = ('Monday', 'Tuesday', 'Wednesday', 'Thursday',
                     'Friday', 'Saturday', 'Sunday')
         selected_weekday = request.args.get('weekday', str(today.weekday()))
@@ -417,7 +427,8 @@ def create_app(test_config=None):
         return render_template('index.html', recipes=db.execute('SELECT * FROM recipes ORDER BY id DESC LIMIT 6').fetchall(),
           events=db.execute('SELECT events.*,recipes.title AS recipe_title FROM events LEFT JOIN recipes ON recipes.id=events.recipe_id ORDER BY event_date LIMIT 12').fetchall(),
           items=items, lists=lists, selected_list=selected_list, list_kind=list_kind,
-          list_users=list_users, shopping_categories=SHOPPING_CATEGORIES,
+          list_users=list_users, todo_assignees=todo_assignees,
+          shopping_categories=SHOPPING_CATEGORIES,
           today=today.isoformat(), weekdays=weekdays,
           selected_weekday=selected_weekday, chore_filter=chore_filter,
           chore_groups=chore_groups, home_weekday=home_weekday,
@@ -855,6 +866,28 @@ def create_app(test_config=None):
         if not text or len(text) > 240:
             abort(400)
         db = get_db()
+        due_date = None
+        assignee_id = None
+        if expected_kind == 'todo':
+            due_date = request.form.get('due_date', '').strip() or None
+            if due_date:
+                try:
+                    if date.fromisoformat(due_date).isoformat() != due_date:
+                        abort(400)
+                except ValueError:
+                    abort(400)
+            raw_assignee = request.form.get('assignee_id', '').strip()
+            if raw_assignee:
+                try:
+                    assignee_id = int(raw_assignee)
+                except ValueError:
+                    abort(400)
+                assignee = db.execute(
+                    "SELECT id FROM users WHERE id=? AND active=1 AND account_kind='person'",
+                    (assignee_id,)
+                ).fetchone()
+                if not assignee:
+                    abort(400)
         selected_id = request.form.get('list_id')
         if selected_id:
             target = visible_list(db, g.user, selected_id)
@@ -866,10 +899,18 @@ def create_app(test_config=None):
             abort(400)
         if not target or target['kind'] != expected_kind:
             abort(404)
+        if (assignee_id and target['kind'] == 'todo' and target['visibility'] == 'private'
+                and assignee_id != target['created_by']):
+            allowed = db.execute(
+                'SELECT 1 FROM list_access WHERE list_id=? AND user_id=?',
+                (target['id'], assignee_id)
+            ).fetchone()
+            if not allowed:
+                abort(400)
         with db:
-            db.execute('INSERT INTO shopping_items(text,created_by,list_id,updated_at) '
-                       'VALUES(?,?,?,CURRENT_TIMESTAMP)',
-                       (text, g.user['id'], target['id']))
+            db.execute('INSERT INTO shopping_items(text,created_by,list_id,due_date,assignee_id,updated_at) '
+                       'VALUES(?,?,?,?,?,CURRENT_TIMESTAMP)',
+                       (text, g.user['id'], target['id'], due_date, assignee_id))
         return redirect(url_for('index', kind=expected_kind, list_id=target['id']) +
                         ('#shopping' if expected_kind == 'shopping' else '#todo'))
 
@@ -882,6 +923,51 @@ def create_app(test_config=None):
     @login_required
     def add_todo_item():
         return add_list_item('todo')
+
+    @app.post('/todo/<int:item_id>/edit')
+    @login_required
+    def edit_todo_item(item_id):
+        db = get_db()
+        item = db.execute('SELECT * FROM shopping_items WHERE id=?', (item_id,)).fetchone()
+        if not item or not item['list_id']:
+            abort(404)
+        target = visible_list(db, g.user, item['list_id'])
+        if target['kind'] != 'todo':
+            abort(404)
+        text = request.form.get('text', '').strip()
+        if not text or len(text) > 240:
+            abort(400)
+        due_date = request.form.get('due_date', '').strip() or None
+        if due_date:
+            try:
+                if date.fromisoformat(due_date).isoformat() != due_date:
+                    abort(400)
+            except ValueError:
+                abort(400)
+        raw_assignee = request.form.get('assignee_id', '').strip()
+        assignee_id = None
+        if raw_assignee:
+            try:
+                assignee_id = int(raw_assignee)
+            except ValueError:
+                abort(400)
+            assignee = db.execute(
+                "SELECT id FROM users WHERE id=? AND active=1 AND account_kind='person'",
+                (assignee_id,)
+            ).fetchone()
+            if not assignee:
+                abort(400)
+            if target['visibility'] == 'private' and assignee_id != target['created_by']:
+                allowed = db.execute(
+                    'SELECT 1 FROM list_access WHERE list_id=? AND user_id=?',
+                    (target['id'], assignee_id)
+                ).fetchone()
+                if not allowed:
+                    abort(400)
+        with db:
+            db.execute('UPDATE shopping_items SET text=?,due_date=?,assignee_id=?,updated_at=CURRENT_TIMESTAMP '
+                       'WHERE id=?', (text, due_date, assignee_id, item_id))
+        return redirect(url_for('index', kind='todo', list_id=target['id']) + '#todo')
 
     @app.post('/shopping/<int:item_id>/toggle')
     @login_required
