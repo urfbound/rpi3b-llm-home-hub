@@ -444,7 +444,8 @@ the three games where it breaks ties.
 ## Open design reviews
 
 - [Account administration preview](design/account-admin-preview.html): approved
-  by the user.
+  for account controls; backup/restore controls have been added to the Admin
+  settings section and are awaiting review.
 - [Home preview](design/home-preview.html): approved; the user had no comments.
 - [Lists and navigation preview](design/lists-navigation-preview.html):
   approved by the user before list and tab-order implementation.
