@@ -10,7 +10,8 @@ user's explicit confirmation.
 The first-release scope and game rules are agreed. Visual designs for the
 account administration, Home, Lists and navigation, Recipes, Calendar,
 Weather, RSS, Games, and Chat tabs are approved. Chat remains contingent on
-the local-model feasibility check described below.
+combined app-and-model profiling and answer-quality review described below;
+initial model-only Raspberry Pi 3B benchmarks support an optional feature.
 
 ## Product and release
 
@@ -40,8 +41,7 @@ the local-model feasibility check described below.
   margins up to a 1440 px content width.
 - An admin can set one household-wide order of feature tabs from the Admin tab
   only. Keep Home fixed at the start and Admin fixed at the end; the feature
-  tabs between them can be reordered. The control's visual design still needs
-  approval.
+  tabs between them can be reordered. The control's visual design is approved.
 - Stack all Admin cards vertically, with Accounts first. Provide jump links
   to each feature's household configuration section; keep Admin's own settings
   in the Admin tab. Show Calendar limits before Calendar retention.
@@ -110,10 +110,10 @@ the local-model feasibility check described below.
   user's assignments.
   The Chores visual design is approved, including per-person groups and the
   exclusion of the shared house-wide login from Everyone assignments.
-  To-do remains a separate section.
+  To-do remains a separate section, with its visual design approved.
   To-do checklists are collaborative: invited members may add, edit, and
   complete tasks. At creation, the user may decide optional due dates and
-  assignees for each item separately. The visual design still needs approval.
+  assignees for each item separately.
 - Show a distinct Delete action for items whether complete or incomplete.
   Show a Delete list action to its creator and admins, with confirmation that
   its items, including contributions from others, will be removed.
@@ -396,6 +396,9 @@ the three games where it breaks ties.
 
 ## Optional local chat
 
+Initial model-only Raspberry Pi 3B results and the remaining profiling gates
+are recorded in [CHAT_PI_BENCHMARK.md](CHAT_PI_BENCHMARK.md).
+
 - Hidden until an admin enables it. An admin selects one installed Ollama
   model; only one model and one request run at a time. The runtime remains
   bound to loopback. A response taking minutes is acceptable.
@@ -428,26 +431,48 @@ the three games where it breaks ties.
 
 ## Delivery sequence
 
-1. Show the account administration visual design, then stabilize foundations:
-   account administration and data migration, roles, sessions, login rate
-   limiting, CSRF, backup/restore, TLS deployment guide, and baseline memory
-   measurement.
-2. Home, Games, and Chat visual designs are approved. Chat remains hidden
-   until an admin enables it and local model feasibility is established. The
-   proposed scoped, read-only database-tool budget is approved; measure it
-   on the Pi before enabling database access.
-3. Implement the approved Lists, Recipes, Calendar, Weather, and RSS designs
-   in focused branches with relevant tests and profiling.
-4. Spike Ollama on the target Pi, then design and implement Chat if feasible;
-   otherwise keep it hidden for first release.
-5. Verify permissions, privacy, resource use, backup/restore, and household
-   deployment before the first release.
+1. Finish shared foundations: schema migrations, roles and permissions,
+   sessions, CSRF, login rate limiting, backup/restore, TLS deployment, and
+   baseline app memory measurement. Account, backup, TLS, and schema versioning
+   foundations are implemented; schema version 3 for Lists is in progress.
+2. Implement Lists, then Recipes and Calendar, because recipes and events
+   connect to shopping lists and to each other.
+3. Implement Weather, RSS, and all six Games, each in focused test-driven
+   increments. Games are part of the first-release scope, not only an approved
+   visual design.
+4. Complete the Home dashboard after its Chores, Calendar, Weather, and
+   system-status data sources are available.
+5. Measure the app on the Raspberry Pi, then profile it alongside Ollama.
+   Initial model-only Chat measurements are recorded in
+   [CHAT_PI_BENCHMARK.md](CHAT_PI_BENCHMARK.md). Chat remains hidden unless an
+   admin enables it after combined resource and answer-quality checks. Measure
+   the approved read-only database-tool budget on the Pi before enabling it.
+6. Verify permissions, privacy, upgrades, resource use, backup/restore, and
+   household deployment before the first release.
+
+### Lists implementation increments
+
+1. Add a versioned, data-preserving list schema. Upgrade existing shopping
+   items into a shared Groceries list and test migration and rollback.
+2. Implement the Shopping and To-do sections, list creation and deletion,
+   static shopping categories, private allowlists, collaboration, item
+   ownership, and separate completion and deletion actions.
+3. Add portable Copy list and reviewed Paste list flows, including matching,
+   duplicate handling, ownership preservation, and permission rechecks.
+4. Implement the seven persistent weekday Chores lists, per-person and
+   Everyone assignments, Sunday completion reset, and the Home chores card.
+5. Add away-mode caching and conflict-aware checkmark sync for shopping lists
+   after the online list flows are stable.
+
+See [the implementation agenda](IMPLEMENTATION_AGENDA.md) for the full
+workstream list, current status, dependencies, deferred work, and release
+gates.
 
 ## Open design reviews
 
 - [Account administration preview](design/account-admin-preview.html): approved
   for account controls; backup/restore controls have been added to the Admin
-  settings section and are awaiting review.
+  settings section and approved.
 - [Home preview](design/home-preview.html): approved; the user had no comments.
 - [Lists and navigation preview](design/lists-navigation-preview.html):
   approved by the user before list and tab-order implementation.
@@ -463,8 +488,10 @@ the three games where it breaks ties.
   and a distinct Today progress card.
 - [Chat preview](design/chat-preview.html): updated with model names,
   optional remote-provider support, and scoped database-tool disclosure;
-  approved by the user; Chat implementation still requires a local-model
-  feasibility check on the Raspberry Pi. The database-access budget is approved.
+  approved by the user. Initial model-only Pi 3B benchmarks are recorded in
+  [CHAT_PI_BENCHMARK.md](CHAT_PI_BENCHMARK.md); combined app/model profiling
+  and answer-quality review remain before enabling Chat. The database-access
+  budget is approved.
 
 ## Deferred features
 
