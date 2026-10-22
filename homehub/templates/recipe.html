@@ -1,7 +1,11 @@
 {% extends 'base.html' %}
 {% block content %}
 <section class="panel recipe-detail">
-  <p><a href="{{ url_for('index') }}#recipes">← Recipes</a></p>
+  <div class="recipe-detail-actions">
+    <a href="{{ url_for('index') }}#recipes">← Recipes</a>
+    {% if can_edit %}<a class="button" href="{{ url_for('edit_recipe', recipe_id=recipe['id']) }}">Edit recipe</a>{% endif %}
+    {% if can_delete %}<button type="button" class="danger" onclick="document.getElementById('delete-recipe-dialog').showModal()">Delete recipe</button>{% endif %}
+  </div>
   <p class="eyebrow">Your recipe book</p>
   <h1>{{ recipe['title'] }}</h1>
   {% if recipe['description'] %}<p class="muted">{{ recipe['description'] }}</p>{% endif %}
@@ -32,4 +36,11 @@
     </section>
   </div>
 </section>
+{% if can_delete %}
+<dialog id="delete-recipe-dialog"><form method="post" action="{{ url_for('delete_recipe', recipe_id=recipe['id']) }}" class="dialog-form">
+  <input type="hidden" name="_csrf" value="{{ csrf_token }}"><p class="eyebrow">Permanent removal</p><h2>Delete this recipe?</h2>
+  <p>{{ recipe['title'] }} will be removed from the recipe book. Shopping items previously copied from it will stay on their lists.</p>
+  <div class="dialog-actions"><button type="button" onclick="this.closest('dialog').close()">Cancel</button><button class="danger">Delete recipe</button></div>
+</form></dialog>
+{% endif %}
 {% endblock %}
