@@ -389,6 +389,8 @@ the three games where it breaks ties.
   awaiting user review before list and tab-order implementation.
 - [Recipes preview](design/recipes-preview.html): approved by the user before
   recipe implementation.
+- [Calendar preview](design/calendar-preview.html): awaiting user review
+  before calendar implementation.
 - [Weather preview](design/weather-preview.html): approved by the user before
   weather implementation.
 - [RSS preview](design/rss-preview.html): approved by the user before RSS
