@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Home Hub · Recipes design preview</title>
+<style>
+  :root{color-scheme:light;--page:#f7f4ed;--surface:#fffefa;--soft:#f1f4ed;--ink:#253329;--muted:#617065;--line:#dce3d8;--green:#376c52;--green-ink:#fffefa;--amber:#a96520;--amber-soft:#fff2df;--shadow:0 14px 42px rgb(33 51 38 / 7%)}
+  html[data-theme=dark]{color-scheme:dark;--page:#1d2721;--surface:#28362d;--soft:#314137;--ink:#f4f2e9;--muted:#c0cabd;--line:#4a5e4f;--green:#a5d3ae;--green-ink:#1b2a20;--amber:#e3b675;--amber-soft:#4f402b;--shadow:0 14px 42px rgb(0 0 0 / 16%)}
+  *{box-sizing:border-box}body{margin:0;background:var(--page);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}button,input,select,textarea{font:inherit}button{cursor:pointer}a{color:inherit;text-decoration:none}button:focus-visible,a:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:3px solid var(--amber);outline-offset:2px}[hidden]{display:none!important}h1,h2,h3,p{margin-top:0}h1,h2{font-family:Georgia,"Times New Roman",serif;letter-spacing:-.025em}
+  .intro,.preview{width:calc(100% - 64px);max-width:1440px;margin:auto}.intro{padding:28px 0 12px}.intro h1{font-size:clamp(1.8rem,3vw,2.5rem);margin:.15rem 0}.intro>p:last-of-type{color:var(--muted);margin-bottom:0}.eyebrow{color:var(--green);font-size:.74rem;font-weight:800;letter-spacing:.12em;text-transform:uppercase;margin:0 0 5px}.preview-controls{display:flex;align-items:end;gap:12px;flex-wrap:wrap;margin:18px 0 4px;padding:16px;background:var(--soft);border:1px solid var(--line);border-radius:15px}.preview-controls label{display:grid;gap:4px;min-width:185px;font-size:.8rem;font-weight:700}.preview-controls select{min-height:40px;border:1px solid var(--line);border-radius:9px;padding:7px 9px;background:var(--surface);color:var(--ink)}.preview-controls p{margin:0;color:var(--muted);font-size:.78rem;max-width:300px}
+  .preview{margin-top:18px;margin-bottom:50px;background:var(--surface);border:1px solid var(--line);border-radius:24px;box-shadow:var(--shadow);overflow:hidden}.site-head{display:flex;align-items:center;gap:20px;padding:14px 28px;border-bottom:1px solid var(--line)}.brand{display:flex;align-items:center;gap:9px;font-size:1.12rem;font-weight:800;white-space:nowrap}.mark{display:grid;place-items:center;background:var(--green);color:var(--green-ink);width:34px;height:34px;border-radius:11px;font-size:1.3rem}.nav{display:flex;gap:3px;align-items:center;overflow-x:auto;scrollbar-width:none}.nav a{padding:8px 11px;border-radius:10px;color:var(--muted);white-space:nowrap;font-size:.89rem;font-weight:650}.nav a.active{color:var(--green);background:var(--soft)}.head-actions{margin-left:auto;display:flex;align-items:center;gap:8px;white-space:nowrap}.theme{border:0;background:transparent;color:var(--muted);padding:8px}.avatar{display:grid;place-items:center;width:34px;height:34px;border-radius:50%;background:var(--amber-soft);color:var(--amber);font-size:.75rem;font-weight:800}
+  main{padding:29px 32px 38px}.crumb{color:var(--muted);font-size:.83rem;margin-bottom:14px}.crumb button{border:0;background:transparent;color:var(--green);padding:0;font-size:inherit;font-weight:700}.page-head{display:flex;justify-content:space-between;align-items:end;gap:18px}.page-head h1{font-size:clamp(2rem,3.2vw,2.85rem);margin:0 0 7px}.page-head p:last-child{color:var(--muted);margin:0}.primary{border:0;border-radius:10px;padding:10px 15px;background:var(--green);color:var(--green-ink);font-weight:750;white-space:nowrap}.secondary{border:1px solid var(--line);border-radius:9px;padding:9px 12px;background:var(--surface);color:var(--ink);font-size:.84rem;font-weight:700}.quiet{border:0;background:transparent;color:var(--green);padding:7px 3px;font-size:.83rem;font-weight:750}.action-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}.helper{color:var(--muted);font-size:.83rem;margin:12px 0 0}
+  .library-tools{display:flex;gap:10px;align-items:center;margin:24px 0 16px}.search{flex:1;min-width:0;padding:11px 13px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink)}.filter{padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink)}.recipe-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}.recipe-card{display:flex;flex-direction:column;min-width:0;border:1px solid var(--line);border-radius:17px;overflow:hidden;background:var(--surface)}.recipe-art{display:grid;place-items:center;height:118px;font-size:2.9rem;background:linear-gradient(125deg,var(--soft),var(--amber-soft));color:var(--amber)}.recipe-card:nth-child(2) .recipe-art{background:linear-gradient(125deg,var(--amber-soft),var(--soft))}.recipe-card:nth-child(3) .recipe-art{background:linear-gradient(125deg,var(--soft),var(--surface))}.recipe-card-body{display:flex;flex:1;flex-direction:column;padding:16px}.recipe-card h2{font:750 1.1rem system-ui,-apple-system,"Segoe UI",sans-serif;margin:6px 0 6px}.recipe-card p{font-size:.84rem;color:var(--muted);margin-bottom:15px}.recipe-card .quiet{margin-top:auto;align-self:start}.card-meta{display:flex;gap:6px;align-items:center;flex-wrap:wrap;font-size:.76rem;color:var(--muted)}.badge{display:inline-flex;align-items:center;padding:4px 8px;border-radius:99px;background:var(--soft);color:var(--green);font-size:.72rem;font-weight:800}.badge.private{background:var(--amber-soft);color:var(--amber)}.empty{padding:26px;border:1px dashed var(--line);border-radius:14px;color:var(--muted)}
+  .detail-top{display:flex;align-items:start;justify-content:space-between;gap:16px;margin-top:5px}.detail-top h1{font-size:clamp(2.1rem,3.2vw,3rem);margin:2px 0 8px}.detail-top p{color:var(--muted);margin:0}.serving-panel{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin:22px 0;padding:14px 17px;background:var(--soft);border:1px solid var(--line);border-radius:14px}.serving-panel .serving-copy{margin-right:auto}.serving-panel strong{display:block;font-size:.95rem}.serving-panel small{display:block;color:var(--muted);font-size:.77rem}.stepper{display:flex;align-items:center;gap:9px;border:1px solid var(--line);border-radius:10px;background:var(--surface);padding:4px}.stepper button{width:34px;height:34px;border:0;border-radius:7px;background:var(--soft);color:var(--ink);font-weight:800}.stepper output{min-width:35px;text-align:center;font-weight:800}.detail-grid{display:grid;grid-template-columns:minmax(285px,.82fr) minmax(0,1.18fr);gap:17px}.panel{border:1px solid var(--line);border-radius:17px;padding:20px;background:var(--surface);min-width:0}.panel h2{font-size:1.42rem;margin:0 0 5px}.panel .subtext{font-size:.82rem;color:var(--muted);margin:0 0 14px}.ingredient-list{list-style:none;margin:0;padding:0}.ingredient-list li{display:flex;gap:12px;padding:10px 0;border-top:1px solid var(--line);font-size:.91rem}.ingredient-list .qty{flex:none;min-width:77px;font-weight:800;color:var(--green);font-variant-numeric:tabular-nums}.ingredient-list small{display:block;color:var(--muted);font-size:.76rem}.method-list{margin:0;padding-left:23px}.method-list li{padding:0 0 16px 7px}.method-list li::marker{color:var(--green);font-weight:800}.method-list li:last-child{padding-bottom:0}.recipe-note{margin-top:17px;padding:14px 17px;background:var(--amber-soft);border-radius:13px;font-size:.85rem}.recipe-note strong{display:block;color:var(--amber)}.recipe-note p{margin:4px 0 0;color:var(--ink)}
+  .shopping-review{margin-top:18px;background:var(--soft)}.shopping-review .review-head{display:flex;align-items:start;justify-content:space-between;gap:12px}.shopping-review .row{display:grid;grid-template-columns:24px minmax(0,1fr);align-items:center;gap:10px;padding:8px 0;border-top:1px solid var(--line)}.shopping-review input[type=checkbox]{width:17px;height:17px;accent-color:var(--green)}.shopping-review input[type=text]{width:100%;min-width:0;padding:9px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink)}.shopping-review .target{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:16px 0}.shopping-review select{min-width:175px;padding:9px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink)}.shopping-review .foot{display:flex;justify-content:end;gap:8px;flex-wrap:wrap;margin-top:16px}.feedback{min-height:1.3em;color:var(--green);font-size:.84rem;font-weight:700}
+  .edit-grid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(260px,.75fr);gap:17px;margin-top:21px}.field{display:grid;gap:5px;margin-bottom:14px;font-size:.83rem;font-weight:750}.field input,.field select,.field textarea{width:100%;padding:10px 11px;border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--ink)}.field textarea{min-height:190px;resize:vertical}.ingredient-edit-head,.ingredient-edit-row{display:grid;grid-template-columns:75px 91px minmax(140px,1fr) minmax(130px,1fr) 34px;gap:7px;align-items:center}.ingredient-edit-head{color:var(--muted);font-size:.73rem;font-weight:800}.ingredient-edit-row{margin:7px 0}.ingredient-edit-row input,.ingredient-edit-row select{width:100%;min-width:0;padding:9px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink)}.ingredient-edit-row button{border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--muted);height:38px}.sharing-choices{display:grid;gap:10px;padding:12px;border:1px solid var(--line);border-radius:10px;background:var(--soft)}.sharing-choices label{font-size:.86rem;font-weight:650}.sharing-choices input{accent-color:var(--green)}.allowlist{margin-top:10px}.allowlist label{display:block;padding:5px 0;font-size:.84rem}.allowlist input{accent-color:var(--green)}.edit-actions{display:flex;gap:9px;justify-content:end;flex-wrap:wrap;margin-top:18px}
+  .preview-note{margin:20px 0 0;color:var(--muted);font-size:.78rem}
+  @media(max-width:1050px){.site-head{flex-wrap:wrap;gap:6px 18px}.nav{order:3;width:100%}.recipe-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.edit-grid{grid-template-columns:1fr}}
+  @media(max-width:760px){.intro,.preview{width:100%}.intro{padding:18px 16px}.preview{border-radius:0;margin-top:0;border-left:0;border-right:0}.site-head{padding:10px 16px 0}.nav{margin:4px -16px 0;padding:0 12px 8px}.head-actions span:last-child{display:none}main{padding:21px 16px 28px}.page-head,.detail-top{align-items:start;flex-direction:column}.detail-grid{grid-template-columns:1fr}.recipe-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.preview-controls label{flex:1;min-width:160px}}
+  @media(max-width:530px){.recipe-grid{grid-template-columns:1fr}.recipe-art{height:88px}.library-tools{flex-direction:column;align-items:stretch}.ingredient-edit-head{display:none}.ingredient-edit-row{grid-template-columns:75px 1fr 34px}.ingredient-edit-row .ingredient-name,.ingredient-edit-row .ingredient-note{grid-column:1/-1}.ingredient-edit-row button{grid-column:3;grid-row:1}.serving-panel .primary,.serving-panel .secondary{width:100%}}
+  dialog{max-width:min(430px,calc(100vw - 32px));border:1px solid var(--line);border-radius:17px;padding:22px;background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}dialog::backdrop{background:rgb(17 28 20 / 46%)}dialog h2{font-size:1.4rem;margin-bottom:8px}dialog p{font-size:.88rem;color:var(--muted)}.dialog-actions{display:flex;justify-content:end;gap:8px;flex-wrap:wrap;margin-top:16px}
+  .back-button{border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--green);padding:7px 11px;font-size:.83rem;font-weight:750;margin:0 0 12px}.notes-panel,.calendar-review{margin-top:18px}.note-entry{padding:12px 0;border-top:1px solid var(--line)}.note-entry strong{font-size:.84rem;color:var(--green)}.note-entry p{margin:4px 0 0;font-size:.88rem}.note-editor{border-top:1px solid var(--line);padding-top:14px;margin-top:4px}.note-editor textarea{width:100%;min-height:78px;resize:vertical;padding:10px;border:1px solid var(--line);border-radius:9px;background:var(--surface);color:var(--ink)}.note-editor .foot{display:flex;align-items:center;gap:8px;justify-content:end;flex-wrap:wrap;margin-top:7px}.note-editor small{color:var(--muted);margin-right:auto}.calendar-review .review-head{display:flex;align-items:start;justify-content:space-between;gap:12px}.calendar-review .calendar-fields{display:flex;align-items:end;gap:10px;flex-wrap:wrap}.calendar-review .field{min-width:160px;margin:0}.calendar-review .serves{padding:10px;background:var(--soft);border-radius:9px;font-size:.85rem}.calendar-link{padding:13px;margin-top:15px;background:var(--soft);border-radius:10px;font-size:.84rem}.calendar-link strong{display:block}.calendar-link button{margin-top:5px}.step-edit-row{display:grid;grid-template-columns:24px minmax(0,1fr) 34px;gap:8px;align-items:start;margin:9px 0}.step-edit-row .step-number{font-size:.83rem;font-weight:800;color:var(--green);padding-top:10px}.step-edit-row textarea{width:100%;min-height:66px;resize:vertical;padding:9px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink)}.step-edit-row button{border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--muted);height:38px}.step-edit-row small{display:block;color:var(--muted);font-size:.73rem;text-align:right}.count{color:var(--muted);font-size:.8rem;font-weight:700}.quiet:disabled{opacity:.45;cursor:default}
+</style>
+</head>
+<body>
+<div class="intro"><p class="eyebrow">Visual design · review before implementation</p><h1>Recipes</h1><p>Illustrative recipes and interactions. Switch views and accounts to review browsing, scaling, shopping-list copying, and recipe editing.</p><div class="preview-controls" aria-label="Preview controls"><label>Preview view<select id="preview-view" onchange="renderView()"><option value="library">Recipe library</option><option value="detail">Recipe detail</option><option value="edit">Create or edit</option></select></label><label>Preview account<select id="account" onchange="renderView()"><option value="owner">Alex · recipe owner</option><option value="viewer">Jamie · household member</option><option value="house">House-wide · read-only</option></select></label><p>These controls demonstrate views and permissions. They are outside the app screen.</p></div></div>
+<div class="preview"><header class="site-head"><a class="brand" href="lists-navigation-preview.html#home"><span class="mark">⌂</span> Home Hub</a><nav class="nav" aria-label="Main navigation"><a href="lists-navigation-preview.html#home">Home</a><a href="lists-navigation-preview.html">Lists</a><a href="#" class="active" aria-current="page">Recipes</a><a href="#">Calendar</a><a href="weather-preview.html">Weather</a><a href="rss-preview.html">RSS</a><a href="#">Games</a><a href="account-admin-preview.html">Admin</a></nav><div class="head-actions"><button class="theme" type="button" onclick="toggleTheme()">◐ Theme</button><span class="avatar" id="avatar">AP</span><span id="user-name">Alex</span></div></header>
+<main>
+  <section id="library-view"><div class="crumb">Home / <strong>Recipes</strong></div><div class="page-head"><div><p class="eyebrow">From our kitchen</p><h1>Recipes</h1><p>Find a favourite or add something new to cook.</p></div><button class="primary" id="new-recipe" type="button" onclick="openEdit(true)">+ New recipe</button></div><div class="library-tools"><input class="search" id="recipe-search" type="search" placeholder="Search recipes" aria-label="Search recipes" oninput="renderLibrary()"><select class="filter" id="recipe-filter" aria-label="Filter recipes" onchange="renderLibrary()"><option value="all">All recipes</option><option value="shared">Shared with household</option><option value="mine">My recipes</option></select></div><p class="helper" id="recipe-quota">2 of 128 recipes used by Alex</p><div class="recipe-grid" id="recipe-grid"></div><p class="helper">This mockup opens one sample recipe; the other cards show the browsing layout.</p><p class="empty" id="library-empty" hidden>No recipes match that search.</p></section>
+  <section id="detail-view" hidden><button class="back-button" type="button" onclick="showView('library')">← Back to recipes</button><div class="crumb">Recipes / Lemon &amp; herb pasta</div><div class="detail-top"><div><p class="eyebrow">Weeknight favourite</p><h1>Lemon &amp; herb pasta</h1><div class="action-row"><span class="badge" id="detail-visibility-badge">Shared with household</span><span class="helper" style="margin:0">Added by Alex</span></div></div><div class="action-row"><button class="secondary owner-action" type="button" onclick="openEdit(false)">Edit recipe</button><button class="secondary owner-action" type="button" onclick="showDeleteNote()">Delete recipe</button></div></div><div class="serving-panel"><div class="serving-copy"><strong>Serves 4 by default</strong><small>Adjust servings to scale the ingredients below.</small></div><div class="stepper" aria-label="Serving count"><button type="button" aria-label="Decrease servings" onclick="changeServings(-1)">−</button><output id="serving-count">4</output><button type="button" aria-label="Increase servings" onclick="changeServings(1)">+</button></div><button class="primary" id="add-to-list" type="button" onclick="showShoppingReview()">Add to list</button><button class="secondary" id="add-to-calendar" type="button" onclick="showCalendarReview()">Add to calendar</button></div><div class="detail-grid"><section class="panel"><h2>Ingredients</h2><p class="subtext">Quantities for <span class="serving-copy-count">4</span> servings</p><ul class="ingredient-list" id="ingredient-list"></ul></section><section class="panel"><h2>Method</h2><p class="subtext">Simple steps for a relaxed dinner.</p><ol class="method-list"><li>Cook the pasta in salted water until just tender. Save a cup of cooking water before draining.</li><li>Warm the olive oil and garlic in a pan. Stir in the lemon zest and a splash of pasta water.</li><li>Toss with pasta, spinach, and parsley. Add a little more water until glossy, then finish with lemon juice.</li></ol></section></div><section class="panel notes-panel"><h2>Household notes</h2><p class="subtext">One note per person, up to 256 characters. Notes are visible to people who can view this recipe.</p><div id="notes-list"></div><div class="note-editor" id="note-editor"><label class="field" for="my-note">Your note<textarea id="my-note" maxlength="256" oninput="updateNoteCount()"></textarea></label><div class="foot"><small id="note-count">0 / 256 characters</small><button class="secondary" id="remove-note" type="button" onclick="removeNote()">Remove note</button><button class="primary" type="button" onclick="saveNote()">Save note</button></div></div><p class="feedback" id="note-feedback" role="status"></p></section><section class="panel calendar-review" id="calendar-review" hidden><div class="review-head"><div><h2>Add to calendar</h2><p class="subtext">Create a meal event linked to this recipe and its selected serving count.</p></div><button class="quiet" type="button" onclick="hideCalendarReview()">Close</button></div><div class="calendar-fields"><label class="field">Date<input id="meal-date" type="date" value="2026-10-24"></label><label class="field">Meal<select id="meal-slot"><option>Dinner</option><option>Lunch</option><option>Breakfast</option></select></label><span class="serves">Planned servings: <strong id="calendar-servings">4</strong></span><button class="primary" type="button" onclick="previewCalendarAdd()">Add event</button></div><div class="calendar-link" id="calendar-link" hidden><strong>Preview calendar event: Lemon &amp; herb pasta</strong><span id="calendar-event-summary"></span><br><button class="quiet" type="button" onclick="returnFromCalendar()">Open linked recipe at planned servings →</button></div></section><section class="panel shopping-review" id="shopping-review" hidden><div class="review-head"><div><h2>Review shopping snapshot</h2><p class="subtext">Edit the copied items before adding them. Later recipe changes will not alter your list.</p></div><button class="quiet" type="button" onclick="hideShoppingReview()">Close</button></div><div class="target"><label for="target-list"><strong>Shopping list</strong></label><select id="target-list"><option>Weekly groceries</option><option>Weekend shopping</option></select></div><div id="shopping-rows"></div><p class="helper">Only confidently matching names and convertible units will be combined with existing items. Unclear matches remain separate.</p><div class="foot"><button class="secondary" type="button" onclick="hideShoppingReview()">Cancel</button><button class="primary" type="button" onclick="previewAddToList()">Add selected items</button></div><p class="feedback" id="shopping-feedback" role="status"></p></section><p class="feedback" id="detail-feedback" role="status"></p></section>
+  <section id="edit-view" hidden><div class="crumb"><button type="button" onclick="showView('library')">Recipes</button> / <strong id="edit-crumb">Edit recipe</strong></div><div class="page-head"><div><p class="eyebrow">Your recipe book</p><h1 id="edit-title">Edit recipe</h1><p>Keep the ingredients structured so servings and shopping quantities can scale.</p></div></div><div class="edit-grid"><section class="panel"><label class="field">Recipe name<input id="recipe-title-input" type="text" maxlength="128" value="Lemon &amp; herb pasta"></label><label class="field">Short description<input id="recipe-description-input" type="text" maxlength="256" value="Bright lemon, soft greens, and a quick garlic sauce."></label><h2>Method steps <span class="count" id="step-count">3 / 64</span></h2><p class="subtext">Each step can have up to 256 characters.</p><div id="steps-editor"></div><button class="quiet" id="add-step" type="button" onclick="addStepRow()">+ Add step</button><h2>Ingredients <span class="count" id="ingredient-count">6 / 64</span></h2><p class="subtext">Add quantity, unit, name, and an optional note for each ingredient.</p><div class="ingredient-edit-head"><span>Quantity</span><span>Unit</span><span>Ingredient</span><span>Note</span></div><div id="ingredient-editor"></div><button class="quiet" id="add-ingredient" type="button" onclick="addIngredientRow()">+ Add ingredient</button></section><aside class="panel"><h2>Details &amp; sharing</h2><label class="field">Default servings<input id="recipe-servings-input" type="number" min="1" max="99" value="4"></label><p class="subtext">The default serving count appears at the top of the recipe.</p><div class="sharing-choices"><label><input type="radio" name="privacy" value="shared" checked onchange="updateSharing()"> Shared with household</label><label><input type="radio" name="privacy" value="private" onchange="updateSharing()"> Private</label></div><div class="allowlist" id="allowlist" hidden><p class="subtext">Allow these people to view this private recipe:</p><label><input id="share-jamie" type="checkbox"> Jamie</label><label><input type="checkbox"> Morgan</label><p class="subtext">Admins can view all recipes. Only the creator can edit this recipe.</p></div></aside></div><div class="edit-actions"><button class="secondary" type="button" onclick="showView('detail')">Cancel</button><button class="primary" type="button" onclick="previewSave()">Save recipe</button></div><p class="feedback" id="edit-feedback" role="status"></p></section>
+  <p class="preview-note">Illustrative content for design review. Buttons in this mockup demonstrate the intended flow without saving household data.</p>
+</main></div>
+<dialog id="delete-dialog" aria-labelledby="delete-title"><h2 id="delete-title">Delete this recipe?</h2><p>Lemon &amp; herb pasta will be removed from the recipe book. Shopping items previously copied from it will stay on their lists.</p><div class="dialog-actions"><button class="secondary" type="button" onclick="closeDelete(false)">Cancel</button><button class="primary" type="button" onclick="closeDelete(true)">Delete recipe</button></div></dialog>
+<dialog id="unshare-dialog" aria-labelledby="unshare-title"><h2 id="unshare-title">Make this recipe private?</h2><p>Jamie will lose access to this recipe, so Jamie's note will be removed. Your note stays. This cannot be undone.</p><div class="dialog-actions"><button class="secondary" type="button" onclick="closeUnshare(false)">Keep editing</button><button class="primary" type="button" onclick="closeUnshare(true)">Make private and remove note</button></div></dialog>
+<script>
+const recipes=[
+  {name:'Lemon & herb pasta',by:'Alex',serves:4,private:false,glyph:'🍋',description:'Bright lemon, soft greens, and a quick garlic sauce.'},
+  {name:'Tomato & lentil soup',by:'Morgan',serves:6,private:false,glyph:'🥣',description:'A warming pot for weeknights and leftovers.'},
+  {name:'Cinnamon breakfast oats',by:'Alex',serves:2,private:true,glyph:'🍎',description:'A quiet morning recipe kept in Alex’s collection.'},
+  {name:'Sheet-pan vegetables',by:'Jamie',serves:4,private:false,glyph:'🥕',description:'Roasted seasonal vegetables with pantry spices.'}
+];
+const ingredients=[
+  {quantity:320,unit:'g',name:'pasta',note:''},
+  {quantity:2,unit:'tbsp',name:'olive oil',note:''},
+  {quantity:2,unit:'cloves',name:'garlic',note:'finely chopped'},
+  {quantity:1,unit:'',name:'lemon',note:'zest and juice'},
+  {quantity:120,unit:'g',name:'baby spinach',note:''},
+  {quantity:null,unit:'',name:'parsley',note:''}
+];
+const steps=[
+  'Cook the pasta in salted water until just tender. Save a cup of cooking water before draining.',
+  'Warm the olive oil and garlic in a pan. Stir in the lemon zest and a splash of pasta water.',
+  'Toss with pasta, spinach, and parsley. Add a little more water until glossy, then finish with lemon juice.'
+];
+const notes={owner:'Good with a little grated cheese. Add it at the table so everyone can choose.',viewer:'I add extra spinach for lunch leftovers.'};
+let servings=4,creating=false,plannedServings=4,allowedJamie=false;
+function role(){return document.getElementById('account').value;}
+function toggleTheme(){document.documentElement.dataset.theme=document.documentElement.dataset.theme==='light'?'dark':'light';}
+function showView(view){document.getElementById('preview-view').value=view;renderView();}
+function openEdit(isNew){creating=isNew;showView('edit');}
+function renderView(){
+  const view=document.getElementById('preview-view').value,who=role();
+  document.getElementById('avatar').textContent=who==='owner'?'AP':who==='viewer'?'JM':'HW';
+  document.getElementById('user-name').textContent=who==='owner'?'Alex':who==='viewer'?'Jamie':'House-wide';
+  document.getElementById('new-recipe').hidden=who==='house';
+  const mine=document.querySelector('#recipe-filter option[value=mine]');mine.hidden=who==='house';
+  if(who==='house'&&document.getElementById('recipe-filter').value==='mine')document.getElementById('recipe-filter').value='all';
+  document.querySelectorAll('.owner-action').forEach(button=>button.hidden=who!=='owner');
+  document.getElementById('add-to-list').hidden=who==='house';
+  document.getElementById('add-to-calendar').hidden=who==='house';
+  if(view==='detail'&&recipes[0].private&&(who==='house'||who==='viewer'&&!allowedJamie)){showView('library');return;}
+  if(view==='edit'&&who==='house'){showView('library');return;}
+  if(view==='edit'&&who==='viewer'&&!creating){showView('detail');return;}
+  for(const name of ['library','detail','edit'])document.getElementById(name+'-view').hidden=name!==view;
+  if(view==='library')renderLibrary();
+  if(view==='detail'){
+    const badge=document.getElementById('detail-visibility-badge');
+    badge.textContent=recipes[0].private?'Private':'Shared with household';
+    badge.classList.toggle('private',recipes[0].private);
+    renderIngredients();renderNotes();
+  }
+  if(view==='edit'){
+    document.getElementById('edit-title').textContent=creating?'New recipe':'Edit recipe';
+    document.getElementById('edit-crumb').textContent=creating?'New recipe':'Edit recipe';
+    document.getElementById('recipe-title-input').value=creating?'':'Lemon & herb pasta';
+    document.getElementById('recipe-description-input').value=creating?'':'Bright lemon, soft greens, and a quick garlic sauce.';
+    document.getElementById('recipe-servings-input').value='4';
+    document.querySelector('input[name=privacy][value='+(creating?'shared':recipes[0].private?'private':'shared')+']').checked=true;
+    document.getElementById('share-jamie').checked=!creating&&allowedJamie;
+    updateSharing();
+    document.getElementById('edit-feedback').textContent='';
+    renderIngredientEditor();renderStepEditor();
+  }
+}
+function renderLibrary(){
+  const grid=document.getElementById('recipe-grid');grid.replaceChildren();
+  const query=document.getElementById('recipe-search').value.trim().toLowerCase(),filter=document.getElementById('recipe-filter').value,who=role();
+  document.getElementById('recipe-quota').textContent=who==='house'?'Shared household recipes':(who==='owner'?'2':'1')+' of 128 recipes used by '+(who==='owner'?'Alex':'Jamie');
+  const visible=recipes.filter(recipe=>(!recipe.private||who==='owner'||who==='viewer'&&allowedJamie&&recipe===recipes[0])&&recipe.name.toLowerCase().includes(query)&&(filter==='all'||filter==='shared'&&!recipe.private||filter==='mine'&&recipe.by===(who==='owner'?'Alex':who==='viewer'?'Jamie':'')));
+  for(const recipe of visible){
+    const card=document.createElement('article');card.className='recipe-card';
+    const art=document.createElement('div');art.className='recipe-art';art.setAttribute('aria-hidden','true');art.textContent=recipe.glyph;
+    const body=document.createElement('div');body.className='recipe-card-body';
+    const meta=document.createElement('div');meta.className='card-meta';
+    const badge=document.createElement('span');badge.className='badge'+(recipe.private?' private':'');badge.textContent=recipe.private?'Private':'Shared';
+    const by=document.createElement('span');by.textContent='By '+recipe.by+' · Serves '+recipe.serves;meta.append(badge,by);
+    const title=document.createElement('h2');title.textContent=recipe.name;
+    const desc=document.createElement('p');desc.textContent=recipe.description;
+    body.append(meta,title,desc);
+    if(recipe.name==='Lemon & herb pasta'){
+      const open=document.createElement('button');open.type='button';open.className='quiet';open.textContent='View recipe →';open.onclick=()=>showView('detail');body.append(open);
+    }
+    card.append(art,body);grid.append(card);
+  }
+  document.getElementById('library-empty').hidden=visible.length>0;
+}
+function formatQuantity(value){
+  if(Number.isInteger(value))return String(value);
+  const whole=Math.floor(value),fraction=value-whole;
+  const parts=[[.25,'¼'],[.5,'½'],[.75,'¾']];
+  const match=parts.find(([amount])=>Math.abs(fraction-amount)<.001);
+  return match?(whole?String(whole):'')+match[1]:Number(value.toFixed(2)).toString();
+}
+function renderIngredients(){
+  document.getElementById('serving-count').textContent=servings;
+  document.querySelectorAll('.serving-copy-count').forEach(node=>node.textContent=servings);
+  const list=document.getElementById('ingredient-list');list.replaceChildren();
+  ingredients.forEach(ingredient=>{
+    const row=document.createElement('li'),qty=document.createElement('span'),detail=document.createElement('span');
+    qty.className='qty';qty.textContent=ingredient.quantity===null?'To taste':formatQuantity(ingredient.quantity*servings/4)+(ingredient.unit?' '+ingredient.unit:'');
+    detail.textContent=ingredient.name;
+    if(ingredient.note){const note=document.createElement('small');note.textContent=ingredient.note;detail.append(note);}
+    row.append(qty,detail);list.append(row);
+  });
+}
+function renderNotes(){
+  const list=document.getElementById('notes-list');list.replaceChildren();
+  for(const [user,name] of [['owner','Alex'],['viewer','Jamie']]){
+    if(!notes[user])continue;
+    const entry=document.createElement('div');entry.className='note-entry';
+    const by=document.createElement('strong');by.textContent=name;
+    const text=document.createElement('p');text.textContent=notes[user];entry.append(by,text);list.append(entry);
+  }
+  document.getElementById('note-editor').hidden=role()==='house';
+  if(role()!=='house'){
+    document.getElementById('my-note').value=notes[role()]||'';
+    document.getElementById('remove-note').disabled=!notes[role()];
+    updateNoteCount();
+  }
+}
+function updateNoteCount(){document.getElementById('note-count').textContent=document.getElementById('my-note').value.length+' / 256 characters';}
+function saveNote(){
+  const value=document.getElementById('my-note').value.trim();
+  if(!value){document.getElementById('note-feedback').textContent='Write a note, or use Remove note to clear yours.';return;}
+  notes[role()]=value.slice(0,256);renderNotes();
+  document.getElementById('note-feedback').textContent='Preview only: your note is saved in this mockup.';
+}
+function removeNote(){delete notes[role()];renderNotes();document.getElementById('note-feedback').textContent='Preview only: your note was removed.';}
+function changeServings(step){servings=Math.max(1,Math.min(24,servings+step));renderIngredients();if(!document.getElementById('shopping-review').hidden)renderShoppingRows();if(!document.getElementById('calendar-review').hidden)document.getElementById('calendar-servings').textContent=servings;}
+function showCalendarReview(){document.getElementById('calendar-review').hidden=false;document.getElementById('calendar-servings').textContent=servings;document.getElementById('calendar-link').hidden=true;document.getElementById('calendar-review').scrollIntoView({behavior:'smooth',block:'nearest'});}
+function hideCalendarReview(){document.getElementById('calendar-review').hidden=true;}
+function previewCalendarAdd(){
+  plannedServings=servings;
+  document.getElementById('calendar-event-summary').textContent=document.getElementById('meal-date').value+' · '+document.getElementById('meal-slot').value+' · '+plannedServings+' servings';
+  document.getElementById('calendar-link').hidden=false;
+}
+function returnFromCalendar(){servings=plannedServings;renderIngredients();document.getElementById('calendar-servings').textContent=servings;document.getElementById('detail-feedback').textContent='Recipe opened at '+servings+' planned servings.';document.getElementById('detail-view').scrollIntoView({behavior:'smooth',block:'start'});}
+function showShoppingReview(){document.getElementById('shopping-review').hidden=false;document.getElementById('shopping-feedback').textContent='';renderShoppingRows();document.getElementById('shopping-review').scrollIntoView({behavior:'smooth',block:'nearest'});}
+function hideShoppingReview(){document.getElementById('shopping-review').hidden=true;}
+function renderShoppingRows(){
+  const container=document.getElementById('shopping-rows');container.replaceChildren();
+  ingredients.forEach(ingredient=>{
+    const row=document.createElement('div');row.className='row';
+    const check=document.createElement('input');check.type='checkbox';check.checked=true;check.setAttribute('aria-label','Include '+ingredient.name);
+    const text=document.createElement('input');text.type='text';text.setAttribute('aria-label','Shopping text for '+ingredient.name);
+    text.value=(ingredient.quantity===null?'To taste':formatQuantity(ingredient.quantity*servings/4)+(ingredient.unit?' '+ingredient.unit:''))+' '+ingredient.name;
+    row.append(check,text);container.append(row);
+  });
+}
+function previewAddToList(){const count=document.querySelectorAll('#shopping-rows input[type=checkbox]:checked').length;document.getElementById('shopping-feedback').textContent='Preview only: '+count+' editable item'+(count===1?'':'s')+' would be added to '+document.getElementById('target-list').value+'.';}
+function updateEditorCounts(){
+  const ingredientCount=document.getElementById('ingredient-editor').children.length;
+  const stepCount=document.getElementById('steps-editor').children.length;
+  document.getElementById('ingredient-count').textContent=ingredientCount+' / 64';
+  document.getElementById('step-count').textContent=stepCount+' / 64';
+  document.getElementById('add-ingredient').disabled=ingredientCount>=64;
+  document.getElementById('add-step').disabled=stepCount>=64;
+}
+function renderIngredientEditor(){const editor=document.getElementById('ingredient-editor');editor.replaceChildren();if(creating)addIngredientRow();else ingredients.forEach(ingredient=>addIngredientRow(ingredient));updateEditorCounts();}
+function addIngredientRow(ingredient={quantity:'',unit:'',name:'',note:''}){
+  const editor=document.getElementById('ingredient-editor');if(editor.children.length>=64)return;
+  const row=document.createElement('div');row.className='ingredient-edit-row';
+  const qty=document.createElement('input');qty.type='text';qty.maxLength=32;qty.placeholder='2 or to taste';qty.value=ingredient.quantity===null?'to taste':ingredient.quantity;qty.setAttribute('aria-label','Quantity');
+  const unit=document.createElement('select');unit.setAttribute('aria-label','Unit');
+  for(const value of ['', 'g', 'kg', 'ml', 'L', 'tsp', 'tbsp', 'cup', 'cloves', 'pieces']){const option=document.createElement('option');option.value=value;option.textContent=value||'—';unit.append(option);}unit.value=ingredient.unit;
+  const name=document.createElement('input');name.className='ingredient-name';name.type='text';name.maxLength=128;name.placeholder='Ingredient name';name.value=ingredient.name;name.setAttribute('aria-label','Ingredient name');
+  const note=document.createElement('input');note.className='ingredient-note';note.type='text';note.maxLength=128;note.placeholder='Optional note';note.value=ingredient.note;note.setAttribute('aria-label','Ingredient note');
+  const remove=document.createElement('button');remove.type='button';remove.textContent='×';remove.setAttribute('aria-label','Remove ingredient row');remove.onclick=()=>{row.remove();updateEditorCounts();};
+  row.append(qty,unit,name,note,remove);editor.append(row);updateEditorCounts();
+}
+function renderStepEditor(){const editor=document.getElementById('steps-editor');editor.replaceChildren();if(creating)addStepRow();else steps.forEach(step=>addStepRow(step));updateEditorCounts();}
+function addStepRow(value=''){
+  const editor=document.getElementById('steps-editor');if(editor.children.length>=64)return;
+  const row=document.createElement('div');row.className='step-edit-row';
+  const number=document.createElement('span');number.className='step-number';number.textContent=editor.children.length+1+'.';
+  const entry=document.createElement('div'),text=document.createElement('textarea'),count=document.createElement('small');
+  text.maxLength=256;text.value=value;text.setAttribute('aria-label','Method step');
+  text.oninput=()=>{count.textContent=text.value.length+' / 256 characters';};text.oninput();entry.append(text,count);
+  const remove=document.createElement('button');remove.type='button';remove.textContent='×';remove.setAttribute('aria-label','Remove step');
+  remove.onclick=()=>{row.remove();[...editor.children].forEach((item,index)=>item.querySelector('.step-number').textContent=index+1+'.');updateEditorCounts();};
+  row.append(number,entry,remove);editor.append(row);updateEditorCounts();
+}
+function updateSharing(){document.getElementById('allowlist').hidden=document.querySelector('input[name=privacy]:checked').value!=='private';}
+function previewSave(){
+  const makePrivate=document.querySelector('input[name=privacy]:checked').value==='private';
+  const keepJamie=makePrivate&&document.getElementById('share-jamie').checked;
+  if(!creating&&makePrivate&&!keepJamie&&notes.viewer){document.getElementById('unshare-dialog').showModal();return;}
+  finishPreviewSave(makePrivate,keepJamie);
+}
+function finishPreviewSave(makePrivate,keepJamie){
+  if(creating){document.getElementById('edit-feedback').textContent='Preview only: a new recipe would be saved with these details.';return;}
+  recipes[0].private=makePrivate;allowedJamie=keepJamie;
+  showView('detail');
+  document.getElementById('detail-feedback').textContent='Preview only: recipe sharing updated.';
+}
+function closeUnshare(confirmed){
+  document.getElementById('unshare-dialog').close();
+  if(!confirmed)return;
+  delete notes.viewer;
+  finishPreviewSave(true,false);
+}
+function showDeleteNote(){document.getElementById('delete-dialog').showModal();}
+function closeDelete(confirmed){document.getElementById('delete-dialog').close();if(confirmed)document.getElementById('detail-feedback').textContent='Preview only: the recipe would be deleted after confirmation.';}
+renderView();
+</script>
+</body>
+</html>
