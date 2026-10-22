@@ -286,6 +286,50 @@ def initialize_database(db_path):
 def safe_ics_text(value):
     return str(value).replace('\\', '\\\\').replace('\n', '\\n').replace(',', '\\,').replace(';', '\\;')
 
+def recipe_form_values(form):
+    title = form.get('title', '').strip()
+    description = form.get('description', '').strip()
+    try:
+        servings = int(form.get('default_servings', ''))
+    except ValueError:
+        abort(400)
+    quantities = form.getlist('ingredient_quantity')
+    units = form.getlist('ingredient_unit')
+    names = form.getlist('ingredient_name')
+    notes = form.getlist('ingredient_note')
+    steps = form.getlist('step')
+    if (not title or len(title) > 128 or len(description) > 256
+            or not 1 <= servings <= 99 or not 1 <= len(names) <= 64
+            or len(quantities) != len(names) or len(units) != len(names)
+            or len(notes) != len(names) or not 1 <= len(steps) <= 64):
+        abort(400)
+    ingredients = []
+    for quantity, unit, name, note in zip(quantities, units, names, notes):
+        ingredient = (quantity.strip(), unit.strip(), name.strip(), note.strip())
+        if (not ingredient[2] or len(ingredient[0]) > 32 or len(ingredient[1]) > 16
+                or len(ingredient[2]) > 128 or len(ingredient[3]) > 128):
+            abort(400)
+        ingredients.append(ingredient)
+    clean_steps = [step.strip() for step in steps]
+    if any(not step or len(step) > 256 for step in clean_steps):
+        abort(400)
+    return title, description, servings, ingredients, clean_steps
+
+def save_recipe_content(db, recipe_id, values):
+    title, description, servings, ingredients, steps = values
+    db.execute('UPDATE recipes SET title=?,description=?,default_servings=?,ingredients=?,instructions=? '
+               'WHERE id=?', (title, description, servings, '', '', recipe_id))
+    db.execute('DELETE FROM recipe_ingredients WHERE recipe_id=?', (recipe_id,))
+    db.execute('DELETE FROM recipe_steps WHERE recipe_id=?', (recipe_id,))
+    db.executemany(
+        'INSERT INTO recipe_ingredients(recipe_id,position,quantity,unit,name,note) VALUES(?,?,?,?,?,?)',
+        [(recipe_id, position, *ingredient) for position, ingredient in enumerate(ingredients)]
+    )
+    db.executemany(
+        'INSERT INTO recipe_steps(recipe_id,position,text) VALUES(?,?,?)',
+        [(recipe_id, position, step) for position, step in enumerate(steps)]
+    )
+
 def create_app(test_config=None):
     app = Flask(__name__)
     app.config.update(
@@ -1057,32 +1101,8 @@ def create_app(test_config=None):
     @app.post('/recipes')
     @login_required
     def add_recipe():
-        title = request.form.get('title', '').strip()
-        description = request.form.get('description', '').strip()
-        try:
-            servings = int(request.form.get('default_servings', ''))
-        except ValueError:
-            abort(400)
-        quantities = request.form.getlist('ingredient_quantity')
-        units = request.form.getlist('ingredient_unit')
-        names = request.form.getlist('ingredient_name')
-        notes = request.form.getlist('ingredient_note')
-        steps = request.form.getlist('step')
-        if (not title or len(title) > 128 or len(description) > 256
-                or not 1 <= servings <= 99 or not 1 <= len(names) <= 64
-                or len(quantities) != len(names) or len(units) != len(names)
-                or len(notes) != len(names) or not 1 <= len(steps) <= 64):
-            abort(400)
-        ingredients = []
-        for quantity, unit, name, note in zip(quantities, units, names, notes):
-            ingredient = (quantity.strip(), unit.strip(), name.strip(), note.strip())
-            if (not ingredient[2] or len(ingredient[0]) > 32 or len(ingredient[1]) > 16
-                    or len(ingredient[2]) > 128 or len(ingredient[3]) > 128):
-                abort(400)
-            ingredients.append(ingredient)
-        clean_steps = [step.strip() for step in steps]
-        if any(not step or len(step) > 256 for step in clean_steps):
-            abort(400)
+        values = recipe_form_values(request.form)
+        title, description, servings, _, _ = values
         db = get_db()
         count = db.execute('SELECT COUNT(*) FROM recipes WHERE created_by=?',
                            (g.user['id'],)).fetchone()[0]
@@ -1094,16 +1114,7 @@ def create_app(test_config=None):
                 (title, description, servings, g.user['id'])
             )
             recipe_id = cursor.lastrowid
-            db.executemany(
-                'INSERT INTO recipe_ingredients(recipe_id,position,quantity,unit,name,note) '
-                'VALUES(?,?,?,?,?,?)',
-                [(recipe_id, position, *ingredient)
-                 for position, ingredient in enumerate(ingredients)]
-            )
-            db.executemany(
-                'INSERT INTO recipe_steps(recipe_id,position,text) VALUES(?,?,?)',
-                [(recipe_id, position, step) for position, step in enumerate(clean_steps)]
-            )
+            save_recipe_content(db, recipe_id, values)
         return redirect(url_for('index')+'#recipes')
 
     @app.get('/recipes/<int:recipe_id>')
@@ -1123,7 +1134,52 @@ def create_app(test_config=None):
         legacy_steps = not steps and bool(recipe['instructions'])
         return render_template('recipe.html', recipe=recipe, ingredients=ingredients,
                                steps=steps, legacy_ingredients=legacy_ingredients,
-                               legacy_steps=legacy_steps)
+                               legacy_steps=legacy_steps,
+                               can_edit=recipe['created_by'] == g.user['id'],
+                               can_delete=(recipe['created_by'] == g.user['id']
+                                           or g.user['role'] == 'admin'))
+
+    @app.route('/recipes/<int:recipe_id>/edit', methods=['GET', 'POST'])
+    @login_required
+    def edit_recipe(recipe_id):
+        db = get_db()
+        recipe = db.execute('SELECT * FROM recipes WHERE id=?', (recipe_id,)).fetchone()
+        if not recipe:
+            abort(404)
+        if recipe['created_by'] != g.user['id']:
+            abort(403)
+        if request.method == 'POST':
+            values = recipe_form_values(request.form)
+            with db:
+                save_recipe_content(db, recipe_id, values)
+            return redirect(url_for('recipe_detail', recipe_id=recipe_id))
+        ingredients = db.execute(
+            'SELECT quantity,unit,name,note FROM recipe_ingredients WHERE recipe_id=? ORDER BY position',
+            (recipe_id,)
+        ).fetchall()
+        steps = db.execute('SELECT text FROM recipe_steps WHERE recipe_id=? ORDER BY position',
+                            (recipe_id,)).fetchall()
+        if not ingredients and recipe['ingredients']:
+            ingredients = [{'quantity': '', 'unit': '', 'name': line, 'note': ''}
+                           for line in recipe['ingredients'].splitlines() if line.strip()]
+        if not steps and recipe['instructions']:
+            steps = [{'text': line} for line in recipe['instructions'].splitlines() if line.strip()]
+        return render_template('edit_recipe.html', recipe=recipe,
+                               ingredients=ingredients or [{'quantity': '', 'unit': '', 'name': '', 'note': ''}],
+                               steps=steps or [{'text': ''}])
+
+    @app.post('/recipes/<int:recipe_id>/delete')
+    @login_required
+    def delete_recipe(recipe_id):
+        db = get_db()
+        recipe = db.execute('SELECT id,created_by FROM recipes WHERE id=?', (recipe_id,)).fetchone()
+        if not recipe:
+            abort(404)
+        if recipe['created_by'] != g.user['id'] and g.user['role'] != 'admin':
+            abort(403)
+        with db:
+            db.execute('DELETE FROM recipes WHERE id=?', (recipe_id,))
+        return redirect(url_for('index') + '#recipes')
 
     @app.post('/events')
     @login_required
