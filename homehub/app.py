@@ -150,6 +150,8 @@ def create_app(test_config=None):
         DATABASE=os.environ.get('HOMEHUB_DB', str(Path.home()/'.local/share/homehub/homehub.sqlite3')),
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE='Lax',
+        SESSION_COOKIE_SECURE=os.environ.get('HOMEHUB_COOKIE_SECURE', '').strip().lower()
+            in {'1', 'true', 'yes', 'on'},
         MAX_CONTENT_LENGTH=64*1024,
     )
     if test_config:

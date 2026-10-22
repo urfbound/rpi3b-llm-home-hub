@@ -24,7 +24,7 @@ Browse to http://127.0.0.1:8080. **Keep your secret key persistent** across rest
 
 ## Run on the Pi
 
-Install a minimal Raspberry Pi OS (Python 3.11+), create a Python virtual environment, install the app using `pip install .`, and configure a systemd service with `HOMEHUB_SECRET_KEY`, `HOMEHUB_DB` and `HOMEHUB_BIND=<Pi LAN IP>`. See `deploy/homehub.service.example`; edit paths and user before installation. Do not open a router port to this service. Restrict the allowed LAN subnet with your firewall. If you use an HTTP connection for the initial prototype, passwords and cookies travel unencrypted over the LAN; arrange HTTPS before household use.
+Install a minimal Raspberry Pi OS (Python 3.11+), create a Python virtual environment, install the app using `pip install .`, and configure a systemd service with `HOMEHUB_SECRET_KEY`, `HOMEHUB_DB` and `HOMEHUB_BIND=127.0.0.1`. See `deploy/homehub.service.example`; edit paths and user before installation. Put Caddy in front of Waitress for LAN HTTPS, and follow the [TLS deployment guide](docs/TLS_DEPLOYMENT.md) before household use. Do not open a router port to this service; restrict HTTPS to the household LAN with the firewall.
 
 ## Important limitations / follow-up work
 
@@ -32,5 +32,5 @@ Install a minimal Raspberry Pi OS (Python 3.11+), create a Python virtual enviro
 - Recipe creation and viewing exist, but editing, ingredient normalization, linking recipes to dates, deletion, and shopping-list aggregation remain to build.
 - Calendar `.ics` downloads are a one-way snapshot, not two-way synchronization. The basic export covers all-day events only.
 - Weather, RSS, games, outbound email, and LLM chat are not wired up yet.
-- Login rate limits are in place. TLS, routine backup/restore, audit logging, and reliable timezone rules are still needed before production. Schema versioning and pre-upgrade backups are implemented; later releases still need their own migrations and upgrade tests.
-- Do not store sensitive information until further security hardening. For now, run on localhost for development.
+- Login rate limits are in place. Follow the [TLS deployment guide](docs/TLS_DEPLOYMENT.md) before household use. Routine backup/restore, audit logging, and reliable timezone rules are still needed before production. Schema versioning and pre-upgrade backups are implemented; later releases still need their own migrations and upgrade tests.
+- Until TLS is configured, keep the app on localhost for development; do not sign in over plain HTTP on the LAN.
