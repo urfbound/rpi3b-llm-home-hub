@@ -229,12 +229,16 @@ by feature before implementation.
   account. Group articles by feed, with a personal user's own feeds first and
   house-wide feeds below them. A separate Manage feeds view lets users remove
   and reorder their own feeds; admins do the same for house-wide feeds. Adding
-  a feed should be easy. Refresh every 30 minutes by default; admins can choose
-  an interval from ten to 240 minutes. Keep up to 30 ordinary articles per
-  feed. When outbound access is off, show cached items with a last-updated
-  time. Ordinary users may add public web feeds; only admins may add trusted
-  feeds hosted on the household LAN. RSS cards show the title, source,
-  publication date, and a short text summary, without loading remote images.
+  a feed should be easy. Reject a personal subscription when its feed URL is
+  already in the house-wide list, as well as duplicate subscriptions within
+  the same list. Normalize URLs for duplicate checks and test this rule again
+  at the backend boundary when RSS is implemented. Refresh every 30 minutes
+  by default; admins can choose an interval from ten to 240 minutes. Keep up
+  to 30 ordinary articles per feed. When outbound access is off, show cached
+  items with a last-updated time. Ordinary users may add public web feeds;
+  only admins may add trusted feeds hosted on the household LAN. RSS cards
+  show the title, source, publication date, and a short text summary, without
+  loading remote images.
   Accept HTTP(S) feed URLs with size and timeout limits; recheck destinations
   after DNS resolution and redirects. Block loopback and other unsafe
   addresses. Only an admin can explicitly approve a LAN destination.
@@ -243,14 +247,16 @@ by feature before implementation.
   Provide a deliberate Done reading action that marks an article read and
   prompts whether to keep or delete it. The prompt has a Don't ask me again
   option that repeats the chosen action; users can restore prompting in
-  Manage feeds. Users can also delete articles at any
-  time; deleting a favourite requires confirmation. Show all of a user's
-  favourites together in a card below the feed groups. Allow at most 32
-  favourites per user and never automatically delete them. Retain ordinary
-  articles for at most 90 days and cap each user's visible saved articles at
-  64 MB. At capacity, remove the oldest unread
-  ordinary article first; once none remain, remove the oldest read ordinary
-  article. Store shared article content once with separate per-user state.
+  Manage feeds. Test persistence and both automatic choices when implementing
+  user settings. Hide Done reading after an article is read, and mark it read
+  when its link is opened. Read articles cannot be marked unread. Users can
+  also delete articles at any time; deleting a favourite requires confirmation.
+  Show all of a user's favourites in a card below the feed groups. Allow at
+  most 32 favourites per user and never automatically delete them. Retain
+  ordinary articles for at most 90 days and cap each user's visible saved
+  articles at 64 MB. At capacity, remove the oldest unread ordinary article
+  first; once none remain, remove the oldest read ordinary article. Store shared
+  article content once with separate per-user state.
   If favourites alone fill the quota, stop saving new articles for that user
   until they free space; do not silently delete favourites.
 - Dashboard system status includes RAM use, CPU use, one hour of CPU history

@@ -27,19 +27,19 @@
 <form class="panel" id="add-panel" hidden onsubmit="addFeed(event)"><div><h2>Add a feed</h2><p>Paste an HTTP or HTTPS RSS or Atom URL. The hub will discover its name after checking the feed.</p></div><div class="add-row"><input id="feed-url" type="url" placeholder="https://example.org/feed.xml" aria-label="Feed URL" required><button class="primary" type="submit">Add feed</button><button class="secondary" type="button" onclick="togglePanel('add-panel')">Cancel</button></div><span class="form-feedback" id="form-feedback" role="status"></span></form>
 <section class="panel" id="manage-panel" hidden aria-label="Manage feeds"><div class="manage-head"><div><h2>Manage feeds</h2><p id="manage-description">Reorder or remove your feeds. House-wide feeds stay below them.</p></div><button class="secondary" type="button" onclick="togglePanel('manage-panel')">Done</button></div><div id="manage-list"></div><label class="setting"><input id="ask-done-setting" type="checkbox" checked onchange="setDonePrompt(this.checked)"> Ask whether to keep or delete after Done reading</label><p id="done-choice-note"></p><p id="storage-note">Saved for your account: 1.8 MB / 64 MB · 90 days · 0 / 32 favourites. Oldest unread articles clear first, then oldest read articles. Favourites are protected.</p></section>
 <div id="feed-content"><section id="primary-section"><div class="section-head"><div><p class="eyebrow" id="primary-eyebrow">Your reading shelf</p><h2 id="section-title">My feeds</h2></div><p id="feed-count"></p></div><div class="feed-grid" id="feed-grid" aria-label="RSS feed cards"></div></section><section id="house-section"><div class="section-head"><div><p class="eyebrow">Shared with the household</p><h2>House-wide feeds</h2></div><p id="house-feed-count"></p></div><div class="feed-grid" id="house-grid" aria-label="House-wide RSS feed cards"></div></section></div>
-<section class="favourites-card" id="favourites-card"><div class="favourites-head"><h2>★ Favourites</h2><p id="favourite-count">0 / 32 saved</p></div><div id="favourites-list"></div></section><section class="empty-state" id="empty-state" hidden><h2>No saved articles yet</h2><p id="empty-copy">Add a feed and the first articles will appear after a successful refresh.</p></section><p class="preview-note">Illustrative content for design review. The app will store only short article summaries, not remote images. Opening a story takes you to its source site.</p></main></div>
+<section class="favourites-card" id="favourites-card"><div class="favourites-head"><h2>★ Favourites</h2><p id="favourite-count">0 / 32 saved</p></div><div id="favourites-list"></div></section><section class="empty-state" id="empty-state" hidden><h2>No saved articles yet</h2><p id="empty-copy">Add a feed and the first articles will appear after a successful refresh.</p></section><p class="preview-note">Illustrative content for design review. The app will store only short article summaries, not remote images. In this mockup, article links mark stories read; the finished app will open their source sites.</p></main></div>
 <dialog id="done-dialog" aria-labelledby="done-title"><h2 id="done-title">Done reading?</h2><p id="done-copy">This article is marked read. Keep it on your shelf, or delete it from your account?</p><label class="setting dialog-setting"><input id="skip-done-prompt" type="checkbox"> Don't ask me again</label><div class="dialog-actions"><button class="secondary" type="button" onclick="closeDone(false)">Keep article</button><button class="primary" type="button" id="done-delete-button" onclick="closeDone(true)">Delete article</button></div></dialog>
 <dialog id="delete-dialog" aria-labelledby="delete-title"><h2 id="delete-title">Delete favourite?</h2><p id="delete-copy">Remove this article from your favourites and delete it from your account?</p><div class="dialog-actions"><button class="secondary" type="button" onclick="closeDelete(false)">Cancel</button><button class="primary" type="button" onclick="closeDelete(true)">Delete favourite</button></div></dialog>
 <script>
 const personalFeeds=[
   {name:'Garden Journal',source:'garden.example.org',items:[['Planning a small autumn herb garden','Today · 9:20 AM','A few hardy herbs can keep the kitchen supplied even as the days get shorter.'],['Putting the beds to rest','Yesterday · 4:10 PM','Simple end-of-season care for soil, tools, and perennial plants.']]},
   {name:'Space & Science',source:'science.example.org',items:[['What to spot in the October sky','Today · 7:45 AM','A short guide to the Moon, bright planets, and the evening sky.'],['Why autumn leaves change colour','Yesterday · 11:30 AM','A clear look at the chemistry behind the season’s familiar colours.']]},
-  {name:'The Local Library',source:'library.example.org',items:[['Weekend workshops for all ages','Monday · 2:15 PM','This week’s hands-on activities include crafts, reading, and a family game night.'],['New books on the shelves','Sunday · 10:00 AM','A selection of recent arrivals for curious readers of every age.']]}
 ];
 const houseFeeds=[
   {name:'Household Bulletin',source:'bulletin.example.org',items:[['What is happening this weekend','Today · 8:30 AM','A roundup of nearby events and places to visit with the family.'],['A guide to local autumn trails','Yesterday · 1:05 PM','Short walks and longer outings while the leaves are at their brightest.']]},
   {name:'The Local Library',source:'library.example.org',items:[['Weekend workshops for all ages','Monday · 2:15 PM','This week’s hands-on activities include crafts, reading, and a family game night.']]}
 ];
+for(const feed of [...personalFeeds,...houseFeeds])feed.url='https://'+feed.source+'/feed.xml';
 const articleStates=new Map([
   ['personal|personal|garden.example.org|Putting the beds to rest',{read:true,favourite:true,deleted:false}],
   ['personal|house|bulletin.example.org|A guide to local autumn trails',{read:true,favourite:false,deleted:false}]
@@ -49,11 +49,31 @@ const doneChoices=new Map();
 function account(){return document.getElementById('account').value;}
 function toggleTheme(){document.documentElement.dataset.theme=document.documentElement.dataset.theme==='light'?'dark':'light';}
 function togglePanel(id){const panel=document.getElementById(id),other=document.getElementById(id==='add-panel'?'manage-panel':'add-panel');other.hidden=true;panel.hidden=!panel.hidden;if(!panel.hidden&&id==='add-panel')document.getElementById('feed-url').focus();}
-function addFeed(event){event.preventDefault();const input=document.getElementById('feed-url'),url=new URL(input.value);if(!['http:','https:'].includes(url.protocol)){document.getElementById('form-feedback').textContent='Use an HTTP or HTTPS feed URL.';return;}const feed={name:'New feed',source:url.hostname,items:[]};(account()==='personal'?personalFeeds:houseFeeds).push(feed);input.value='';document.getElementById('add-panel').hidden=true;renderFeeds();}
+function normalizedFeedUrl(raw){
+  const url=new URL(raw.trim());
+  if(!['http:','https:'].includes(url.protocol))throw new Error('Use an HTTP or HTTPS feed URL.');
+  url.hash='';return url.href;
+}
+function addFeed(event){
+  event.preventDefault();
+  const input=document.getElementById('feed-url'),feedback=document.getElementById('form-feedback');
+  let url;
+  try{url=normalizedFeedUrl(input.value);}catch{feedback.textContent='Use a valid HTTP or HTTPS feed URL.';return;}
+  if(houseFeeds.some(feed=>normalizedFeedUrl(feed.url)===url)){
+    feedback.textContent='This feed is already available in house-wide feeds.';return;
+  }
+  if(account()==='personal'&&personalFeeds.some(feed=>normalizedFeedUrl(feed.url)===url)){
+    feedback.textContent='This feed is already in your feeds.';return;
+  }
+  const parsed=new URL(url),feed={name:'New feed',source:parsed.hostname,url,items:[]};
+  (account()==='personal'?personalFeeds:houseFeeds).push(feed);
+  input.value='';feedback.textContent='';document.getElementById('add-panel').hidden=true;renderFeeds();
+}
 function removeFeed(index){const feeds=account()==='personal'?personalFeeds:houseFeeds;feeds.splice(index,1);renderFeeds();}
 function moveFeed(index,step){const feeds=account()==='personal'?personalFeeds:houseFeeds;[feeds[index],feeds[index+step]]=[feeds[index+step],feeds[index]];renderFeeds();}
 function articleKey(scope,feed,item){return account()+'|'+scope+'|'+feed.source+'|'+item[0];}
 function stateFor(key){if(!articleStates.has(key))articleStates.set(key,{read:false,favourite:false,deleted:false});return articleStates.get(key);}
+function visitArticle(event,key){event.preventDefault();stateFor(key).read=true;renderFeeds();}
 function favouriteCount(){return [...articleStates].filter(([key,state])=>key.startsWith(account()+'|')&&state.favourite&&!state.deleted).length;}
 function toggleFavourite(key){const state=stateFor(key);if(!state.favourite&&favouriteCount()>=32){alert('You can favourite up to 32 articles. Remove a favourite before adding another.');return;}state.favourite=!state.favourite;renderFeeds();}
 function deleteArticle(key,confirmed=false){
@@ -111,16 +131,16 @@ function renderGrid(gridId,feeds,scope,readOnly){
         const key=articleKey(scope,feed,item),article=stateFor(key),story=document.createElement('article');
         story.className='story'+(article.read?' read':'');
         const h=document.createElement('h4'),link=document.createElement('a');
-        link.href='#';link.textContent=item[0];link.onclick=event=>event.preventDefault();h.append(link);
+        link.href='#';link.textContent=item[0];link.onclick=event=>visitArticle(event,key);h.append(link);
         const meta=document.createElement('p');meta.className='meta';meta.textContent=(article.read?'Read':'● Unread')+' · '+item[1];
         const summary=document.createElement('p');summary.className='summary';summary.textContent=item[2];story.append(h,meta,summary);
         if(!readOnly){
           const actions=document.createElement('div');actions.className='story-actions';
-          const done=makeButton(article.read?'Done reading':'Mark done reading',()=>doneReading(key));
+          if(!article.read)actions.append(makeButton('Done reading',()=>doneReading(key)));
           const fav=makeButton(article.favourite?'★ Favourite':'☆ Favourite',()=>toggleFavourite(key),'favourite');
           fav.setAttribute('aria-pressed',article.favourite?'true':'false');fav.setAttribute('aria-label',(article.favourite?'Remove favourite from ':'Favourite ')+item[0]);
           const remove=makeButton('Delete',()=>deleteArticle(key),'delete');remove.setAttribute('aria-label','Delete '+item[0]);
-          actions.append(done,fav,remove);story.append(actions);
+          actions.append(fav,remove);story.append(actions);
         }
         card.append(story);
       });
@@ -141,8 +161,9 @@ function renderFavourites(){
     if(!state.favourite||state.deleted)return;
     count++;
     const row=document.createElement('div');row.className='favourite-row';
-    const detail=document.createElement('div'),title=document.createElement('strong'),source=document.createElement('small');
-    title.textContent=item[0];source.textContent=feed.name+' · '+item[1];detail.append(title,source);
+    const detail=document.createElement('div'),title=document.createElement('strong'),link=document.createElement('a'),source=document.createElement('small');
+    link.href='#';link.textContent=item[0];link.onclick=event=>visitArticle(event,key);title.append(link);
+    source.textContent=feed.name+' · '+item[1];detail.append(title,source);
     const actions=document.createElement('div');actions.className='manage-actions';
     actions.append(makeButton('Remove favourite',()=>toggleFavourite(key),'secondary'),makeButton('Delete',()=>deleteArticle(key),'secondary'));
     row.append(detail,actions);list.append(row);
