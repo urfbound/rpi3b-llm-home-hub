@@ -196,7 +196,7 @@ function addIngredientRow(ingredient={quantity:'',unit:'',name:'',note:''}){
   const unit=document.createElement('select');unit.setAttribute('aria-label','Unit');
   for(const value of ['', 'g', 'kg', 'ml', 'L', 'tsp', 'tbsp', 'cup', 'cloves', 'pieces']){const option=document.createElement('option');option.value=value;option.textContent=value||'—';unit.append(option);}unit.value=ingredient.unit;
   const name=document.createElement('input');name.className='ingredient-name';name.type='text';name.maxLength=128;name.placeholder='Ingredient name';name.value=ingredient.name;name.setAttribute('aria-label','Ingredient name');
-  const note=document.createElement('input');note.className='ingredient-note';note.type='text';note.maxLength=64;note.placeholder='Optional note';note.value=ingredient.note;note.setAttribute('aria-label','Ingredient note');
+  const note=document.createElement('input');note.className='ingredient-note';note.type='text';note.maxLength=128;note.placeholder='Optional note';note.value=ingredient.note;note.setAttribute('aria-label','Ingredient note');
   const remove=document.createElement('button');remove.type='button';remove.textContent='×';remove.setAttribute('aria-label','Remove ingredient row');remove.onclick=()=>{row.remove();updateEditorCounts();};
   row.append(qty,unit,name,note,remove);editor.append(row);updateEditorCounts();
 }

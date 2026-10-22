@@ -150,18 +150,17 @@ by feature before implementation.
   64 ordered steps, and each step to 256 characters. Give each user at most
   one attributed note per recipe, editable or removable by that user and
   limited to 256 characters. Recipe viewers can read the notes. When sharing
-  is narrowed, warn before removing notes belonging to people who lose
-  access. The house-wide account can read shared recipes and notes but cannot
-  add notes. For storage sizing, propose further limits of 128 characters for
-  a title, 256 for a description, and 32/16/128/64 for ingredient quantity,
-  unit, name, and note respectively; confirm these limits before implementation.
+  is narrowed, keep notes from people who retain access and warn before
+  removing notes belonging to people who lose access. The house-wide account
+  can read shared recipes and notes but cannot add notes. Limit titles to 128
+  characters, descriptions to 256, and ingredient quantity, unit, name, and
+  note to 32, 16, 128, and 128 characters respectively.
   At 32 users filling every recipe, ingredient, step, and note slot, this is
   4,096 recipes, 262,144 ingredients, 262,144 steps, and up to 131,072 notes.
-  A SQLite layout with those proposed text caps is roughly 180–200 MiB for
-  one-byte UTF-8 text, or around 650–700 MiB if text fills every field with
-  four-byte UTF-8 characters. This estimate excludes images, other features,
-  backups, and SQLite WAL files. The ingredient text caps must be confirmed to
-  establish a useful storage ceiling.
+  A SQLite layout with these text caps is roughly 200–220 MiB for one-byte
+  UTF-8 text, or around 715–765 MiB if text fills every field with four-byte
+  UTF-8 characters. This estimate excludes images, other features, backups,
+  and SQLite WAL files.
 - A deliberate **Add to list** action copies recipe ingredients into an
   editable shopping-list snapshot. Combine matching ingredient names only
   when units convert reliably; leave uncertain combinations separate.
@@ -388,7 +387,7 @@ the three games where it breaks ties.
   implementation.
 - [Lists and navigation preview](design/lists-navigation-preview.html):
   awaiting user review before list and tab-order implementation.
-- [Recipes preview](design/recipes-preview.html): awaiting user review before
+- [Recipes preview](design/recipes-preview.html): approved by the user before
   recipe implementation.
 - [Weather preview](design/weather-preview.html): approved by the user before
   weather implementation.
