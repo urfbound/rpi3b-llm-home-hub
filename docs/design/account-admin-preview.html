@@ -116,7 +116,7 @@
     .backup-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--line); }
     .backup-row strong { display: block; }
     .backup-row small { display: block; color: var(--muted); }
-    .backup-row .button { justify-self: end; }
+    .backup-row-actions { display: flex; justify-content: end; flex-wrap: wrap; gap: 6px; }
     .backup-check { display: flex; align-items: center; gap: 9px; margin: 12px 0; font-size: .85rem; }
     .backup-check input { width: 18px; height: 18px; accent-color: var(--green); }
     .mobile-section { width: calc(100% - 64px); max-width: 1440px; margin: 0 auto 56px; padding: 0; }
@@ -238,10 +238,10 @@
             <section class="panel side-panel" aria-labelledby="backup-settings-heading">
               <h3 id="backup-settings-heading">Backup settings</h3>
               <p>Choose where routine and on-demand database backups are stored, and how often the app creates them.</p>
+              <label class="backup-check"><input id="backups-off" type="checkbox" onchange="toggleBackupFrequency()"> Turn automatic backups off</label>
               <label class="calendar-setting">Backup folder<input type="text" value="/var/lib/homehub/backups" aria-label="Backup folder"></label>
               <p class="backup-folder-status" role="status">✓ Backup folder available</p>
               <label class="calendar-setting">Automatic backup interval (days)<input id="backup-frequency" type="number" min="1" max="31" value="1"></label>
-              <label class="backup-check"><input id="backups-off" type="checkbox" onchange="toggleBackupFrequency()"> Turn automatic backups off</label>
               <label class="calendar-setting">Keep most recent backups<input id="backup-retention" type="number" min="1" max="365" value="14"></label>
               <p>Archive files are stored separately from the active database where possible. The resolved folder is shown here.</p>
               <div class="backup-actions"><button class="button small" type="button" onclick="saveBackupSettings()">Save settings</button><button class="button small primary" type="button" onclick="createBackup()">Create backup now</button></div>
@@ -252,9 +252,9 @@
               <p>Latest backup: today at 02:00 · Verified · Integrity check passed · 18.4 MB</p>
               <p><strong>Before restoring:</strong> Restoring replaces the current database with the selected copy and signs everyone out. Changes made after that backup will be lost. Verify the selected copy before restoring; keep a separate copy of important data.</p>
               <div class="backup-rows">
-                <div class="backup-row"><div><strong>Today · 02:00</strong><small>Verified · Integrity check passed · 18.4 MB</small></div><button class="button small danger" type="button" onclick="askRestore('Today at 02:00')">Restore</button></div>
-                <div class="backup-row"><div><strong>Yesterday · 02:00</strong><small>Verified · Integrity check passed · 18.2 MB</small></div><button class="button small danger" type="button" onclick="askRestore('Yesterday at 02:00')">Restore</button></div>
-                <div class="backup-row"><div><strong>October 20 · 02:00</strong><small>Verified · Integrity check passed · 18.1 MB</small></div><button class="button small danger" type="button" onclick="askRestore('October 20 at 02:00')">Restore</button></div>
+                <div class="backup-row"><div><strong>Today · 02:00</strong><small>Verified · Integrity check passed · 18.4 MB</small></div><div class="backup-row-actions"><button class="button small danger" type="button" onclick="askRestore('Today at 02:00')">Restore</button><button class="button small quiet" type="button" onclick="askDeleteBackup('Today at 02:00')">Delete</button></div></div>
+                <div class="backup-row"><div><strong>Yesterday · 02:00</strong><small>Verified · Integrity check passed · 18.2 MB</small></div><div class="backup-row-actions"><button class="button small danger" type="button" onclick="askRestore('Yesterday at 02:00')">Restore</button><button class="button small quiet" type="button" onclick="askDeleteBackup('Yesterday at 02:00')">Delete</button></div></div>
+                <div class="backup-row"><div><strong>October 20 · 02:00</strong><small>Verified · Integrity check passed · 18.1 MB</small></div><div class="backup-row-actions"><button class="button small danger" type="button" onclick="askRestore('October 20 at 02:00')">Restore</button><button class="button small quiet" type="button" onclick="askDeleteBackup('October 20 at 02:00')">Delete</button></div></div>
               </div>
               <p id="backup-feedback" role="status"></p>
             </section>
@@ -275,6 +275,7 @@
 
   <dialog id="delete-dialog" aria-labelledby="delete-title"><div class="dialog-body"><div class="dialog-top"><div><p class="eyebrow">Permanent removal</p><h2 id="delete-title">Remove Jamie?</h2></div><button class="button small quiet" type="button" onclick="closeDialog('delete-dialog')" aria-label="Close">✕</button></div><p id="delete-explanation">Choose what happens to Jamie's lists, recipes, and events. Chats, scores, and personal feeds will be deleted.</p><div class="danger-box"><strong>This cannot be undone.</strong><br><span id="delete-counts">Jamie owns 2 lists, 4 recipes, and 12 events.</span> A shared list may contain items added by other people.</div><label class="radio-line"><input type="radio" name="content-choice" checked>Transfer all owned content to another person</label><label>Transfer to<select aria-label="Transfer to"><option>Alex P.</option><option>Sam P.</option><option>Taylor P.</option></select></label><label class="radio-line"><input type="radio" name="content-choice">Delete all owned content, including other contributors' items in this person's lists</label><label id="confirm-label">Type Jamie to confirm<input id="confirm-name" placeholder="Jamie" aria-label="Type Jamie to confirm" oninput="updateRemoveButton()"></label></div><div class="dialog-actions"><button class="button" type="button" onclick="closeDialog('delete-dialog')">Cancel</button><button id="confirm-remove" class="button danger" type="button" onclick="closeDialog('delete-dialog')" disabled>Remove account</button></div></dialog>
   <dialog id="order-dialog" aria-labelledby="order-title"><div class="dialog-body"><p class="eyebrow">Admin · Navigation</p><h2 id="order-title">Reorder household tabs</h2><p>Move the middle tabs with the arrow buttons. This order applies to everyone. Tabs for unavailable features remain hidden.</p><ol class="order-list" id="order-list"></ol></div><div class="dialog-actions"><button class="button" type="button" onclick="closeDialog('order-dialog')">Cancel</button><button class="button primary" type="button" onclick="saveOrder()">Save order</button></div></dialog>
+  <dialog id="backup-action-dialog" aria-labelledby="backup-action-title"><div class="dialog-body"><div class="dialog-top"><div><p class="eyebrow">Admin · Backups</p><h2 id="backup-action-title">Restore backup?</h2></div><button class="button small quiet" type="button" onclick="closeDialog('backup-action-dialog')" aria-label="Close">×</button></div><p id="backup-action-copy"></p></div><div class="dialog-actions"><button class="button" type="button" onclick="closeDialog('backup-action-dialog')">Cancel</button><button id="backup-action-confirm" class="button danger" type="button" onclick="confirmBackupAction()">Restore backup</button></div></dialog>
 
   <script>
     let savedRetention = 3;
@@ -285,10 +286,28 @@
     }
     function saveBackupSettings() { document.getElementById('backup-settings-feedback').textContent = 'Preview only: backup settings would be saved.'; }
     function createBackup() { document.getElementById('backup-feedback').textContent = 'Preview only: a backup would be created and verified.'; }
+    let pendingBackupAction = null;
     function askRestore(copy) {
-      if (window.confirm('Restore the backup from ' + copy + '? This replaces the current database, signs everyone out, and loses changes made since that backup.')) {
-        document.getElementById('backup-feedback').textContent = 'Preview only: the selected backup would be restored after verification.';
-      }
+      pendingBackupAction = { type: 'restore', copy };
+      document.getElementById('backup-action-title').textContent = 'Restore backup?';
+      document.getElementById('backup-action-copy').textContent = 'Restore the backup from ' + copy + '? This replaces the current database, signs everyone out, and loses changes made since that backup.';
+      document.getElementById('backup-action-confirm').textContent = 'Restore backup';
+      openDialog('backup-action-dialog');
+    }
+    function askDeleteBackup(copy) {
+      pendingBackupAction = { type: 'delete', copy };
+      document.getElementById('backup-action-title').textContent = 'Delete backup?';
+      document.getElementById('backup-action-copy').textContent = 'Delete the backup from ' + copy + '? This backup will be permanently removed.';
+      document.getElementById('backup-action-confirm').textContent = 'Delete backup';
+      openDialog('backup-action-dialog');
+    }
+    function confirmBackupAction() {
+      const { type, copy } = pendingBackupAction;
+      document.getElementById('backup-action-dialog').close();
+      document.getElementById('backup-feedback').textContent = type === 'restore'
+        ? 'Preview only: the backup from ' + copy + ' would be restored after verification.'
+        : 'Preview only: the backup from ' + copy + ' would be deleted.';
+      pendingBackupAction = null;
     }
     function previewSaveRetention() {
       const next = Number(document.getElementById('calendar-retention').value);
