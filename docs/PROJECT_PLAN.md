@@ -345,7 +345,7 @@ the three games where it breaks ties.
   implementation.
 - [Lists and navigation preview](design/lists-navigation-preview.html):
   awaiting user review before list and tab-order implementation.
-- [Weather preview](design/weather-preview.html): awaiting user review before
+- [Weather preview](design/weather-preview.html): approved by the user before
   weather implementation.
 
 ## Deferred features
