@@ -232,6 +232,8 @@
       <label>Name<input name="title" placeholder="Favourite dinner" maxlength="128" required></label>
       <label>Description<input name="description" maxlength="256"></label>
       <label>Default servings<input name="default_servings" type="number" min="1" max="99" value="4" required></label>
+      <label>Sharing<select name="visibility"><option value="shared">Shared with household</option><option value="private">Private</option></select></label>
+      <label>Private recipe viewers<select name="allowed_user_ids" multiple size="3">{% for user in list_users if user['id'] != current_user['id'] %}<option value="{{ user['id'] }}">{{ user['display_name'] or user['username'] }}</option>{% endfor %}</select></label>
       <h3>Ingredients <small>(up to 64)</small></h3>
       <div id="recipe-ingredients">
         <div class="recipe-ingredient-row">
