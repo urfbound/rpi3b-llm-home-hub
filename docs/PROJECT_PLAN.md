@@ -462,6 +462,8 @@ the three games where it breaks ties.
   optional remote-provider support, and scoped database-tool disclosure;
   approved by the user; Chat implementation still requires a local-model
   feasibility check on the Raspberry Pi. The database-access budget is approved.
+- [Backup and restore preview](design/backup-restore-preview.html): awaiting
+  user review before implementing routine backup and restore controls.
 
 ## Deferred features
 
