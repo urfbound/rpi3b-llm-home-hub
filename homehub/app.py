@@ -30,10 +30,11 @@ from .system_status import (collect_system_snapshot, cpu_usage_percent,
 from .rss import (DEFAULT_RSS_REFRESH_MINUTES, MAX_RSS_REFRESH_MINUTES,
                   MIN_RSS_REFRESH_MINUTES, RSSFeedError, validate_feed_url)
 from .rss_fetch import fetch_feed
-from .rss_refresh import refresh_due_feeds
+from .rss_refresh import (MAX_RSS_STORAGE_BYTES, enforce_rss_user_storage,
+                          refresh_due_feeds)
 
 PH = PasswordHasher(memory_cost=16384, time_cost=2, parallelism=1)
-SCHEMA_VERSION = 16
+SCHEMA_VERSION = 17
 LOGIN_WINDOW_SECONDS = 15 * 60
 LOGIN_USERNAME_LIMIT = 5
 LOGIN_ADDRESS_LIMIT = 30
@@ -377,6 +378,7 @@ CREATE TABLE IF NOT EXISTS rss_articles (
  summary TEXT NOT NULL DEFAULT '' CHECK(length(summary)<=4000),
  published TEXT NOT NULL DEFAULT '' CHECK(length(published)<=128),
  fetched_at TEXT NOT NULL,
+ position INTEGER NOT NULL DEFAULT 0,
  UNIQUE(feed_id,url)
 );
 CREATE INDEX IF NOT EXISTS rss_articles_feed_date ON rss_articles(feed_id,fetched_at DESC,id DESC);
@@ -729,6 +731,9 @@ def initialize_database(db_path):
             for column in ('last_attempt_at', 'last_fetched_at', 'last_error'):
                 if column not in rss_columns:
                     db.execute(f'ALTER TABLE rss_feeds ADD COLUMN {column} TEXT')
+            article_columns = {row[1] for row in db.execute('PRAGMA table_info(rss_articles)')}
+            if 'position' not in article_columns:
+                db.execute('ALTER TABLE rss_articles ADD COLUMN position INTEGER NOT NULL DEFAULT 0')
             default_list = db.execute(
                 "SELECT id FROM household_lists WHERE kind='shopping' AND is_default=1"
             ).fetchone()
@@ -1366,6 +1371,9 @@ def create_app(test_config=None):
             interval_minutes=setting(db, 'rss_refresh_minutes', DEFAULT_RSS_REFRESH_MINUTES),
             fetcher=fetch_feed,
         )
+        storage_used = enforce_rss_user_storage(
+            db, g.user['id'], max_bytes=MAX_RSS_STORAGE_BYTES
+        )
         if g.user['account_kind'] == 'person':
             personal_feeds = db.execute(
                 "SELECT * FROM rss_feeds WHERE scope='personal' AND owner_user_id=? "
@@ -1382,7 +1390,7 @@ def create_app(test_config=None):
                 'COALESCE(s.is_favourite,0) AS is_favourite FROM rss_articles a '
                 'LEFT JOIN rss_article_states s ON s.article_id=a.id AND s.user_id=? '
                 'WHERE a.feed_id=? AND (s.deleted_at IS NULL OR s.article_id IS NULL) '
-                'ORDER BY a.published DESC,a.fetched_at DESC,a.id DESC',
+                'ORDER BY a.position ASC,a.fetched_at DESC,a.id DESC',
                 (g.user['id'], feed['id']),
             ).fetchall()
         personal_feeds = [dict(feed) | {'articles': articles_by_feed[feed['id']]}
@@ -1407,7 +1415,9 @@ def create_app(test_config=None):
                                outbound_enabled=bool(setting(db, 'rss_outbound_enabled', 1)),
                                prompt_after_done=prompt_after_done,
                                done_without_prompt=done_without_prompt,
-                               favourite_articles=favourite_articles)
+                               favourite_articles=favourite_articles,
+                               storage_used=storage_used,
+                               storage_limit=MAX_RSS_STORAGE_BYTES)
 
     @app.get('/rss/articles/<int:article_id>/open')
     @login_required

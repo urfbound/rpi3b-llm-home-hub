@@ -63,6 +63,7 @@
     {% if not prompt_after_done and done_without_prompt %}<p class="muted">Articles are automatically {% if done_without_prompt == 'delete' %}deleted{% else %}kept{% endif %} when marked Done reading.</p>{% endif %}
     <button>Save reading preference</button>
   </form>
+  <p class="muted">Saved for your account: {{ storage_used|filesizeformat(true) }} / {{ storage_limit|filesizeformat(true) }}.</p>
 </section>
 {% endif %}
 

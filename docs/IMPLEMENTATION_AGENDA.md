@@ -152,14 +152,18 @@ to `main` only after the user approves the completed change.
   interval; this avoids a continuously running scheduler. This review branch
   enforces the outbound toggle, stores and displays parsed article caches, keeps
   cached copies visible when outbound access is off or refresh fails, and
-  expires personal articles after 90 days and household articles after three
-  days. Per-user open/read tracking, Done reading choices, manual deletion, and
-  the saved prompt preference, up to 32 favorites, favorite-delete confirmation,
-  and the bottom favorites card are implemented on this review branch.
-- Enforce the 64 MB per-user cap with the approved eviction order, exempting
-  favorited articles; retain up to 30 ordinary articles per feed. If favorites
-  alone fill the quota, stop saving new articles for that user until they free
-  space.
+    cached copies visible when outbound access is off or refresh fails, and
+    expires personal articles after 90 days and household articles after three
+    days (favorites are exempt). Per-user open/read tracking, Done reading choices,
+    manual deletion, the saved prompt preference, up to 32 favorites,
+    favorite-delete confirmation, and the bottom favorites card are implemented
+    on this review branch.
+  - The review branch also enforces a 64 MB per-user article budget, evicting
+    oldest unread articles before oldest read articles while protecting favorites.
+    If favorites alone exceed the budget, ordinary articles are hidden until the
+    user frees space. It retains up to 30 ordinary articles per feed and preserves
+    their source ordering. RSS schema v17 adds this ordering without dropping
+    cached articles or per-user state.
 
 ### Games
 

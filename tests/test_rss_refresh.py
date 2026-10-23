@@ -158,6 +158,12 @@ def test_expired_articles_are_pruned_even_while_outbound_access_is_disabled(tmp_
              (personal_id, 'Recent', 'https://news.example/recent', recent),
              (household_id, 'Recent household', 'https://family.example/recent', recent)],
         )
+        expired_household_id = db.execute(
+            "SELECT id FROM rss_articles WHERE title='Expired household'"
+        ).fetchone()[0]
+        reader_id = db.execute("SELECT id FROM users WHERE username='reader'").fetchone()[0]
+        db.execute('INSERT INTO rss_article_states(article_id,user_id,is_favourite) VALUES(?,?,1)',
+                   (expired_household_id, reader_id))
     monkeypatch.setattr(app_module, 'fetch_feed', lambda *_args, **_kwargs: pytest.fail(
         'outbound RSS was disabled'))
 
@@ -165,10 +171,32 @@ def test_expired_articles_are_pruned_even_while_outbound_access_is_disabled(tmp_
 
     assert response.status_code == HTTPStatus.OK
     assert b'Expired personal' not in response.data
-    assert b'Expired household' not in response.data
+    assert b'Expired household' in response.data
     assert b'Recent household' in response.data
     with sqlite3.connect(app.config['DATABASE']) as db:
         assert db.execute('SELECT title FROM rss_articles ORDER BY title').fetchall() == [
-            ('Recent',), ('Recent household',),
+            ('Expired household',), ('Recent',), ('Recent household',),
         ]
+
+
+def test_refresh_keeps_only_30_ordinary_articles_per_feed(tmp_path, monkeypatch):
+    app = create_test_app(tmp_path)
+    set_settings(app)
+    items = ''.join(
+        f'<item><title>Story {index:02}</title><link>https://news.example/{index}</link></item>'
+        for index in range(40)
+    )
+    monkeypatch.setattr(app_module, 'fetch_feed', lambda *_args, **_kwargs: (
+        f'<rss><channel><title>News</title>{items}</channel></rss>'.encode(),
+        'https://news.example/feed',
+    ))
+
+    response = sign_in(app).get('/rss')
+
+    assert response.status_code == HTTPStatus.OK
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        titles = db.execute('SELECT title FROM rss_articles ORDER BY position').fetchall()
+    assert len(titles) == 30
+    assert titles[0] == ('Story 00',)
+    assert titles[-1] == ('Story 29',)
 
