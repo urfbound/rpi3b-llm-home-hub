@@ -290,7 +290,7 @@ def test_recurring_events_appear_on_calendar_and_offer_occurrence_or_series_acti
     detail = bob.get('/events/2')
     edit = bob.get('/events/2/edit')
 
-    assert calendar.data.count(b'Pasta night') == 2
+    assert calendar.data.count(b'class="calendar-event"') == 2
     assert b'Only this occurrence' in detail.data
     assert b'Entire series' in detail.data
     assert b'name="edit_scope"' in edit.data
@@ -332,11 +332,126 @@ def test_v7_upgrade_adds_recurrence_columns_without_losing_event(tmp_path):
                 'DATABASE': str(path)})
 
     with sqlite3.connect(path) as db:
-        assert db.execute('PRAGMA user_version').fetchone()[0] == 8
+        assert db.execute('PRAGMA user_version').fetchone()[0] == 11
         assert db.execute(
             'SELECT id,title,event_date,series_id,recurrence_frequency,recurrence_until '
             'FROM events'
         ).fetchone() == (1, 'Dinner', '2026-10-24', None, None, None)
+        assert db.execute('PRAGMA foreign_key_check').fetchall() == []
+
+
+def test_private_event_hides_details_from_calendar_detail_and_ics_unless_invited(app):
+    bob = signed_in(app, 'bob', 'bob calendar password')
+    carol = signed_in(app, 'carol', 'carol calendar password')
+    admin = signed_in(app, 'alex', 'alex calendar password')
+    bob.post('/events', data=event_form(
+        bob, title='Secret anniversary', description='Surprise party plans',
+        visibility='private',
+    ))
+
+    calendar = carol.get('/?month=10&year=2026')
+    detail = carol.get('/events/1')
+    export = carol.get('/calendar.ics')
+    only_required = carol.get('/calendar.ics?only_required=1')
+    admin_detail = admin.get('/events/1')
+
+    assert b'Busy' in calendar.data
+    assert b'Secret anniversary' not in calendar.data
+    assert b'Secret anniversary' not in detail.data
+    assert b'Surprise party plans' not in detail.data
+    assert b'Busy' in detail.data
+    assert b'SUMMARY:Busy' in export.data
+    assert b'Secret anniversary' not in export.data
+    assert b'Surprise party plans' not in export.data
+    assert b'BEGIN:VEVENT' not in only_required.data
+    assert b'Secret anniversary' in admin_detail.data
+
+
+def test_invited_user_sees_private_details_but_cannot_edit_event(app):
+    bob = signed_in(app, 'bob', 'bob calendar password')
+    carol = signed_in(app, 'carol', 'carol calendar password')
+    bob.post('/events', data=event_form(
+        bob, title='Secret anniversary', description='Surprise party plans',
+        visibility='private', participant_ids=['3'],
+    ))
+
+    detail = carol.get('/events/1')
+    denied = carol.post('/events/1/edit', data=event_form(
+        carol, title='Changed', visibility='private',
+    ))
+    export = carol.get('/calendar.ics?only_required=1')
+
+    assert b'Secret anniversary' in detail.data
+    assert b'Surprise party plans' in detail.data
+    assert b'Edit event' not in detail.data
+    assert denied.status_code == 403
+    assert b'SUMMARY:Secret anniversary' in export.data
+
+
+def test_creator_can_manage_event_participants_and_house_account_is_explicitly_invitable(app):
+    bob = signed_in(app, 'bob', 'bob calendar password')
+    house = signed_in(app, 'house', 'house calendar password')
+    created = bob.post('/events', data=event_form(
+        bob, visibility='private', participant_ids=['3', '4'],
+    ))
+    assert created.status_code == 302
+
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        assert db.execute(
+            'SELECT visibility FROM events WHERE id=1'
+        ).fetchone() == ('private',)
+        assert db.execute(
+            'SELECT user_id FROM event_participants WHERE event_id=1 ORDER BY user_id'
+        ).fetchall() == [(3,), (4,)]
+
+    assert b'Pasta night' in house.get('/events/1').data
+    updated = bob.post('/events/1/edit', data=event_form(
+        bob, visibility='private', participant_ids=['3'],
+    ))
+    assert updated.status_code == 302
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        assert db.execute(
+            'SELECT user_id FROM event_participants WHERE event_id=1'
+        ).fetchall() == [(3,)]
+
+
+def test_recurring_event_copies_participants_to_every_occurrence(app):
+    bob = signed_in(app, 'bob', 'bob calendar password')
+    bob.post('/events', data=event_form(
+        bob, visibility='private', participant_ids=['3'],
+        recurrence_frequency='weekly', recurrence_until='2026-11-07',
+    ))
+
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        assert db.execute(
+            'SELECT events.event_date,event_participants.user_id FROM events '
+            'JOIN event_participants ON event_participants.event_id=events.id '
+            'ORDER BY events.event_date'
+        ).fetchall() == [
+            ('2026-10-24', 3), ('2026-10-31', 3), ('2026-11-07', 3),
+        ]
+
+
+def test_v8_upgrade_adds_private_event_access_without_losing_existing_event(tmp_path):
+    path = tmp_path / 'v8.sqlite3'
+    create_app({'TESTING': True, 'SECRET_KEY': 'calendar-migrate-secret',
+                'DATABASE': str(path)})
+    with sqlite3.connect(path) as db:
+        db.execute('DROP TABLE IF EXISTS event_participants')
+        if 'visibility' in {row[1] for row in db.execute('PRAGMA table_info(events)')}:
+            db.execute('ALTER TABLE events DROP COLUMN visibility')
+        db.execute("INSERT INTO users(username,password_hash,role) VALUES('bob','hash','user')")
+        db.execute("INSERT INTO events(title,event_date,created_by) VALUES('Dinner','2026-10-24',1)")
+        db.execute('PRAGMA user_version=8')
+
+    create_app({'TESTING': True, 'SECRET_KEY': 'calendar-migrate-secret',
+                'DATABASE': str(path)})
+
+    with sqlite3.connect(path) as db:
+        assert db.execute('PRAGMA user_version').fetchone()[0] == 11
+        assert db.execute(
+            'SELECT id,title,event_date,visibility FROM events'
+        ).fetchone() == (1, 'Dinner', '2026-10-24', 'shared')
         assert db.execute('PRAGMA foreign_key_check').fetchall() == []
 
 
@@ -362,10 +477,10 @@ def test_v6_upgrade_preserves_events_and_adds_all_day_defaults(tmp_path):
                 'DATABASE': str(path)})
 
     with sqlite3.connect(path) as db:
-        assert db.execute('PRAGMA user_version').fetchone()[0] == 8
+        assert db.execute('PRAGMA user_version').fetchone()[0] == 11
         assert db.execute(
             'SELECT id,title,event_date,description,all_day,start_time,end_time FROM events'
         ).fetchone() == (23, 'Dinner', '2026-10-24', '', 1, None, None)
         assert db.execute('PRAGMA foreign_key_check').fetchall() == []
-    backups = list(tmp_path.glob('v6.pre-v8-*.sqlite3'))
+    backups = list(tmp_path.glob('v6.pre-v11-*.sqlite3'))
     assert len(backups) == 1

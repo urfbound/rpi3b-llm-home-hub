@@ -22,9 +22,11 @@ from argon2.exceptions import VerifyMismatchError, VerificationError
 from .backups import (BackupError, backup_filename, create_backup,
                       default_backup_directory, delete_backup, list_backups,
                       prune_backups, restore_backup, validate_backup_directory)
+from .weather import (WeatherError, geocode_location, get_cached_forecast,
+                      present_forecast)
 
 PH = PasswordHasher(memory_cost=16384, time_cost=2, parallelism=1)
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 11
 LOGIN_WINDOW_SECONDS = 15 * 60
 LOGIN_USERNAME_LIMIT = 5
 LOGIN_ADDRESS_LIMIT = 30
@@ -322,9 +324,26 @@ CREATE TABLE IF NOT EXISTS events (
  description TEXT NOT NULL DEFAULT '',
  all_day INTEGER NOT NULL DEFAULT 1 CHECK(all_day IN (0,1)),
  start_time TEXT, end_time TEXT,
- series_id INTEGER, recurrence_frequency TEXT, recurrence_until TEXT
+ series_id INTEGER, recurrence_frequency TEXT, recurrence_until TEXT,
+ visibility TEXT NOT NULL DEFAULT 'shared' CHECK(visibility IN ('shared','private')),
+ recipe_servings INTEGER,
+ meal_prep INTEGER NOT NULL DEFAULT 0 CHECK(meal_prep IN (0,1)),
+ meal_slot TEXT CHECK(meal_slot IS NULL OR meal_slot IN ('breakfast','lunch','dinner')),
+ recipe_title_auto INTEGER NOT NULL DEFAULT 0 CHECK(recipe_title_auto IN (0,1))
 );
 CREATE INDEX IF NOT EXISTS events_date ON events(event_date,id);
+CREATE TABLE IF NOT EXISTS event_participants (
+ event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+ user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ added_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ PRIMARY KEY(event_id,user_id)
+);
+CREATE INDEX IF NOT EXISTS event_participants_user ON event_participants(user_id,event_id);
+CREATE TABLE IF NOT EXISTS weather_cache (
+ cache_key TEXT PRIMARY KEY,
+ payload TEXT NOT NULL,
+ fetched_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS chores (
  id INTEGER PRIMARY KEY,
  weekday INTEGER NOT NULL CHECK(weekday BETWEEN 0 AND 6),
@@ -373,6 +392,49 @@ def admin_required(fn):
 def setting(db, key, default):
     row = db.execute('SELECT value FROM app_settings WHERE key=?', (key,)).fetchone()
     return int(row['value']) if row else default
+
+def setting_text(db, key, default=''):
+    row = db.execute('SELECT value FROM app_settings WHERE key=?', (key,)).fetchone()
+    return row['value'] if row else default
+
+def household_weather(db):
+    name = setting_text(db, 'weather_location_name')
+    try:
+        location = {
+            'name': name,
+            'latitude': float(setting_text(db, 'weather_latitude')),
+            'longitude': float(setting_text(db, 'weather_longitude')),
+            'timezone': setting_text(db, 'weather_timezone'),
+        }
+    except (TypeError, ValueError):
+        return {'configured': False, 'location_name': name, 'view': None,
+                'stale': False, 'age_label': None, 'error': None}
+    if not name or not location['timezone']:
+        return {'configured': False, 'location_name': name, 'view': None,
+                'stale': False, 'age_label': None, 'error': None}
+    units = setting_text(db, 'weather_units', 'metric')
+    if units not in ('metric', 'imperial'):
+        units = 'metric'
+    result = get_cached_forecast(
+        db, location, setting(db, 'weather_forecast_days', 5), units,
+        bool(setting(db, 'weather_outbound_enabled', 1)), datetime.now(timezone.utc),
+    )
+    age = result['age_seconds']
+    if age is None:
+        age_label = None
+    elif age < 60:
+        age_label = 'less than a minute'
+    elif age < 3600:
+        age_label = f'{age // 60} minutes'
+    elif age < 86400:
+        age_label = f'{age // 3600} hour' + ('s' if age // 3600 != 1 else '')
+    else:
+        age_label = f'{age // 86400} days'
+    return {
+        'configured': True, 'location_name': name, 'view':
+        present_forecast(result['data']) if result['data'] else None,
+        'stale': result['stale'], 'age_label': age_label, 'error': result['error'],
+    }
 
 def household_today():
     """Use the Pi's configured local date until household timezone settings exist."""
@@ -526,6 +588,11 @@ def initialize_database(db_path):
                 ('series_id', 'INTEGER'),
                 ('recurrence_frequency', 'TEXT'),
                 ('recurrence_until', 'TEXT'),
+                ('visibility', "TEXT NOT NULL DEFAULT 'shared'"),
+                ('recipe_servings', 'INTEGER'),
+                ('meal_prep', 'INTEGER NOT NULL DEFAULT 0'),
+                ('meal_slot', 'TEXT'),
+                ('recipe_title_auto', 'INTEGER NOT NULL DEFAULT 0'),
             ):
                 if column not in event_columns:
                     db.execute(f'ALTER TABLE events ADD COLUMN {column} {definition}')
@@ -632,6 +699,129 @@ def recurrence_dates(start_text, frequency, until_text):
         if index > 3660:
             abort(400, description='A recurring series cannot exceed 3,660 occurrences.')
     return result
+
+def event_access_values(db, form):
+    visibility = form.get('visibility', 'shared').strip()
+    if visibility not in ('shared', 'private'):
+        abort(400, description='Choose whether this event is shared or private.')
+    participant_ids = set()
+    for raw_id in form.getlist('participant_ids'):
+        try:
+            user_id = int(raw_id)
+        except ValueError:
+            abort(400, description='Choose valid event participants.')
+        user = db.execute('SELECT id FROM users WHERE id=? AND active=1',
+                          (user_id,)).fetchone()
+        if not user:
+            abort(400, description='Choose active household accounts as participants.')
+        participant_ids.add(user_id)
+    return visibility, sorted(participant_ids)
+
+def set_event_participants(db, event_id, participant_ids):
+    db.execute('DELETE FROM event_participants WHERE event_id=?', (event_id,))
+    db.executemany('INSERT INTO event_participants(event_id,user_id) VALUES(?,?)',
+                   [(event_id, user_id) for user_id in participant_ids])
+
+def can_view_recipe(db, user, recipe):
+    if not recipe:
+        return False
+    if user['role'] == 'admin' or recipe['visibility'] == 'shared' \
+            or recipe['created_by'] == user['id']:
+        return True
+    return db.execute(
+        'SELECT 1 FROM recipe_access WHERE recipe_id=? AND user_id=?',
+        (recipe['id'], user['id']),
+    ).fetchone() is not None
+
+def event_recipe_values(db, user, form, values, existing_recipe_id=None):
+    raw_recipe_id = form.get('recipe_id', '').strip()
+    if not raw_recipe_id and existing_recipe_id:
+        raw_recipe_id = str(existing_recipe_id)
+    recipe = None
+    if raw_recipe_id:
+        try:
+            recipe_id = int(raw_recipe_id)
+        except ValueError:
+            abort(400, description='Choose a valid recipe.')
+        recipe = db.execute('SELECT * FROM recipes WHERE id=?', (recipe_id,)).fetchone()
+        if not recipe:
+            abort(404)
+        if not can_view_recipe(db, user, recipe) and recipe_id != existing_recipe_id:
+            abort(404)
+    meal_prep = form.get('meal_prep') in ('1', 'on')
+    meal_slot = form.get('meal_slot', '').strip() or None
+    if meal_slot not in (None, 'breakfast', 'lunch', 'dinner'):
+        abort(400, description='Choose breakfast, lunch, or dinner.')
+    raw_servings = form.get('recipe_servings', '').strip()
+    auto_title = form.get('recipe_title_auto') == '1'
+    if not recipe:
+        if meal_prep or meal_slot or raw_servings or auto_title:
+            abort(400, description='Meal prep events must link to one visible recipe.')
+        return {'recipe_id': None, 'recipe_servings': None, 'meal_prep': 0,
+                'meal_slot': None, 'recipe_title_auto': 0}
+    if meal_prep and not recipe:
+        abort(400, description='Meal prep events must link to one visible recipe.')
+    try:
+        servings = int(raw_servings) if raw_servings else int(recipe['default_servings'])
+    except ValueError:
+        abort(400, description='Recipe servings must be from 1 to 99.')
+    if not 1 <= servings <= 99:
+        abort(400, description='Recipe servings must be from 1 to 99.')
+    if auto_title:
+        if recipe['visibility'] == 'private':
+            values['title'] = 'Meal prep'
+        elif values['title'] != recipe['title']:
+            auto_title = False
+    return {
+        'recipe_id': recipe['id'], 'recipe_servings': servings,
+        'meal_prep': int(meal_prep), 'meal_slot': meal_slot,
+        'recipe_title_auto': int(auto_title),
+    }
+
+def enforce_event_budget(db, user_id, occurrence_dates, *, exclude_event_id=None,
+                         exclude_series_id=None):
+    """Keep each user's proposed occurrence set within the daily/monthly caps."""
+    from collections import Counter
+
+    if not occurrence_dates:
+        return
+    daily_limit = setting(db, 'calendar_events_per_day', 8)
+    monthly_limit = setting(db, 'calendar_events_per_month', 128)
+    required_days = Counter(occurrence_dates)
+    required_months = Counter(day[:7] for day in occurrence_dates)
+    first_day, last_day = min(occurrence_dates), max(occurrence_dates)
+    existing_days = Counter(dict(db.execute(
+        'SELECT event_date,COUNT(*) FROM events WHERE created_by=? '
+        'AND event_date>=? AND event_date<=? GROUP BY event_date',
+        (user_id, first_day, last_day),
+    ).fetchall()))
+    first_month, last_month = first_day[:7], last_day[:7]
+    existing_months = Counter(dict(db.execute(
+        'SELECT substr(event_date,1,7),COUNT(*) FROM events WHERE created_by=? '
+        'AND substr(event_date,1,7)>=? AND substr(event_date,1,7)<=? '
+        'GROUP BY substr(event_date,1,7)',
+        (user_id, first_month, last_month),
+    ).fetchall()))
+    if exclude_series_id is not None:
+        excluded_dates = [row['event_date'] for row in db.execute(
+            'SELECT event_date FROM events WHERE created_by=? AND series_id=?',
+            (user_id, exclude_series_id),
+        ).fetchall()]
+    elif exclude_event_id is not None:
+        excluded_dates = [row['event_date'] for row in db.execute(
+            'SELECT event_date FROM events WHERE created_by=? AND id=?',
+            (user_id, exclude_event_id),
+        ).fetchall()]
+    else:
+        excluded_dates = []
+    excluded_days = Counter(excluded_dates)
+    excluded_months = Counter(day[:7] for day in excluded_dates)
+    for occurrence_date, proposed in required_days.items():
+        if existing_days[occurrence_date] - excluded_days[occurrence_date] + proposed > daily_limit:
+            abort(400, description=f'You have reached your limit of {daily_limit} events for that day.')
+    for occurrence_month, proposed in required_months.items():
+        if existing_months[occurrence_month] - excluded_months[occurrence_month] + proposed > monthly_limit:
+            abort(400, description=f'You have reached your limit of {monthly_limit} events for that month.')
 
 def event_time_label(value):
     if not value:
@@ -844,13 +1034,74 @@ def create_app(test_config=None):
         calendar_end = date(calendar_year + (calendar_month == 12),
                             calendar_month % 12 + 1, 1)
         month_events = [dict(row) for row in db.execute(
-            'SELECT id,title,event_date,recipe_id,created_by,description,all_day,start_time,end_time '
+            'SELECT id,title,event_date,recipe_id,created_by,description,all_day,start_time,end_time,visibility '
             'FROM events '
-            'WHERE event_date>=? AND event_date<? ORDER BY event_date,title COLLATE NOCASE,id',
+            'WHERE event_date>=? AND event_date<? ORDER BY event_date,id',
             (calendar_start.isoformat(), calendar_end.isoformat())
         ).fetchall()]
+        viewer_participant_ids = {row['event_id'] for row in db.execute(
+            'SELECT event_id FROM event_participants WHERE user_id=?', (g.user['id'],)
+        ).fetchall()}
         for event in month_events:
+            event['can_view_details'] = (
+                event['visibility'] == 'shared' or g.user['role'] == 'admin'
+                or event['created_by'] == g.user['id']
+                or event['id'] in viewer_participant_ids
+            )
+            if not event['can_view_details']:
+                event['title'] = 'Busy'
+                event['description'] = ''
+                event['recipe_id'] = None
             event['display_start_time'] = event_time_label(event['start_time'])
+        weekend_start = (today if today.weekday() >= 4 else
+                         today + timedelta(days=4 - today.weekday()))
+        weekend_end = weekend_start + timedelta(days=6 - weekend_start.weekday())
+        just_my_events = request.args.get('just_my_events') == '1'
+        weekend_rows = db.execute(
+            'SELECT events.id,events.title,events.event_date,events.created_by,events.description,'
+            'events.all_day,events.start_time,events.end_time,events.visibility,'
+            'users.id AS participant_id,users.display_name AS participant_name '
+            'FROM events LEFT JOIN event_participants ON event_participants.event_id=events.id '
+            'LEFT JOIN users ON users.id=event_participants.user_id '
+            'WHERE events.event_date>=? AND events.event_date<=? '
+            'ORDER BY events.event_date,events.all_day DESC,events.start_time,events.id,'
+            'users.display_name COLLATE NOCASE,users.id',
+            (weekend_start.isoformat(), weekend_end.isoformat()),
+        ).fetchall()
+        weekend_by_id = {}
+        for row in weekend_rows:
+            event = weekend_by_id.setdefault(row['id'], {
+                key: row[key] for key in ('id', 'title', 'event_date', 'created_by',
+                                          'description', 'all_day', 'start_time',
+                                          'end_time', 'visibility')
+            } | {'participants': []})
+            if row['participant_id'] is not None:
+                event['participants'].append({
+                    'id': row['participant_id'], 'display_name': row['participant_name'],
+                })
+        weekend_groups = []
+        for event in weekend_by_id.values():
+            participants = event['participants']
+            participant_ids = {person['id'] for person in participants}
+            is_mine = event['created_by'] == g.user['id'] or g.user['id'] in participant_ids
+            if just_my_events and not is_mine:
+                continue
+            event['can_view_details'] = (
+                event['visibility'] == 'shared' or g.user['role'] == 'admin' or is_mine
+            )
+            if not event['can_view_details']:
+                event['title'] = 'Busy'
+                event['description'] = ''
+                participants = []
+            event['participants'] = participants
+            event['display_start_time'] = event_time_label(event['start_time'])
+            event['display_end_time'] = event_time_label(event['end_time'])
+            event_day = date.fromisoformat(event['event_date'])
+            event['day_label'] = f'{event_day.strftime("%A, %B")} {event_day.day}'
+            if not weekend_groups or weekend_groups[-1]['date'] != event['event_date']:
+                weekend_groups.append({'date': event['event_date'],
+                                      'label': event['day_label'], 'events': []})
+            weekend_groups[-1]['events'].append(event)
         events_by_date = {}
         for event in month_events:
             events_by_date.setdefault(event['event_date'], []).append(event)
@@ -953,7 +1204,14 @@ def create_app(test_config=None):
           today=today.isoformat(), weekdays=weekdays,
           selected_weekday=selected_weekday, chore_filter=chore_filter,
           chore_groups=chore_groups, home_weekday=home_weekday,
-          home_chore_groups=home_chore_groups, just_my_chores=just_my_chores)
+          home_chore_groups=home_chore_groups, just_my_chores=just_my_chores,
+          weather=household_weather(db),
+          weekend_groups=weekend_groups, just_my_events=just_my_events)
+
+    @app.get('/weather')
+    @login_required
+    def weather_page():
+        return render_template('weather.html', weather=household_weather(get_db()))
 
     @app.get('/offline.html')
     def offline_shell():
@@ -1070,15 +1328,136 @@ def create_app(test_config=None):
         backup_frequency = setting(db, 'backup_interval_days', 1)
         backup_retention = setting(db, 'backup_retention', 14)
         backups = list_backups(backup_folder, backup_retention) if backup_folder_available else []
+        weather_units = setting_text(db, 'weather_units', 'metric')
+        if weather_units not in ('metric', 'imperial'):
+            weather_units = 'metric'
         return render_template('accounts.html', users=users, counts=counts,
                                ownership=ownership,
                                idle_hours=setting(db, 'session_idle_hours', 24),
                                absolute_days=setting(db, 'session_absolute_days', 7),
+                               events_per_day=setting(db, 'calendar_events_per_day', 8),
+                               events_per_month=setting(db, 'calendar_events_per_month', 128),
                                backup_folder=str(configured_folder),
                                backup_folder_available=backup_folder_available,
                                backup_frequency=backup_frequency,
                                backup_retention=backup_retention,
-                               backups=backups)
+                               backups=backups,
+                               weather_location_name=setting_text(db, 'weather_location_name'),
+                               weather_forecast_days=setting(db, 'weather_forecast_days', 5),
+                               weather_units=weather_units,
+                               weather_outbound_enabled=setting(db, 'weather_outbound_enabled', 1),
+                               weather_location_candidates=session.get('weather_location_candidates', []),
+                               weather_location_query=session.get('weather_location_query', ''))
+
+    @app.post('/admin/weather/settings')
+    @admin_required
+    def update_weather_settings():
+        try:
+            forecast_days = int(request.form.get('forecast_days', ''))
+        except ValueError:
+            abort(400)
+        units = request.form.get('units', '')
+        outbound_enabled = '1' if request.form.get('outbound_enabled') == '1' else '0'
+        if not 1 <= forecast_days <= 15 or units not in ('metric', 'imperial'):
+            abort(400)
+        db = get_db()
+        with db:
+            db.executemany(
+                'INSERT INTO app_settings(key,value) VALUES(?,?) '
+                'ON CONFLICT(key) DO UPDATE SET value=excluded.value',
+                (('weather_forecast_days', str(forecast_days)), ('weather_units', units),
+                 ('weather_outbound_enabled', outbound_enabled)),
+            )
+            db.execute('DELETE FROM weather_cache')
+        return redirect(url_for('accounts') + '#weather-settings-section')
+
+    @app.post('/admin/weather/location/search')
+    @admin_required
+    def search_weather_locations():
+        db = get_db()
+        if not setting(db, 'weather_outbound_enabled', 1):
+            abort(400, description='Enable outbound weather access before searching for a location.')
+        query = request.form.get('location_query', '').strip()
+        try:
+            results = geocode_location(query)
+        except WeatherError as exc:
+            flash(str(exc))
+            return redirect(url_for('accounts') + '#weather-settings-section')
+        candidates = []
+        for result in results[:5]:
+            try:
+                latitude = float(result['latitude'])
+                longitude = float(result['longitude'])
+                timezone_name = str(result['timezone']).strip()
+                name = str(result['name']).strip()
+            except (KeyError, TypeError, ValueError):
+                continue
+            if not name or not timezone_name or not -90 <= latitude <= 90 \
+                    or not -180 <= longitude <= 180:
+                continue
+            label = ', '.join(part for part in (
+                name, str(result.get('admin1') or '').strip(),
+                str(result.get('country') or '').strip(),
+            ) if part)
+            candidates.append({
+                'name': name, 'label': label, 'latitude': latitude,
+                'longitude': longitude, 'timezone': timezone_name,
+            })
+        if not candidates:
+            flash('No matching locations were found. Try a town or postcode with a region.')
+            session.pop('weather_location_candidates', None)
+            session.pop('weather_location_query', None)
+        else:
+            session['weather_location_candidates'] = candidates
+            session['weather_location_query'] = query
+        return redirect(url_for('accounts') + '#weather-settings-section')
+
+    @app.post('/admin/weather/location/select')
+    @admin_required
+    def select_weather_location():
+        db = get_db()
+        if not setting(db, 'weather_outbound_enabled', 1):
+            abort(400, description='Enable outbound weather access before selecting a location.')
+        candidates = session.get('weather_location_candidates', [])
+        try:
+            candidate_index = int(request.form.get('candidate_index', ''))
+        except ValueError:
+            abort(400)
+        if not 0 <= candidate_index < len(candidates):
+            abort(400)
+        location = candidates[candidate_index]
+        with db:
+            db.executemany(
+                'INSERT INTO app_settings(key,value) VALUES(?,?) '
+                'ON CONFLICT(key) DO UPDATE SET value=excluded.value',
+                (('weather_location_name', location['label']),
+                 ('weather_latitude', str(location['latitude'])),
+                 ('weather_longitude', str(location['longitude'])),
+                 ('weather_timezone', location['timezone'])),
+            )
+            db.execute('DELETE FROM weather_cache')
+        session.pop('weather_location_candidates', None)
+        session.pop('weather_location_query', None)
+        return redirect(url_for('accounts') + '#weather-settings-section')
+
+    @app.post('/admin/calendar/limits')
+    @admin_required
+    def update_calendar_limits():
+        db = get_db()
+        try:
+            events_per_day = int(request.form.get('events_per_day', ''))
+            events_per_month = int(request.form.get('events_per_month', ''))
+        except ValueError:
+            abort(400, description='Enter valid daily and monthly event limits.')
+        if events_per_day < 1 or not 7 <= events_per_month <= 512:
+            abort(400, description='Daily event limit must be at least 1; monthly limit must be from 7 to 512.')
+        with db:
+            db.executemany('INSERT INTO app_settings(key,value) VALUES(?,?) '
+                           'ON CONFLICT(key) DO UPDATE SET value=excluded.value',
+                           (('calendar_events_per_day', str(events_per_day)),
+                            ('calendar_events_per_month', str(events_per_month))))
+        flash('Calendar limits updated.')
+        return redirect(url_for('accounts') + '#calendar-limits-section')
 
     def configured_backup_directory(db):
         row = db.execute('SELECT value FROM app_settings WHERE key=?',
@@ -1791,6 +2170,11 @@ def create_app(test_config=None):
             with db:
                 save_recipe_content(db, recipe_id, values)
                 apply_recipe_sharing(db, recipe_id, visibility, allowed_ids, losing_notes)
+                if recipe['visibility'] != 'private' and visibility == 'private':
+                    db.execute(
+                        "UPDATE events SET title='Meal prep' WHERE recipe_id=? AND recipe_title_auto=1",
+                        (recipe_id,),
+                    )
             return redirect(url_for('recipe_detail', recipe_id=recipe_id))
         ingredients = db.execute(
             'SELECT quantity,unit,name,note FROM recipe_ingredients WHERE recipe_id=? ORDER BY position',
@@ -1867,9 +2251,42 @@ def create_app(test_config=None):
     def new_event():
         if g.user['account_kind'] == 'house':
             abort(403)
+        db = get_db()
+        recipes = visible_recipes(db, g.user)
+        recipe = None
+        recipe_id = request.args.get('recipe_id', '').strip()
+        if recipe_id:
+            recipe = visible_recipe(db, g.user, recipe_id)
+        meal_prep = request.args.get('meal_prep') == '1'
+        if meal_prep and not recipe:
+            abort(400, description='Meal prep events must link to one visible recipe.')
+        try:
+            servings = (int(request.args.get('servings', recipe['default_servings']))
+                        if recipe else None)
+        except ValueError:
+            abort(400, description='Recipe servings must be from 1 to 99.')
+        if servings is not None and not 1 <= servings <= 99:
+            abort(400, description='Recipe servings must be from 1 to 99.')
+        meal_slot = request.args.get('meal_slot', '')
+        if meal_slot not in ('', 'breakfast', 'lunch', 'dinner'):
+            abort(400, description='Choose breakfast, lunch, or dinner.')
+        default_title = ('Meal prep' if recipe and recipe['visibility'] == 'private'
+                         else recipe['title'] if recipe else '')
         event = {'title': '', 'event_date': household_today().isoformat(),
-                 'description': '', 'all_day': 1, 'start_time': '', 'end_time': ''}
-        return render_template('event_form.html', event=event, editing=False)
+                 'description': '', 'all_day': 1, 'start_time': '', 'end_time': '',
+                 'visibility': 'shared', 'recurrence_frequency': '', 'recurrence_until': '',
+                 'recipe_id': recipe['id'] if recipe else None,
+                 'recipe_servings': servings, 'meal_prep': int(meal_prep),
+                 'meal_slot': meal_slot or None,
+                 'recipe_title_auto': int(bool(recipe))}
+        if default_title:
+            event['title'] = default_title
+        users = db.execute(
+            'SELECT id,display_name,username,account_kind FROM users '
+            'WHERE active=1 ORDER BY account_kind,display_name COLLATE NOCASE,id'
+        ).fetchall()
+        return render_template('event_form.html', event=event, editing=False,
+                               users=users, selected_participant_ids=[], recipes=recipes)
 
     @app.post('/events')
     @login_required
@@ -1877,22 +2294,30 @@ def create_app(test_config=None):
         if g.user['account_kind'] == 'house':
             abort(403)
         values = event_form_values(request.form)
+        db = get_db()
+        recipe_values = event_recipe_values(db, g.user, request.form, values)
+        visibility, participant_ids = event_access_values(db, request.form)
         frequency, until = recurrence_values(request.form, values['event_date'])
         occurrence_dates = (recurrence_dates(values['event_date'], frequency, until)
                             if frequency else [values['event_date']])
-        db = get_db()
         with db:
+            db.execute('BEGIN IMMEDIATE')
+            enforce_event_budget(db, g.user['id'], occurrence_dates)
             first_id = None
             occurrence_ids = []
             for occurrence_date in occurrence_dates:
                 cursor = db.execute(
                     'INSERT INTO events(title,event_date,created_by,description,all_day,start_time,end_time,'
-                    'series_id,recurrence_frequency,recurrence_until) VALUES(?,?,?,?,?,?,?,?,?,?)',
+                    'series_id,recurrence_frequency,recurrence_until,visibility,recipe_servings,meal_prep,meal_slot,'
+                    'recipe_title_auto,recipe_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
                     (values['title'], occurrence_date, g.user['id'], values['description'],
                      values['all_day'], values['start_time'], values['end_time'], None,
-                     frequency, until),
+                     frequency, until, visibility, recipe_values['recipe_servings'],
+                     recipe_values['meal_prep'], recipe_values['meal_slot'],
+                     recipe_values['recipe_title_auto'], recipe_values['recipe_id']),
                 )
                 occurrence_ids.append(cursor.lastrowid)
+                set_event_participants(db, cursor.lastrowid, participant_ids)
                 if first_id is None:
                     first_id = cursor.lastrowid
             if frequency:
@@ -1903,12 +2328,36 @@ def create_app(test_config=None):
     @app.get('/events/<int:event_id>')
     @login_required
     def event_detail(event_id):
-        event = get_db().execute('SELECT * FROM events WHERE id=?', (event_id,)).fetchone()
+        db = get_db()
+        event = db.execute('SELECT * FROM events WHERE id=?', (event_id,)).fetchone()
         if not event:
             abort(404)
         can_edit = (event['created_by'] == g.user['id'] or g.user['role'] == 'admin')
+        can_view_details = (
+            event['visibility'] == 'shared' or can_edit or db.execute(
+                'SELECT 1 FROM event_participants WHERE event_id=? AND user_id=?',
+                (event_id, g.user['id']),
+            ).fetchone() is not None
+        )
+        participants = db.execute(
+            'SELECT users.id,users.display_name,users.account_kind FROM event_participants '
+            'JOIN users ON users.id=event_participants.user_id '
+            'WHERE event_participants.event_id=? ORDER BY users.display_name COLLATE NOCASE,users.id',
+            (event_id,),
+        ).fetchall() if can_view_details else []
+        linked_recipe = db.execute('SELECT * FROM recipes WHERE id=?',
+                                   (event['recipe_id'],)).fetchone() if (
+                                       can_view_details and event['recipe_id']) else None
+        recipe_is_visible = can_view_recipe(db, g.user, linked_recipe)
         return render_template(
             'event_detail.html', event=event, can_edit=can_edit,
+            can_view_details=can_view_details, participants=participants,
+            linked_recipe=linked_recipe if recipe_is_visible else None,
+            recipe_label=(linked_recipe['title'] if recipe_is_visible else
+                          'Private recipe' if linked_recipe else None),
+            recipe_url=(url_for('recipe_detail', recipe_id=linked_recipe['id'],
+                                servings=event['recipe_servings'] or linked_recipe['default_servings'])
+                        if recipe_is_visible else None),
             recurring=bool(event['series_id'] and event['recurrence_frequency']),
             start_label=event_time_label(event['start_time']),
             end_label=event_time_label(event['end_time']),
@@ -1924,12 +2373,27 @@ def create_app(test_config=None):
         if event['created_by'] != g.user['id'] and g.user['role'] != 'admin':
             abort(403)
         if request.method == 'GET':
-            return render_template('event_form.html', event=event, editing=True)
+            users = db.execute(
+                'SELECT id,display_name,username,account_kind FROM users '
+                'WHERE active=1 ORDER BY account_kind,display_name COLLATE NOCASE,id'
+            ).fetchall()
+            selected_participant_ids = [row['user_id'] for row in db.execute(
+                'SELECT user_id FROM event_participants WHERE event_id=?', (event_id,)
+            ).fetchall()]
+            recipes = visible_recipes(db, g.user)
+            return render_template('event_form.html', event=event, editing=True,
+                                   users=users, selected_participant_ids=selected_participant_ids,
+                                   recipes=recipes)
         values = event_form_values(request.form)
+        recipe_values = event_recipe_values(
+            db, g.user, request.form, values, existing_recipe_id=event['recipe_id']
+        )
+        visibility, participant_ids = event_access_values(db, request.form)
         edit_scope = request.form.get('edit_scope', 'series' if event['series_id'] else 'occurrence')
         if edit_scope not in ('occurrence', 'series'):
             abort(400)
         with db:
+            db.execute('BEGIN IMMEDIATE')
             group_id = event['series_id'] or event['id']
             if edit_scope == 'series' and event['series_id']:
                 frequency, until = recurrence_values(request.form, values['event_date'])
@@ -1939,34 +2403,54 @@ def create_app(test_config=None):
                     'SELECT id FROM events WHERE series_id=? ORDER BY event_date,id',
                     (group_id,),
                 ).fetchall()
+                enforce_event_budget(db, event['created_by'], occurrence_dates,
+                                     exclude_series_id=group_id)
                 for index, occurrence_date in enumerate(occurrence_dates):
                     columns = (values['title'], occurrence_date, values['description'],
                                values['all_day'], values['start_time'], values['end_time'],
-                               group_id if frequency else None, frequency, until)
+                               group_id if frequency else None, frequency, until, visibility,
+                               recipe_values['recipe_servings'], recipe_values['meal_prep'],
+                               recipe_values['meal_slot'], recipe_values['recipe_title_auto'],
+                               recipe_values['recipe_id'])
                     if index < len(existing):
                         db.execute(
                             'UPDATE events SET title=?,event_date=?,description=?,all_day=?,start_time=?,end_time=?,'
-                            'series_id=?,recurrence_frequency=?,recurrence_until=? WHERE id=?',
+                            'series_id=?,recurrence_frequency=?,recurrence_until=?,visibility=?,'
+                            'recipe_servings=?,meal_prep=?,meal_slot=?,recipe_title_auto=?,recipe_id=? WHERE id=?',
                             (*columns, existing[index]['id']),
                         )
+                        set_event_participants(db, existing[index]['id'], participant_ids)
                     else:
                         db.execute(
                             'INSERT INTO events(title,event_date,created_by,description,all_day,start_time,end_time,'
-                            'series_id,recurrence_frequency,recurrence_until) VALUES(?,?,?,?,?,?,?,?,?,?)',
+                            'series_id,recurrence_frequency,recurrence_until,visibility,recipe_servings,meal_prep,'
+                            'meal_slot,recipe_title_auto,recipe_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
                             (values['title'], occurrence_date, event['created_by'], values['description'],
                              values['all_day'], values['start_time'], values['end_time'],
-                             group_id if frequency else None, frequency, until),
+                             group_id if frequency else None, frequency, until, visibility,
+                             recipe_values['recipe_servings'], recipe_values['meal_prep'],
+                             recipe_values['meal_slot'], recipe_values['recipe_title_auto'],
+                             recipe_values['recipe_id']),
                         )
+                        new_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
+                        set_event_participants(db, new_id, participant_ids)
                 for row in existing[len(occurrence_dates):]:
                     db.execute('DELETE FROM events WHERE id=?', (row['id'],))
                 redirect_id = existing[0]['id']
             else:
+                enforce_event_budget(db, event['created_by'], [values['event_date']],
+                                     exclude_event_id=event_id)
                 db.execute(
                     'UPDATE events SET title=?,event_date=?,description=?,all_day=?,start_time=?,end_time=?,'
-                    'series_id=NULL,recurrence_frequency=NULL,recurrence_until=NULL WHERE id=?',
+                    'series_id=NULL,recurrence_frequency=NULL,recurrence_until=NULL,visibility=?,'
+                    'recipe_servings=?,meal_prep=?,meal_slot=?,recipe_title_auto=?,recipe_id=? WHERE id=?',
                     (values['title'], values['event_date'], values['description'], values['all_day'],
-                     values['start_time'], values['end_time'], event_id),
+                     values['start_time'], values['end_time'], visibility,
+                     recipe_values['recipe_servings'], recipe_values['meal_prep'],
+                     recipe_values['meal_slot'], recipe_values['recipe_title_auto'],
+                     recipe_values['recipe_id'], event_id),
                 )
+                set_event_participants(db, event_id, participant_ids)
                 redirect_id = event_id
         return redirect(url_for('event_detail', event_id=redirect_id))
 
@@ -1995,10 +2479,21 @@ def create_app(test_config=None):
     @app.get('/calendar.ics')
     @login_required
     def export_calendar():
-        events=get_db().execute('SELECT * FROM events ORDER BY event_date').fetchall()
+        db = get_db()
+        events = db.execute('SELECT * FROM events ORDER BY event_date,id').fetchall()
+        participant_ids = {row['event_id'] for row in db.execute(
+            'SELECT event_id FROM event_participants WHERE user_id=?', (g.user['id'],)
+        ).fetchall()}
+        only_required = request.args.get('only_required', '') == '1'
         lines=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//HomeHub//Local Calendar//EN','CALSCALE:GREGORIAN']
         stamp=datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
         for ev in events:
+            required = ev['created_by'] == g.user['id'] or ev['id'] in participant_ids
+            if only_required and not required:
+                continue
+            can_view_details = (
+                ev['visibility'] == 'shared' or g.user['role'] == 'admin' or required
+            )
             lines.extend(['BEGIN:VEVENT', f'UID:homehub-{ev["id"]}@local', f'DTSTAMP:{stamp}'])
             if ev['all_day']:
                 lines.append(f'DTSTART;VALUE=DATE:{ev["event_date"].replace("-", "")}')
@@ -2008,8 +2503,8 @@ def create_app(test_config=None):
                 if ev['end_time']:
                     end_value = f'{ev["event_date"].replace("-", "")}T{ev["end_time"].replace(":", "")}00'
                     lines.append(f'DTEND:{end_value}')
-            lines.append(f'SUMMARY:{safe_ics_text(ev["title"])}')
-            if ev['description']:
+            lines.append(f'SUMMARY:{safe_ics_text(ev["title"] if can_view_details else "Busy")}')
+            if can_view_details and ev['description']:
                 lines.append(f'DESCRIPTION:{safe_ics_text(ev["description"])}')
             lines.append('END:VEVENT')
         lines.append('END:VCALENDAR')

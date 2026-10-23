@@ -16,6 +16,8 @@
   </form>
   <p class="muted recipe-scaled-count">Showing quantities for {{ selected_servings }} servings.</p>
   {% if current_user['account_kind'] != 'house' %}
+  <div class="recipe-calendar-list-actions">
+  <a class="button recipe-add-to-calendar" href="{{ url_for('new_event', recipe_id=recipe['id'], servings=selected_servings, meal_prep=1) }}">Add to calendar</a>
   {% if shopping_lists %}
   <form class="recipe-add-to-list" method="post" action="{{ url_for('add_recipe_to_shopping', recipe_id=recipe['id']) }}">
     <input type="hidden" name="_csrf" value="{{ csrf_token }}">
@@ -26,7 +28,9 @@
     </select>
     <button class="primary">Add ingredients</button>
   </form>
-  {% else %}<p class="muted">Create a shopping list before adding recipe ingredients.</p>{% endif %}
+  {% endif %}
+  </div>
+  {% if not shopping_lists %}<p class="muted">Create a shopping list before adding recipe ingredients.</p>{% endif %}
   {% endif %}
   {% if legacy_ingredients and selected_servings != recipe['default_servings'] %}
   <p class="notice">This older recipe uses freeform ingredient text, so those amounts cannot be scaled automatically.</p>

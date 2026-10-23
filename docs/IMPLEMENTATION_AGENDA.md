@@ -18,11 +18,12 @@ to `main` only after the user approves the completed change.
 - **Lists and Recipes:** Shopping, To-do, Chores, recipe privacy/notes,
   serving scaling, and Add to list snapshots are merged to main. Copy/Paste is
   awaiting review. Weekend, weather, and system status cards remain.
-- **Calendar:** Month navigation, the event grid, all-day/timed event details,
-  and data-preserving schema upgrades are merged to main. Daily, weekly,
-  monthly, and yearly recurrence with occurrence/series actions is implemented
-  on a feature branch and awaits review. Participants, privacy, budgets, and
-  retention settings remain.
+- **Calendar:** Month navigation, event details, daily/weekly/monthly/yearly
+  recurrence, and their data-preserving schema upgrades are merged to main.
+  Event participants, private-event access, and ICS filtering are committed
+  for review. Per-user daily/monthly budget enforcement and Admin limits are
+  implemented on a dependent feature branch. Recipe links, Home summaries,
+  and retention settings remain.
 - **Current app prototype:** login/admin, a single shopping list, recipe
   create/view, basic event creation and ICS export, and light/dark theme exist.
   The approved full tab designs are not yet implemented as complete features.
@@ -84,8 +85,9 @@ to `main` only after the user approves the completed change.
 
 - Structured recipe creation, editing, deletion, privacy, per-user notes,
   serving scaling, and Add to list snapshots are merged to main, including an
-  upgrade that preserves existing recipe text. Remaining recipe work is Add
-  to calendar with serving count.
+  upgrade that preserves existing recipe text. Add to calendar with serving
+  count and private-title protection are implemented on the current review
+  branch; calendar event detail links back to the recipe with servings.
 - Preserve authorized notes when sharing changes; prompt before removing notes
   belonging to users who lose access.
 
@@ -98,24 +100,29 @@ to `main` only after the user approves the completed change.
   validation, and v7-to-v8 migration preserving existing events are merged.
   Timed events export to floating local times in ICS.
 - Daily/weekly/monthly/yearly recurrence, one-year default end date, and
-  single-occurrence or whole-series edits/cancellation are implemented on a
-  feature branch and await review. Occurrences are materialized so they appear
-  in month views and ICS downloads.
-- Add event participants and privacy, per-user daily/monthly budgets, ICS
-  visibility filtering, recipe/meal-prep links, and Home weekend summaries.
+  single-occurrence or whole-series edits/cancellation are merged. Occurrences
+  are materialized so they appear in month views and ICS downloads.
+- Event participants, private-event details, Busy placeholders, ICS
+  visibility filtering, per-user daily/monthly occurrence budgets, and Admin
+  limit settings are implemented on dependent review branches. Recipe/meal-prep
+  links are implemented on the current review branch. Home weekend summaries
+  and retention settings remain.
 - Add admin timezone and retention settings. Archive excluded years to ICS
   before deletion, report failed exports without deleting events, and keep
   archive metadata. Include the ICS calendar archive template behavior.
 
 ### Weather and system status
 
-- Use the selected Open-Meteo source, admin-set household town/postcode,
-  attribution, outbound-access control, configurable 1–15-day forecast,
-  metric/imperial units, and a shared cache no fresher than every 30 minutes.
-- Implement current, daily, and hourly cards, pressure change/trend, wind and
-  precipitation, sunrise/sunset, moon illumination and named full moons, and
-  the nearest supported Canadian tide station. Hide unsupported tide data and
-  show stale-cache age on fetch failure or when outbound access is disabled.
+- The Open-Meteo client and shared SQLite cache are implemented on the current
+  review branch. The provider request covers current, hourly, and daily fields;
+  the cache refreshes after 30 minutes and can serve stale data while outbound
+  access is disabled or a refresh fails. Admin location search/selection,
+  outbound-access control, configurable 1–15-day forecast, and metric/imperial
+  units are implemented on dependent review branches. Current conditions,
+  hourly/daily cards, pressure change/trend, wind and precipitation,
+  sunrise/sunset, moon illumination and named full moons, and stale-cache age
+  are implemented on the current review branch. Tides remain hidden unless a
+  supported station can be determined for the configured location.
 - Add disk, RAM, CPU, one-hour CPU history, temperature, and app RSS to Home;
   respect the admin visibility setting and use per-core CPU thresholds for
   history colors.
@@ -149,11 +156,12 @@ to `main` only after the user approves the completed change.
 
 ### Home
 
-- Complete the dashboard after its data sources exist: first row Chores and
-  This weekend; then current weather and system status. Show invitees and event
-  descriptions under weekend titles, support Just my events, and apply privacy
-  rules. Keep the responsive two-column desktop layout and single-column
-  narrow-phone layout.
+- The Chores and This weekend cards now occupy the first dashboard row. The
+  weekend summary includes Friday through Sunday, invitee and description
+  sub-lines, timed-event ranges, private-event placeholders, and Just my events
+  filtering. This slice is implemented on the current review branch. Weather
+  and system status cards remain; keep the responsive two-column desktop
+  layout and single-column narrow-phone layout.
 
 ### Chat
 

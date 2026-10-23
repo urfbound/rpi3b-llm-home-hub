@@ -1,0 +1,49 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="page-heading weather-page-heading"><div><p class="eyebrow">Household forecast</p><h1>Weather</h1><p class="muted">{{ weather['location_name'] or 'One location for the household' }}</p></div></div>
+{% if weather['stale'] %}<p class="weather-stale notice" role="status">Out of date · last updated {{ weather['age_label'] }} ago. Showing the latest saved forecast.</p>{% endif %}
+{% if not weather['configured'] %}
+<section class="panel weather-not-configured"><h2>Weather location is not set up yet</h2><p class="muted">An admin can choose the household town or postcode in Admin settings.</p>{% if current_user['role'] == 'admin' %}<a class="button primary" href="{{ url_for('accounts') }}#weather-settings-section">Choose a location</a>{% endif %}</section>
+{% elif not weather['view'] %}
+<section class="panel weather-unavailable"><h2>Forecast unavailable</h2><p class="muted">{% if weather['error'] %}{{ weather['error'] }}{% else %}There is no saved forecast yet. Enable outbound weather access to load one.{% endif %}</p></section>
+{% else %}
+{% set view = weather['view'] %}
+<div class="weather-grid">
+  <section class="panel weather-right-now">
+    <p class="eyebrow">Right now</p>
+    <div class="weather-current-reading"><strong>{{ view['current']['temperature_2m'] }}{{ view['current_units'].get('temperature_2m', '°') }}</strong><span>{{ view['condition'] }}</span></div>
+    <p class="weather-feels-like">Feels like <strong>{{ view['current']['apparent_temperature'] }}{{ view['current_units'].get('apparent_temperature', '°') }}</strong></p>
+    <p>Humidity <strong>{{ view['current']['relative_humidity_2m'] }}%</strong></p>
+    <p>Wind <strong>{{ view['current']['wind_speed_10m'] }} {{ view['current_units'].get('wind_speed_10m', '') }}</strong></p>
+  </section>
+  <section class="panel weather-glance">
+    <p class="eyebrow">At a glance</p>
+    <div class="weather-pressure">
+      <strong>Pressure: {{ view['current']['pressure_msl'] }} hPa</strong>
+      <span>{{ view['pressure_trend']['label'] }}{% if view['pressure_trend']['change_hpa'] is not none %} · {{ '%+.1f'|format(view['pressure_trend']['change_hpa']) }} hPa in the last hour{% endif %}</span>
+    </div>
+    <div class="weather-glance-row weather-sunrise-sunset"><div><small>Sunrise</small><strong>{{ view['today'].get('sunrise', 'Unavailable') }}</strong></div><div><small>Sunset</small><strong>{{ view['today'].get('sunset', 'Unavailable') }}</strong></div></div>
+    <div class="weather-glance-row"><div><small>High / Low</small><strong>{{ view['today'].get('high', '—') }} / {{ view['today'].get('low', '—') }} {{ view['daily_units'].get('temperature_2m_max', '') }}</strong></div><div><small>Wind</small><strong>{{ view['current']['wind_speed_10m'] }} {{ view['current_units'].get('wind_speed_10m', '') }} · {{ view['current']['wind_direction_10m'] }}°</strong></div></div>
+    <div class="weather-glance-row"><div><small>Precipitation chance</small><strong>{{ view['today'].get('precipitation_chance', '—') }}{% if view['today'].get('precipitation_chance') is not none %}%{% endif %}</strong></div><div><small>Precipitation accumulation</small><strong>{% if view['today'].get('precipitation_sum') and view['today']['precipitation_sum'] > 0 %}{{ view['today']['precipitation_sum'] }} {{ view['daily_units'].get('precipitation_sum', '') }}{% else %}None{% endif %}</strong></div></div>
+  </section>
+  <section class="panel weather-hourly">
+    <p class="eyebrow">Hour by hour</p>
+    <div class="weather-hourly-list">
+      {% for hour in view['hours'] %}<article class="weather-hour-card"><strong>{{ hour['time'] }}</strong><span>{{ hour['weather'] }}</span><span>{{ hour['temperature'] }}{{ view['hourly_units'].get('temperature_2m', '°') }} · feels {{ hour['apparent_temperature'] }}{{ view['hourly_units'].get('apparent_temperature', '°') }}</span><span>Wind {{ hour['wind_speed'] }} {{ view['hourly_units'].get('wind_speed_10m', '') }} · {{ hour['wind_direction'] }}°</span><span>Pressure: {{ hour['pressure'] }} hPa</span><small class="weather-pressure-trend">Pressure trend: {{ hour['pressure_trend']['label'] }}{% if hour['pressure_trend']['change_hpa'] is not none %} · {{ '%+.1f'|format(hour['pressure_trend']['change_hpa']) }} hPa{% endif %}</small><span>Precipitation {{ hour['precipitation_probability'] }}%</span></article>{% endfor %}
+    </div>
+  </section>
+  <section class="panel weather-daily">
+    <p class="eyebrow">Daily forecast</p>
+    <div class="weather-daily-list">
+      {% for day in view['days'] %}<article class="weather-day-card"><time datetime="{{ day['date'] }}">{{ day['date'] }}</time><strong>{{ day['weather'] }}</strong><span>High {{ day['high'] }}{{ view['daily_units'].get('temperature_2m_max', '°') }} · Low {{ day['low'] }}{{ view['daily_units'].get('temperature_2m_min', '°') }}</span><span>Precipitation {{ day['precipitation_chance'] }}%</span></article>{% endfor %}
+    </div>
+  </section>
+  <section class="panel weather-moon">
+    <p class="eyebrow">Moon phase</p>
+    {% if view['moon_illumination'] is not none %}<div class="weather-moon-content"><svg class="weather-moon-image" viewBox="0 0 100 100" role="img" aria-label="{{ view['moon_phase_name'] }}, {{ view['moon_illumination'] }}% illuminated"><circle cx="50" cy="50" r="44" class="moon-shadow"></circle><path d="{{ view['moon_path'] }}" class="moon-light"></path></svg><div><strong>{{ view['moon_phase_name'] }}</strong><span>{{ view['moon_illumination'] }}% illuminated</span></div></div>{% else %}<p class="muted">Moon phase unavailable.</p>{% endif %}
+    {% if view['next_named_full_moon'] %}<p class="next-named-full-moon">Next named full moon: <strong>{{ view['next_named_full_moon']['name'] }}</strong> · {{ view['next_named_full_moon']['date'].strftime('%B %d') }}</p>{% endif %}
+  </section>
+</div>
+<p class="weather-attribution">Weather data from <a href="https://open-meteo.com/" rel="noreferrer">Open-Meteo</a>.</p>
+{% endif %}
+{% endblock %}

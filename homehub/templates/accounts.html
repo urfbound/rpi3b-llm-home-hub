@@ -2,13 +2,14 @@
 {% block content %}
 <div class="crumb">Admin / <strong>Accounts</strong></div>
 <div class="page-heading"><div><p class="eyebrow">Your household</p><h1>People at home</h1><p class="muted">Give each person their own space, and manage access to the shared home.</p></div><button class="primary" type="button" onclick="document.getElementById('create-dialog').showModal()">+ Add account</button></div>
+<nav class="admin-jumps" aria-label="Jump to admin section"><a href="#accounts-section">Accounts</a><a href="#access-section">Access</a><a href="#calendar-limits-section">Calendar limits</a><a href="#weather-settings-section">Weather</a><a href="#backup-restore-section">Backup and restore</a><a href="#house-wide-section">House-wide access</a></nav>
 <section class="stats" aria-label="Account counts">
   <div class="stat"><strong>{{ counts.users }} <small>/ 32</small></strong><span>Accounts</span></div>
   <div class="stat"><strong>{{ counts.admins }} <small>/ 4</small></strong><span>Admins</span></div>
   <div class="stat"><strong>{{ counts.house }}</strong><span>House-wide login</span></div>
 </section>
 <div class="account-grid">
-  <section class="panel account-list"><h2>Accounts</h2><p class="muted">Only admins can create, reset, or remove accounts.</p>
+  <section class="panel account-list" id="accounts-section"><h2>Accounts</h2><p class="muted">Only admins can create, reset, or remove accounts.</p>
     <label class="search-label">Find a person<input type="search" id="account-search" placeholder="Find a person" oninput="filterAccounts(this.value)"></label>
     {% for user in users %}<div class="person" data-search="{{ (user['display_name'] ~ ' ' ~ user['username'])|lower }}">
       <span class="avatar">{{ '⌂' if user['account_kind'] == 'house' else user['display_name'][:2]|upper }}</span>
@@ -20,10 +21,47 @@
       </div>
     </div>{% endfor %}
   </section>
-  <aside class="account-side"><section class="panel"><p class="eyebrow">Access</p><h2>Passwords & sessions</h2><p>People can change their own passwords. Admin resets issue a one-time password and sign that person out.</p><form method="post" action="{{ url_for('update_session_settings') }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><label>Idle session limit (hours)<input type="number" name="idle_hours" min="1" max="168" value="{{ idle_hours }}" required></label><label>Absolute session limit (days)<input type="number" name="absolute_days" min="1" max="30" value="{{ absolute_days }}" required></label><button>Save session settings</button></form></section>
-    <section class="panel"><p class="eyebrow">Shared display</p><h2>House-wide access</h2><p>The house-wide login can see shared content and play games. Its scores stay off leaderboards.</p><p class="callout"><strong>Privacy note</strong><br>Admins can view all household content, including private chats.</p></section>
+  <aside class="account-side"><section class="panel" id="access-section"><p class="eyebrow">Access</p><h2>Passwords & sessions</h2><p>People can change their own passwords. Admin resets issue a one-time password and sign that person out.</p><form method="post" action="{{ url_for('update_session_settings') }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><label>Idle session limit (hours)<input type="number" name="idle_hours" min="1" max="168" value="{{ idle_hours }}" required></label><label>Absolute session limit (days)<input type="number" name="absolute_days" min="1" max="30" value="{{ absolute_days }}" required></label><button>Save session settings</button></form></section>
+    <section class="panel" id="house-wide-section"><p class="eyebrow">Shared display</p><h2>House-wide access</h2><p>The house-wide login can see shared content and play games. Its scores stay off leaderboards.</p><p class="callout"><strong>Privacy note</strong><br>Admins can view all household content, including private chats.</p></section>
   </aside>
 </div>
+<section class="panel" id="calendar-limits-section"><p class="eyebrow">Event budgets</p><h2>Calendar limits</h2>
+  <form method="post" action="{{ url_for('update_calendar_limits') }}" class="calendar-limits-form">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <label>Events per user per day<input type="number" name="events_per_day" min="1" value="{{ events_per_day }}" required></label>
+    <label>Events per user per month<input type="number" name="events_per_month" min="7" max="512" value="{{ events_per_month }}" required></label>
+    <p class="muted">Monthly limits can be set from 7 to 512. Repeating occurrences count toward both limits.</p>
+    <button class="button small">Save limits</button>
+  </form>
+</section>
+<section class="panel weather-admin" id="weather-settings-section"><p class="eyebrow">Household forecast</p><h2>Weather settings</h2>
+  <p class="muted">{% if weather_location_name %}Current location: <strong>{{ weather_location_name }}</strong>{% else %}No household location selected{% endif %}</p>
+  <form method="post" action="{{ url_for('search_weather_locations') }}" class="weather-location-search">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <label>Town or postcode<input name="location_query" maxlength="100" value="{{ weather_location_query }}" placeholder="Brigus or postal code" required></label>
+    <button {% if not weather_outbound_enabled %}disabled{% endif %}>Search locations</button>
+  </form>
+  {% if weather_location_candidates %}
+  <p class="muted">Choose the matching location to save it for the household.</p>
+  <div class="weather-location-candidates">
+    {% for candidate in weather_location_candidates %}
+    <form method="post" action="{{ url_for('select_weather_location') }}">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <input type="hidden" name="candidate_index" value="{{ loop.index0 }}">
+      <button class="button">{{ candidate['label'] }}</button>
+    </form>
+    {% endfor %}
+  </div>
+  {% endif %}
+  <form method="post" action="{{ url_for('update_weather_settings') }}" class="weather-preferences">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <label>Forecast length (days)<input type="number" name="forecast_days" min="1" max="15" value="{{ weather_forecast_days }}" required></label>
+    <label>Units<select name="units"><option value="metric" {% if weather_units == 'metric' %}selected{% endif %}>Metric (°C, km/h, mm)</option><option value="imperial" {% if weather_units == 'imperial' %}selected{% endif %}>Imperial (°F, mph, in)</option></select></label>
+    <label class="weather-outbound"><input type="checkbox" name="outbound_enabled" value="1" {% if weather_outbound_enabled %}checked{% endif %}> Allow outbound access for weather</label>
+    <p class="muted">Open-Meteo provides the forecast and location search. Weather data is shared and cached locally for up to 30 minutes.</p>
+    <button class="primary">Save weather settings</button>
+  </form>
+</section>
 <section class="backup-admin" id="backup-restore-section" aria-label="Backup and restore">
   <section class="panel">
     <h2>Backup settings</h2>
