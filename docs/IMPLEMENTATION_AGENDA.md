@@ -133,8 +133,11 @@ to `main` only after the user approves the completed change.
 
 ### RSS
 
+- The RSS/Atom parsing and feed URL safety foundation is implemented on the
+  current review branch. It normalizes URLs, rejects non-public destinations,
+  parses bounded article sets, strips HTML summaries, and resolves safe links.
 - Add personal feeds and admin-managed house-wide feeds, ordering and
-  management, duplicate normalization across both scopes, safe URL fetching,
+  management, duplicate normalization across both scopes, safe fetching,
   refresh settings, and outbound-access behavior.
 - Store shared article bodies once with separate per-user read, favourite,
   and delete state. Implement article-open read tracking, Done reading
