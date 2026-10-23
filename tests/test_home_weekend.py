@@ -1,3 +1,4 @@
+from http import HTTPStatus
 import sqlite3
 import re
 from datetime import date
@@ -40,7 +41,7 @@ def sign_in(app, username, password):
     response = client.post('/login', data={
         'username': username, 'password': password, '_csrf': csrf,
     })
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
     return client
 
 

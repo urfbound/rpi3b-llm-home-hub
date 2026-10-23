@@ -1,3 +1,4 @@
+from http import HTTPStatus
 import socket
 
 import pytest
@@ -10,7 +11,7 @@ def public_resolver(host, port, **_kwargs):
     return [(socket.AF_INET, socket.SOCK_STREAM, 6, '', ('93.184.216.34', port))]
 
 
-def response(status=200, headers=None, body=b'<rss><channel/></rss>'):
+def response(status=HTTPStatus.OK, headers=None, body=b'<rss><channel/></rss>'):
     return status, headers or {}, body
 
 
@@ -38,7 +39,7 @@ def test_fetch_revalidates_redirect_target_before_requesting_it():
 
     def requester(url, _address, _timeout, _max_bytes):
         requested.append(url)
-        return response(302, {'location': 'http://127.0.0.1/admin'})
+        return response(HTTPStatus.FOUND, {'location': 'http://127.0.0.1/admin'})
 
     with pytest.raises(RSSFeedError, match='public'):
         fetch_feed('https://feeds.example/rss', resolver=resolver, requester=requester)
@@ -74,7 +75,7 @@ def test_fetch_follows_bounded_relative_redirects():
     def requester(url, _address, _timeout, _max_bytes):
         calls.append(url)
         if len(calls) == 1:
-            return response(301, {'location': '/new/feed.xml'})
+            return response(HTTPStatus.MOVED_PERMANENTLY, {'location': '/new/feed.xml'})
         return response(body=b'<rss><channel><title>ok</title></channel></rss>')
 
     body, final_url = fetch_feed('https://feeds.example/old', resolver=public_resolver,
@@ -97,14 +98,14 @@ def test_fetch_rejects_oversized_body_and_content_length():
 def test_fetch_rejects_non_success_responses_and_redirect_loops():
     with pytest.raises(RSSFeedError, match='HTTP'):
         fetch_feed('https://feeds.example/rss', resolver=public_resolver,
-                   requester=lambda *_args: response(503))
+                   requester=lambda *_args: response(HTTPStatus.SERVICE_UNAVAILABLE))
     with pytest.raises(RSSFeedError, match='redirect'):
         fetch_feed('https://feeds.example/rss', resolver=public_resolver,
-                   requester=lambda *_args: response(302, {'location': '/again'}),
+                   requester=lambda *_args: response(HTTPStatus.FOUND, {'location': '/again'}),
                    max_redirects=2)
 
 
 def test_fetch_rejects_redirect_without_location():
     with pytest.raises(RSSFeedError, match='redirect'):
         fetch_feed('https://feeds.example/rss', resolver=public_resolver,
-                   requester=lambda *_args: response(302))
+                   requester=lambda *_args: response(HTTPStatus.FOUND))

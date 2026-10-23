@@ -1,3 +1,4 @@
+from http import HTTPStatus
 import sqlite3
 
 import pytest
@@ -19,7 +20,7 @@ def sign_in(client):
     client.get('/login')
     with client.session_transaction() as sess: token=sess['csrf_token']
     response=client.post('/login',data={'username':'alice','password':'a long test password','_csrf':token})
-    assert response.status_code==302
+    assert response.status_code==HTTPStatus.FOUND
 
 def csrf_token(client):
     client.get('/login')
@@ -31,10 +32,10 @@ def sign_in_as(client, username, password):
     response = client.post('/login', data={
         'username': username, 'password': password, '_csrf': token,
     })
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
 
 def test_requires_login(client):
-    assert client.get('/').status_code==302
+    assert client.get('/').status_code==HTTPStatus.FOUND
 
 def test_login_and_ics(client):
     sign_in(client)
@@ -42,13 +43,13 @@ def test_login_and_ics(client):
     with client.session_transaction() as sess: token=sess['csrf_token']
     client.post('/events',data={'title':'Pasta night','event_date':'2026-10-21','_csrf':token})
     calendar=client.get('/calendar.ics')
-    assert calendar.status_code==200
+    assert calendar.status_code==HTTPStatus.OK
     assert b'SUMMARY:Pasta night' in calendar.data
     assert b'DTSTART;VALUE=DATE:20261021' in calendar.data
 
 def test_csrf_required(client):
     sign_in(client)
-    assert client.post('/shopping',data={'text':'milk'}).status_code==400
+    assert client.post('/shopping',data={'text':'milk'}).status_code==HTTPStatus.BAD_REQUEST
 
 def test_secure_cookie_can_be_enabled_for_https_deployment(tmp_path, monkeypatch):
     monkeypatch.setenv('HOMEHUB_COOKIE_SECURE', 'true')
@@ -93,7 +94,7 @@ def test_private_list_creation_selection_and_allowlist_access(client):
         'kind': 'shopping', 'title': 'Holiday gifts', 'category': 'Gifts',
         'visibility': 'private', 'allowed_user_ids': str(bob_id), '_csrf': token,
     })
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
     assert 'list_id=' in response.headers['Location']
     list_id = int(response.headers['Location'].split('list_id=')[1])
 
@@ -101,7 +102,7 @@ def test_private_list_creation_selection_and_allowlist_access(client):
     added = client.post('/shopping', data={
         'text': 'Wrapping paper', 'list_id': str(list_id), '_csrf': token,
     })
-    assert added.status_code == 302
+    assert added.status_code == HTTPStatus.FOUND
     assert b'Holiday gifts' in client.get(f'/?list_id={list_id}').data
     with sqlite3.connect(db_path) as db:
         assert db.execute('SELECT text FROM shopping_items WHERE list_id=?',
@@ -113,17 +114,17 @@ def test_private_list_creation_selection_and_allowlist_access(client):
 
     bob = client.application.test_client()
     sign_in_as(bob, 'bob', 'bob test password')
-    assert bob.get(f'/?list_id={list_id}').status_code == 200
+    assert bob.get(f'/?list_id={list_id}').status_code == HTTPStatus.OK
     assert b'Wrapping paper' in bob.get(f'/shopping.txt?list_id={list_id}').data
 
     carol = client.application.test_client()
     sign_in_as(carol, 'carol', 'carol test password')
     denied = carol.get(f'/?list_id={list_id}')
-    assert denied.status_code == 404
+    assert denied.status_code == HTTPStatus.NOT_FOUND
     assert b'Wrapping paper' not in denied.data
-    assert carol.get(f'/shopping.txt?list_id={list_id}').status_code == 404
+    assert carol.get(f'/shopping.txt?list_id={list_id}').status_code == HTTPStatus.NOT_FOUND
     token = csrf_token(carol)
-    assert carol.post(f'/shopping/{item_id}/toggle', data={'_csrf': token}).status_code == 404
+    assert carol.post(f'/shopping/{item_id}/toggle', data={'_csrf': token}).status_code == HTTPStatus.NOT_FOUND
 
     with sqlite3.connect(db_path) as db:
         assert db.execute('SELECT done FROM shopping_items WHERE id=?',
@@ -137,7 +138,7 @@ def test_list_creation_rejects_unknown_kind_or_shopping_category(client):
             'kind': kind, 'title': 'Invalid list', 'category': category,
             'visibility': 'shared', '_csrf': token,
         })
-        assert response.status_code == 400
+        assert response.status_code == HTTPStatus.BAD_REQUEST
     with sqlite3.connect(client.application.config['DATABASE']) as db:
         assert db.execute("SELECT COUNT(*) FROM household_lists WHERE title='Invalid list'").fetchone()[0] == 0
 
@@ -151,17 +152,17 @@ def test_shared_todo_list_accepts_tasks_and_is_visible_to_household(client):
     response = client.post('/lists', data={
         'kind': 'todo', 'title': 'Weekend jobs', 'visibility': 'shared', '_csrf': token,
     })
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
     list_id = int(response.headers['Location'].split('list_id=')[1])
     token = csrf_token(client)
     assert client.post('/todo', data={
         'text': 'Water the plants', 'list_id': str(list_id), '_csrf': token,
-    }).status_code == 302
+    }).status_code == HTTPStatus.FOUND
 
     bob = client.application.test_client()
     sign_in_as(bob, 'bob', 'bob test password')
     page = bob.get(f'/?kind=todo&list_id={list_id}')
-    assert page.status_code == 200
+    assert page.status_code == HTTPStatus.OK
     assert b'Water the plants' in page.data
 
 def test_item_delete_is_limited_to_creator_or_admin(client):
@@ -179,13 +180,13 @@ def test_item_delete_is_limited_to_creator_or_admin(client):
     bob = client.application.test_client()
     sign_in_as(bob, 'bob', 'bob test password')
     token = csrf_token(bob)
-    assert bob.post(f'/shopping/{item_id}/delete', data={'_csrf': token}).status_code == 403
+    assert bob.post(f'/shopping/{item_id}/delete', data={'_csrf': token}).status_code == HTTPStatus.FORBIDDEN
     with sqlite3.connect(db_path) as db:
         assert db.execute('SELECT COUNT(*) FROM shopping_items WHERE id=?',
                           (item_id,)).fetchone()[0] == 1
 
     token = csrf_token(client)
-    assert client.post(f'/shopping/{item_id}/delete', data={'_csrf': token}).status_code == 302
+    assert client.post(f'/shopping/{item_id}/delete', data={'_csrf': token}).status_code == HTTPStatus.FOUND
     with sqlite3.connect(db_path) as db:
         assert db.execute('SELECT COUNT(*) FROM shopping_items WHERE id=?',
                           (item_id,)).fetchone()[0] == 0
@@ -208,7 +209,7 @@ def test_only_list_creator_or_admin_can_delete_list_and_items_cascade(client):
     bob = client.application.test_client()
     sign_in_as(bob, 'bob', 'bob test password')
     token = csrf_token(bob)
-    assert bob.post(f'/lists/{list_id}/delete', data={'_csrf': token}).status_code == 302
+    assert bob.post(f'/lists/{list_id}/delete', data={'_csrf': token}).status_code == HTTPStatus.FOUND
     with sqlite3.connect(db_path) as db:
         assert db.execute('SELECT COUNT(*) FROM household_lists WHERE id=?',
                           (list_id,)).fetchone()[0] == 0
@@ -216,4 +217,4 @@ def test_only_list_creator_or_admin_can_delete_list_and_items_cascade(client):
                           (item_id,)).fetchone()[0] == 0
 
     token = csrf_token(client)
-    assert client.post(f'/lists/{list_id}/delete', data={'_csrf': token}).status_code == 404
+    assert client.post(f'/lists/{list_id}/delete', data={'_csrf': token}).status_code == HTTPStatus.NOT_FOUND

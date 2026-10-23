@@ -1,5 +1,6 @@
 """Bounded HTTP fetching for RSS feeds with DNS-pinned public destinations."""
 
+from http import HTTPStatus
 import http.client
 import socket
 import ssl
@@ -9,7 +10,9 @@ from .rss import (MAX_FEED_BYTES, RSSFeedError, normalize_feed_url,
                   resolve_feed_destination)
 
 
-REDIRECT_CODES = {301, 302, 303, 307, 308}
+REDIRECT_CODES = {HTTPStatus.MOVED_PERMANENTLY, HTTPStatus.FOUND,
+                  HTTPStatus.SEE_OTHER, HTTPStatus.TEMPORARY_REDIRECT,
+                  HTTPStatus.PERMANENT_REDIRECT}
 MAX_REDIRECTS = 5
 REQUEST_TIMEOUT_SECONDS = 8
 
@@ -63,7 +66,7 @@ def _http_request(url, destination, timeout, max_bytes):
         })
         result = connection.getresponse()
         headers = {name.lower(): value for name, value in result.getheaders()}
-        if result.status in REDIRECT_CODES or not 200 <= result.status < 300:
+        if result.status in REDIRECT_CODES or not HTTPStatus.OK <= result.status < HTTPStatus.MULTIPLE_CHOICES:
             return result.status, headers, b''
         content_length = headers.get('content-length')
         if content_length:
@@ -115,7 +118,7 @@ def fetch_feed(url, *, resolver=socket.getaddrinfo, requester=_http_request,
             current_url = urljoin(current_url, location)
             redirects += 1
             continue
-        if not 200 <= status < 300:
+        if not HTTPStatus.OK <= status < HTTPStatus.MULTIPLE_CHOICES:
             raise RSSFeedError(f'The feed server returned HTTP {status}.')
         content_length = headers.get('content-length')
         if content_length:

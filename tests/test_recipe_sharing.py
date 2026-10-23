@@ -1,3 +1,4 @@
+from http import HTTPStatus
 import sqlite3
 import re
 
@@ -40,7 +41,7 @@ def sign_in(app, username):
     response = client.post('/login', data={
         'username': username, 'password': f'{username} password', '_csrf': csrf(client),
     })
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
     return client
 
 
@@ -78,16 +79,16 @@ def test_private_recipe_is_visible_only_to_owner_allowlist_and_admin(app):
     house = sign_in(app, 'house')
     admin = sign_in(app, 'alex')
 
-    assert bob.get(f'/recipes/{recipe_id}').status_code == 200
+    assert bob.get(f'/recipes/{recipe_id}').status_code == HTTPStatus.OK
     assert b'House soup' in bob.get('/').data
-    assert carol.get(f'/recipes/{recipe_id}').status_code == 404
-    assert carol.get(f'/recipes/{recipe_id}?servings=8').status_code == 404
+    assert carol.get(f'/recipes/{recipe_id}').status_code == HTTPStatus.NOT_FOUND
+    assert carol.get(f'/recipes/{recipe_id}?servings=8').status_code == HTTPStatus.NOT_FOUND
     assert b'House soup' not in carol.get('/').data
     assert carol.post(f'/recipes/{recipe_id}/notes', data={
         'text': 'Should not persist', '_csrf': csrf(carol),
-    }).status_code == 404
-    assert house.get(f'/recipes/{recipe_id}').status_code == 404
-    assert admin.get(f'/recipes/{recipe_id}').status_code == 200
+    }).status_code == HTTPStatus.NOT_FOUND
+    assert house.get(f'/recipes/{recipe_id}').status_code == HTTPStatus.NOT_FOUND
+    assert admin.get(f'/recipes/{recipe_id}').status_code == HTTPStatus.OK
 
 
 def test_recipe_creation_can_be_private_with_an_allowlist(app):
@@ -99,7 +100,7 @@ def test_recipe_creation_can_be_private_with_an_allowlist(app):
         'visibility': 'private', 'allowed_user_ids': ['2'], '_csrf': csrf(alex),
     })
 
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
     with sqlite3.connect(app.config['DATABASE']) as db:
         recipe_id, visibility = db.execute('SELECT id,visibility FROM recipes WHERE title=?',
                                            ('Private pie',)).fetchone()
@@ -117,13 +118,13 @@ def test_personal_notes_are_private_to_each_author_but_visible_to_recipe_viewers
 
     assert bob.post(f'/recipes/{recipe_id}/notes', data={
         'text': 'Add lemon zest', '_csrf': csrf(bob),
-    }).status_code == 302
+    }).status_code == HTTPStatus.FOUND
     assert bob.post(f'/recipes/{recipe_id}/notes', data={
         'text': 'Use fresh lemon zest', '_csrf': csrf(bob),
-    }).status_code == 302
+    }).status_code == HTTPStatus.FOUND
     assert carol.post(f'/recipes/{recipe_id}/notes', data={
         'text': 'Serve with salad', '_csrf': csrf(carol),
-    }).status_code == 302
+    }).status_code == HTTPStatus.FOUND
 
     bob_page = bob.get(f'/recipes/{recipe_id}')
     house_page = house.get(f'/recipes/{recipe_id}')
@@ -151,8 +152,8 @@ def test_recipe_note_length_is_128_and_house_account_cannot_add_notes(app):
         'text': 'A note', '_csrf': csrf(house),
     })
 
-    assert too_long.status_code == 400
-    assert house_attempt.status_code == 403
+    assert too_long.status_code == HTTPStatus.BAD_REQUEST
+    assert house_attempt.status_code == HTTPStatus.FORBIDDEN
     with sqlite3.connect(app.config['DATABASE']) as db:
         assert db.execute('SELECT COUNT(*) FROM recipe_notes').fetchone()[0] == 0
 
@@ -165,7 +166,7 @@ def test_recipe_note_accepts_exactly_128_characters(app):
         'text': 'x' * 128, '_csrf': csrf(bob),
     })
 
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
     with sqlite3.connect(app.config['DATABASE']) as db:
         assert db.execute('SELECT length(note) FROM recipe_notes WHERE recipe_id=?',
                           (recipe_id,)).fetchone()[0] == 128
@@ -179,13 +180,13 @@ def test_recipe_owner_must_confirm_before_removing_notes_of_revoked_users(app):
     for member, note in ((bob, 'Keep this'), (carol, 'Remove this')):
         assert member.post(f'/recipes/{recipe_id}/notes', data={
             'text': note, '_csrf': csrf(member),
-        }).status_code == 302
+        }).status_code == HTTPStatus.FOUND
 
     first = alex.post(f'/recipes/{recipe_id}/edit', data=recipe_edit_payload(
         alex, allowed_user_ids=['2'],
     ))
 
-    assert first.status_code == 200
+    assert first.status_code == HTTPStatus.OK
     assert b'Carol' in first.data
     assert b"Carol&#39;s note" in first.data or b"Carol's note" in first.data
     with sqlite3.connect(app.config['DATABASE']) as db:
@@ -196,7 +197,7 @@ def test_recipe_owner_must_confirm_before_removing_notes_of_revoked_users(app):
         alex, allowed_user_ids=['2'], confirm_note_removal='yes',
     ))
 
-    assert confirmed.status_code == 302
+    assert confirmed.status_code == HTTPStatus.FOUND
     with sqlite3.connect(app.config['DATABASE']) as db:
         assert db.execute('SELECT visibility FROM recipes WHERE id=?', (recipe_id,)).fetchone()[0] == 'private'
         assert db.execute('SELECT user_id,note FROM recipe_notes WHERE recipe_id=?',
@@ -211,14 +212,14 @@ def test_recipe_note_can_be_deleted_only_by_its_author(app):
     carol = sign_in(app, 'carol')
     assert bob.post(f'/recipes/{recipe_id}/notes', data={
         'text': 'Add pepper', '_csrf': csrf(bob),
-    }).status_code == 302
+    }).status_code == HTTPStatus.FOUND
     with sqlite3.connect(app.config['DATABASE']) as db:
         note_id = db.execute('SELECT id FROM recipe_notes WHERE recipe_id=?', (recipe_id,)).fetchone()[0]
 
     denied = carol.post(f'/recipes/{recipe_id}/notes/{note_id}/delete', data={'_csrf': csrf(carol)})
     allowed = bob.post(f'/recipes/{recipe_id}/notes/{note_id}/delete', data={'_csrf': csrf(bob)})
 
-    assert denied.status_code == 403
-    assert allowed.status_code == 302
+    assert denied.status_code == HTTPStatus.FORBIDDEN
+    assert allowed.status_code == HTTPStatus.FOUND
     with sqlite3.connect(app.config['DATABASE']) as db:
         assert db.execute('SELECT COUNT(*) FROM recipe_notes WHERE id=?', (note_id,)).fetchone()[0] == 0

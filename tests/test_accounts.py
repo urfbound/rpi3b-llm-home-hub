@@ -1,3 +1,4 @@
+from http import HTTPStatus
 import re
 import sqlite3
 import time
@@ -41,17 +42,17 @@ def db_rows(app, query, parameters=()):
 
 def test_accounts_are_admin_only(app):
     client = app.test_client()
-    assert client.get('/admin/accounts').status_code == 302
-    assert sign_in(client, 'sam', 'another long password').status_code == 302
-    assert client.get('/admin/accounts').status_code == 403
-    assert post(client, '/admin/accounts', username='new', display_name='New').status_code == 403
+    assert client.get('/admin/accounts').status_code == HTTPStatus.FOUND
+    assert sign_in(client, 'sam', 'another long password').status_code == HTTPStatus.FOUND
+    assert client.get('/admin/accounts').status_code == HTTPStatus.FORBIDDEN
+    assert post(client, '/admin/accounts', username='new', display_name='New').status_code == HTTPStatus.FORBIDDEN
 
 
 def test_create_and_force_password_change(app):
     admin = app.test_client()
     sign_in(admin)
     response = post(admin, '/admin/accounts', username='morgan', display_name='Morgan', role='user')
-    assert response.status_code == 200
+    assert response.status_code == HTTPStatus.OK
     assert response.headers['Cache-Control'] == 'no-store'
     assert b'Temporary password' in response.data
     password = re.search(rb'<code>([^<]+)</code>', response.data).group(1).decode()
@@ -61,7 +62,7 @@ def test_create_and_force_password_change(app):
     assert member.get('/').headers['Location'].endswith('/account/password')
     changed = post(member, '/account/password', current_password=password,
                    new_password='a replacement password', confirm_password='a replacement password')
-    assert changed.status_code == 302
+    assert changed.status_code == HTTPStatus.FOUND
     assert sign_in(member, 'morgan', 'a replacement password').headers['Location'].endswith('/')
 
 
@@ -72,8 +73,8 @@ def test_reset_revokes_sessions(app):
     sign_in(admin)
     user_id = db_rows(app, 'SELECT id FROM users WHERE username=?', ('sam',))[0][0]
     response = post(admin, f'/admin/accounts/{user_id}/reset-password')
-    assert response.status_code == 200
-    assert member.get('/').status_code == 302
+    assert response.status_code == HTTPStatus.OK
+    assert member.get('/').status_code == HTTPStatus.FOUND
     assert db_rows(app, 'SELECT must_change_password FROM users WHERE id=?', (user_id,)) == [(1,)]
 
 
@@ -89,10 +90,10 @@ def test_removal_handles_owned_content(app, choice):
     client = app.test_client()
     sign_in(client)
     assert post(client, f'/admin/accounts/{sam}/delete', content_choice=choice,
-                transfer_to=alex, confirm_username='wrong').status_code == 400
+                transfer_to=alex, confirm_username='wrong').status_code == HTTPStatus.BAD_REQUEST
     response = post(client, f'/admin/accounts/{sam}/delete', content_choice=choice,
                     transfer_to=alex, confirm_username='sam')
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
     assert not db_rows(app, 'SELECT id FROM users WHERE id=?', (sam,))
     for table in ('shopping_items', 'recipes', 'events'):
         rows = db_rows(app, f'SELECT created_by FROM {table}')
@@ -107,8 +108,8 @@ def test_house_account_is_read_only(app):
     password = re.search(rb'<code>([^<]+)</code>', response.data).group(1).decode()
     house = app.test_client()
     sign_in(house, 'house', password)
-    assert house.get('/').status_code == 200
-    assert post(house, '/shopping', text='No').status_code == 403
+    assert house.get('/').status_code == HTTPStatus.OK
+    assert post(house, '/shopping', text='No').status_code == HTTPStatus.FORBIDDEN
 
 
 def test_removal_requires_valid_transfer_and_keeps_admin(app):
@@ -117,20 +118,20 @@ def test_removal_requires_valid_transfer_and_keeps_admin(app):
     alex = db_rows(app, 'SELECT id FROM users WHERE username=?', ('alex',))[0][0]
     sam = db_rows(app, 'SELECT id FROM users WHERE username=?', ('sam',))[0][0]
     assert post(client, f'/admin/accounts/{sam}/delete', content_choice='transfer',
-                transfer_to=sam, confirm_username='sam').status_code == 400
+                transfer_to=sam, confirm_username='sam').status_code == HTTPStatus.BAD_REQUEST
     assert post(client, f'/admin/accounts/{alex}/delete', content_choice='delete',
-                confirm_username='alex').status_code == 400
+                confirm_username='alex').status_code == HTTPStatus.BAD_REQUEST
     assert db_rows(app, 'SELECT COUNT(*) FROM users WHERE role=?', ('admin',)) == [(1,)]
 
 
 def test_session_expiry_and_settings(app):
     client = app.test_client()
     sign_in(client)
-    assert post(client, '/admin/session-settings', idle_hours='0', absolute_days='7').status_code == 400
-    assert post(client, '/admin/session-settings', idle_hours='2', absolute_days='3').status_code == 302
+    assert post(client, '/admin/session-settings', idle_hours='0', absolute_days='7').status_code == HTTPStatus.BAD_REQUEST
+    assert post(client, '/admin/session-settings', idle_hours='2', absolute_days='3').status_code == HTTPStatus.FOUND
     with client.session_transaction() as session:
         session['last_seen'] = int(time.time()) - 3 * 3600
-    assert client.get('/admin/accounts').status_code == 302
+    assert client.get('/admin/accounts').status_code == HTTPStatus.FOUND
 
 
 def test_login_rate_limit_is_persisted_hashed_and_expires(app, monkeypatch):
@@ -140,9 +141,9 @@ def test_login_rate_limit_is_persisted_hashed_and_expires(app, monkeypatch):
     client.get('/login')
     for _ in range(5):
         response = post(client, '/login', username='alex', password='wrong')
-        assert response.status_code == 200
+        assert response.status_code == HTTPStatus.OK
     blocked = post(client, '/login', username='alex', password='correct horse battery')
-    assert blocked.status_code == 429
+    assert blocked.status_code == HTTPStatus.TOO_MANY_REQUESTS
     assert b'Too many sign-in attempts' in blocked.data
     rows = db_rows(app, 'SELECT username_key,address_key FROM login_failures')
     assert len(rows) == 5
@@ -151,7 +152,7 @@ def test_login_rate_limit_is_persisted_hashed_and_expires(app, monkeypatch):
 
     now[0] += 15 * 60 + 1
     recovered = post(client, '/login', username='alex', password='correct horse battery')
-    assert recovered.status_code == 302
+    assert recovered.status_code == HTTPStatus.FOUND
     assert recovered.headers['Location'].endswith('/')
     assert db_rows(app, 'SELECT COUNT(*) FROM login_failures') == [(0,)]
 
@@ -161,9 +162,9 @@ def test_login_rate_limit_caps_failures_from_one_address(app):
     client.get('/login')
     for attempt in range(30):
         response = post(client, '/login', username=f'unknown{attempt}', password='wrong')
-        assert response.status_code == 200
+        assert response.status_code == HTTPStatus.OK
     blocked = post(client, '/login', username='sam', password='another long password')
-    assert blocked.status_code == 429
+    assert blocked.status_code == HTTPStatus.TOO_MANY_REQUESTS
 
 
 def test_migrates_existing_user_table(tmp_path):

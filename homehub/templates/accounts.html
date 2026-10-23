@@ -65,7 +65,7 @@
 <section class="panel" id="rss-settings-section"><p class="eyebrow">Reading shelf</p><h2>RSS settings</h2>
   <form method="post" action="{{ url_for('update_rss_settings') }}" class="rss-settings-form">
     <input type="hidden" name="_csrf" value="{{ csrf_token }}">
-    <label>Refresh interval (minutes)<input type="number" name="refresh_minutes" min="10" max="240" value="{{ rss_refresh_minutes }}" required></label>
+    <label>Refresh interval (minutes)<input type="number" name="refresh_minutes" min="{{ rss_refresh_minimum }}" max="{{ rss_refresh_maximum }}" value="{{ rss_refresh_minutes }}" required></label>
     <label class="system-status-check"><input type="checkbox" name="outbound_enabled" value="1" {% if rss_outbound_enabled %}checked{% endif %}> Allow outbound RSS access</label>
     <p class="muted">When outbound access is off, the RSS tab shows cached articles and their last refresh time.</p>
     <button class="primary">Save RSS settings</button>

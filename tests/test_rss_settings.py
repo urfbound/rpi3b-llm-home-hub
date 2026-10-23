@@ -1,8 +1,13 @@
+from http import HTTPStatus
 import sqlite3
 
 import pytest
 
 from homehub.app import PH, create_app
+from homehub.rss import (
+    DEFAULT_RSS_REFRESH_MINUTES, MAX_RSS_REFRESH_MINUTES,
+    MIN_RSS_REFRESH_MINUTES,
+)
 
 
 @pytest.fixture
@@ -25,7 +30,7 @@ def sign_in(app, username, password):
         token = session['csrf_token']
     assert client.post('/login', data={
         'username': username, 'password': password, '_csrf': token,
-    }).status_code == 302
+    }).status_code == HTTPStatus.FOUND
     return client
 
 
@@ -45,13 +50,16 @@ def test_admin_can_configure_rss_refresh_and_outbound_access(app):
     page = admin.get('/admin/accounts')
 
     assert b'RSS settings' in page.data
-    assert b'name="refresh_minutes" min="10" max="240" value="30"' in page.data
+    control = (f'name="refresh_minutes" min="{MIN_RSS_REFRESH_MINUTES}" '
+               f'max="{MAX_RSS_REFRESH_MINUTES}" '
+               f'value="{DEFAULT_RSS_REFRESH_MINUTES}"').encode()
+    assert control in page.data
     assert b'name="outbound_enabled" value="1" checked' in page.data
 
     response = admin.post('/admin/rss/settings', data={
         '_csrf': csrf(admin), 'refresh_minutes': '30', 'outbound_enabled': '1',
     })
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
     assert values(app) == {'rss_refresh_minutes': '30', 'rss_outbound_enabled': '1'}
 
 
@@ -60,19 +68,34 @@ def test_rss_settings_validate_interval_and_save_outbound_toggle(app):
     with admin.session_transaction() as session:
         token = session['csrf_token']
 
-    for interval in ('9', '241', 'abc'):
+    for interval in (str(MIN_RSS_REFRESH_MINUTES - 1),
+                     str(MAX_RSS_REFRESH_MINUTES + 1), 'abc'):
         assert admin.post('/admin/rss/settings', data={
             '_csrf': token, 'refresh_minutes': interval, 'outbound_enabled': '1',
-        }).status_code == 400
+        }).status_code == HTTPStatus.BAD_REQUEST
     assert values(app) == {}
 
     response = admin.post('/admin/rss/settings', data={
-        '_csrf': token, 'refresh_minutes': '240',
+        '_csrf': token, 'refresh_minutes': str(MAX_RSS_REFRESH_MINUTES),
     })
 
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
     assert response.headers['Location'].endswith('#rss-settings-section')
-    assert values(app) == {'rss_refresh_minutes': '240', 'rss_outbound_enabled': '0'}
+    assert values(app) == {
+        'rss_refresh_minutes': str(MAX_RSS_REFRESH_MINUTES), 'rss_outbound_enabled': '0',
+    }
+
+
+def test_rss_refresh_accepts_the_configured_minimum(app):
+    admin = sign_in(app, 'admin', 'admin password')
+
+    response = admin.post('/admin/rss/settings', data={
+        '_csrf': csrf(admin), 'refresh_minutes': str(MIN_RSS_REFRESH_MINUTES),
+        'outbound_enabled': '1',
+    })
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert values(app)['rss_refresh_minutes'] == str(MIN_RSS_REFRESH_MINUTES)
 
 
 def test_only_admins_can_change_rss_settings(app):
@@ -84,5 +107,5 @@ def test_only_admins_can_change_rss_settings(app):
         '_csrf': token, 'refresh_minutes': '60', 'outbound_enabled': '1',
     })
 
-    assert response.status_code == 403
+    assert response.status_code == HTTPStatus.FORBIDDEN
     assert values(app) == {}

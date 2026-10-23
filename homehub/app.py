@@ -1,4 +1,5 @@
 """Home Hub phase 1: accounts, sessions, recipes, lists, calendar and ICS exports."""
+from http import HTTPStatus
 import hashlib
 import hmac
 import os
@@ -26,7 +27,8 @@ from .weather import (WeatherError, geocode_location, get_cached_forecast,
                       present_forecast)
 from .system_status import (collect_system_snapshot, cpu_usage_percent,
                             cpu_bar_class, record_metric_sample)
-from .rss import RSSFeedError, validate_feed_url
+from .rss import (DEFAULT_RSS_REFRESH_MINUTES, MAX_RSS_REFRESH_MINUTES,
+                  MIN_RSS_REFRESH_MINUTES, RSSFeedError, validate_feed_url)
 
 PH = PasswordHasher(memory_cost=16384, time_cost=2, parallelism=1)
 SCHEMA_VERSION = 14
@@ -412,7 +414,7 @@ def admin_required(fn):
     @login_required
     def wrapper(*args, **kwargs):
         if g.user['role'] != 'admin':
-            abort(403)
+            abort(HTTPStatus.FORBIDDEN)
         return fn(*args, **kwargs)
     return wrapper
 
@@ -548,16 +550,16 @@ def visible_list(db, user, list_id):
     try:
         list_id = int(list_id)
     except (TypeError, ValueError):
-        abort(404)
+        abort(HTTPStatus.NOT_FOUND)
     row = db.execute('SELECT * FROM household_lists WHERE id=?', (list_id,)).fetchone()
     if not row:
-        abort(404)
+        abort(HTTPStatus.NOT_FOUND)
     if user['role'] == 'admin' or row['visibility'] == 'shared' or row['created_by'] == user['id']:
         return row
     allowed = db.execute('SELECT 1 FROM list_access WHERE list_id=? AND user_id=?',
                          (list_id, user['id'])).fetchone()
     if not allowed:
-        abort(404)
+        abort(HTTPStatus.NOT_FOUND)
     return row
 
 def visible_recipes(db, user):
@@ -572,12 +574,12 @@ def visible_recipes(db, user):
 def visible_recipe(db, user, recipe_id):
     recipe = db.execute('SELECT * FROM recipes WHERE id=?', (recipe_id,)).fetchone()
     if not recipe:
-        abort(404)
+        abort(HTTPStatus.NOT_FOUND)
     if user['role'] != 'admin' and recipe['visibility'] == 'private' and recipe['created_by'] != user['id']:
         allowed = db.execute('SELECT 1 FROM recipe_access WHERE recipe_id=? AND user_id=?',
                              (recipe_id, user['id'])).fetchone()
         if not allowed:
-            abort(404)
+            abort(HTTPStatus.NOT_FOUND)
     return recipe
 
 def temporary_password():
@@ -700,9 +702,9 @@ def event_form_values(form):
         if date.fromisoformat(event_date).isoformat() != event_date:
             raise ValueError
     except ValueError:
-        abort(400, description='Enter a valid event date.')
+        abort(HTTPStatus.BAD_REQUEST, description='Enter a valid event date.')
     if not title or len(title) > 128 or len(description) > 256:
-        abort(400, description='Event titles are limited to 128 characters and descriptions to 256.')
+        abort(HTTPStatus.BAD_REQUEST, description='Event titles are limited to 128 characters and descriptions to 256.')
     all_day = (form.get('all_day') == '1' or
                (form.get('all_day') is None and form.get('start_time') is None
                 and form.get('end_time') is None))
@@ -712,11 +714,11 @@ def event_form_values(form):
         start_time = form.get('start_time', '').strip()
         end_time = form.get('end_time', '').strip() or None
         if not re.fullmatch(r'(?:[01]\d|2[0-3]):[0-5]\d', start_time):
-            abort(400, description='Choose a valid start time for a timed event.')
+            abort(HTTPStatus.BAD_REQUEST, description='Choose a valid start time for a timed event.')
         if end_time and not re.fullmatch(r'(?:[01]\d|2[0-3]):[0-5]\d', end_time):
-            abort(400, description='Choose a valid end time.')
+            abort(HTTPStatus.BAD_REQUEST, description='Choose a valid end time.')
         if end_time and end_time <= start_time:
-            abort(400, description='The end time must be later than the start time.')
+            abort(HTTPStatus.BAD_REQUEST, description='The end time must be later than the start time.')
     return {
         'title': title, 'event_date': event_date, 'description': description,
         'all_day': int(all_day), 'start_time': start_time, 'end_time': end_time,
@@ -726,7 +728,7 @@ def recurrence_values(form, event_date):
     """Validate a recurrence rule and return its inclusive end date."""
     frequency = form.get('recurrence_frequency', '').strip()
     if frequency not in ('', 'daily', 'weekly', 'monthly', 'yearly'):
-        abort(400, description='Choose a supported recurrence interval.')
+        abort(HTTPStatus.BAD_REQUEST, description='Choose a supported recurrence interval.')
     if not frequency:
         return None, None
     try:
@@ -742,9 +744,9 @@ def recurrence_values(form, event_date):
             except ValueError:
                 until = start.replace(year=start.year + 1, day=28)
     except ValueError:
-        abort(400, description='Enter a valid recurrence end date.')
+        abort(HTTPStatus.BAD_REQUEST, description='Enter a valid recurrence end date.')
     if until < date.fromisoformat(event_date):
-        abort(400, description='The recurrence end date must be on or after the event date.')
+        abort(HTTPStatus.BAD_REQUEST, description='The recurrence end date must be on or after the event date.')
     return frequency, until.isoformat()
 
 def recurrence_dates(start_text, frequency, until_text):
@@ -771,23 +773,23 @@ def recurrence_dates(start_text, frequency, until_text):
         result.append(occurrence.isoformat())
         index += 1
         if index > 3660:
-            abort(400, description='A recurring series cannot exceed 3,660 occurrences.')
+            abort(HTTPStatus.BAD_REQUEST, description='A recurring series cannot exceed 3,660 occurrences.')
     return result
 
 def event_access_values(db, form):
     visibility = form.get('visibility', 'shared').strip()
     if visibility not in ('shared', 'private'):
-        abort(400, description='Choose whether this event is shared or private.')
+        abort(HTTPStatus.BAD_REQUEST, description='Choose whether this event is shared or private.')
     participant_ids = set()
     for raw_id in form.getlist('participant_ids'):
         try:
             user_id = int(raw_id)
         except ValueError:
-            abort(400, description='Choose valid event participants.')
+            abort(HTTPStatus.BAD_REQUEST, description='Choose valid event participants.')
         user = db.execute('SELECT id FROM users WHERE id=? AND active=1',
                           (user_id,)).fetchone()
         if not user:
-            abort(400, description='Choose active household accounts as participants.')
+            abort(HTTPStatus.BAD_REQUEST, description='Choose active household accounts as participants.')
         participant_ids.add(user_id)
     return visibility, sorted(participant_ids)
 
@@ -816,31 +818,31 @@ def event_recipe_values(db, user, form, values, existing_recipe_id=None):
         try:
             recipe_id = int(raw_recipe_id)
         except ValueError:
-            abort(400, description='Choose a valid recipe.')
+            abort(HTTPStatus.BAD_REQUEST, description='Choose a valid recipe.')
         recipe = db.execute('SELECT * FROM recipes WHERE id=?', (recipe_id,)).fetchone()
         if not recipe:
-            abort(404)
+            abort(HTTPStatus.NOT_FOUND)
         if not can_view_recipe(db, user, recipe) and recipe_id != existing_recipe_id:
-            abort(404)
+            abort(HTTPStatus.NOT_FOUND)
     meal_prep = form.get('meal_prep') in ('1', 'on')
     meal_slot = form.get('meal_slot', '').strip() or None
     if meal_slot not in (None, 'breakfast', 'lunch', 'dinner'):
-        abort(400, description='Choose breakfast, lunch, or dinner.')
+        abort(HTTPStatus.BAD_REQUEST, description='Choose breakfast, lunch, or dinner.')
     raw_servings = form.get('recipe_servings', '').strip()
     auto_title = form.get('recipe_title_auto') == '1'
     if not recipe:
         if meal_prep or meal_slot or raw_servings or auto_title:
-            abort(400, description='Meal prep events must link to one visible recipe.')
+            abort(HTTPStatus.BAD_REQUEST, description='Meal prep events must link to one visible recipe.')
         return {'recipe_id': None, 'recipe_servings': None, 'meal_prep': 0,
                 'meal_slot': None, 'recipe_title_auto': 0}
     if meal_prep and not recipe:
-        abort(400, description='Meal prep events must link to one visible recipe.')
+        abort(HTTPStatus.BAD_REQUEST, description='Meal prep events must link to one visible recipe.')
     try:
         servings = int(raw_servings) if raw_servings else int(recipe['default_servings'])
     except ValueError:
-        abort(400, description='Recipe servings must be from 1 to 99.')
+        abort(HTTPStatus.BAD_REQUEST, description='Recipe servings must be from 1 to 99.')
     if not 1 <= servings <= 99:
-        abort(400, description='Recipe servings must be from 1 to 99.')
+        abort(HTTPStatus.BAD_REQUEST, description='Recipe servings must be from 1 to 99.')
     if auto_title:
         if recipe['visibility'] == 'private':
             values['title'] = 'Meal prep'
@@ -892,10 +894,10 @@ def enforce_event_budget(db, user_id, occurrence_dates, *, exclude_event_id=None
     excluded_months = Counter(day[:7] for day in excluded_dates)
     for occurrence_date, proposed in required_days.items():
         if existing_days[occurrence_date] - excluded_days[occurrence_date] + proposed > daily_limit:
-            abort(400, description=f'You have reached your limit of {daily_limit} events for that day.')
+            abort(HTTPStatus.BAD_REQUEST, description=f'You have reached your limit of {daily_limit} events for that day.')
     for occurrence_month, proposed in required_months.items():
         if existing_months[occurrence_month] - excluded_months[occurrence_month] + proposed > monthly_limit:
-            abort(400, description=f'You have reached your limit of {monthly_limit} events for that month.')
+            abort(HTTPStatus.BAD_REQUEST, description=f'You have reached your limit of {monthly_limit} events for that month.')
 
 def event_time_label(value):
     if not value:
@@ -908,7 +910,7 @@ def recipe_form_values(form):
     try:
         servings = int(form.get('default_servings', ''))
     except ValueError:
-        abort(400)
+        abort(HTTPStatus.BAD_REQUEST)
     quantities = form.getlist('ingredient_quantity')
     units = form.getlist('ingredient_unit')
     names = form.getlist('ingredient_name')
@@ -918,36 +920,36 @@ def recipe_form_values(form):
             or not 1 <= servings <= 99 or not 1 <= len(names) <= 64
             or len(quantities) != len(names) or len(units) != len(names)
             or len(notes) != len(names) or not 1 <= len(steps) <= 64):
-        abort(400)
+        abort(HTTPStatus.BAD_REQUEST)
     ingredients = []
     for quantity, unit, name, note in zip(quantities, units, names, notes):
         ingredient = (quantity.strip(), unit.strip(), name.strip(), note.strip())
         if (not ingredient[2] or len(ingredient[0]) > 32 or len(ingredient[1]) > 16
                 or len(ingredient[2]) > 128 or len(ingredient[3]) > 128):
-            abort(400)
+            abort(HTTPStatus.BAD_REQUEST)
         ingredients.append(ingredient)
     clean_steps = [step.strip() for step in steps]
     if any(not step or len(step) > 256 for step in clean_steps):
-        abort(400)
+        abort(HTTPStatus.BAD_REQUEST)
     return title, description, servings, ingredients, clean_steps
 
 def recipe_sharing_values(db, form, owner_id):
     visibility = form.get('visibility', 'shared')
     if visibility not in ('shared', 'private'):
-        abort(400)
+        abort(HTTPStatus.BAD_REQUEST)
     user_ids = set()
     if visibility == 'private':
         for raw_id in form.getlist('allowed_user_ids'):
             try:
                 user_id = int(raw_id)
             except ValueError:
-                abort(400)
+                abort(HTTPStatus.BAD_REQUEST)
             user = db.execute(
                 "SELECT id FROM users WHERE id=? AND active=1 AND account_kind='person'",
                 (user_id,)
             ).fetchone()
             if not user or user_id == owner_id:
-                abort(400)
+                abort(HTTPStatus.BAD_REQUEST)
             user_ids.add(user_id)
     return visibility, sorted(user_ids)
 
@@ -1013,14 +1015,14 @@ def create_app(test_config=None):
     def enter_request():
         with maintenance:
             if request_state['restoring']:
-                return 'The hub is restoring a verified backup. Try again shortly.', 503
+                return 'The hub is restoring a verified backup. Try again shortly.', HTTPStatus.SERVICE_UNAVAILABLE
             request_state['active'] += 1
             g.request_counted = True
 
     def begin_restore():
         with maintenance:
             if request_state['restoring']:
-                abort(409, description='Another restore is already in progress.')
+                abort(HTTPStatus.CONFLICT, description='Another restore is already in progress.')
             request_state['restoring'] = True
             while request_state['active'] > 1:
                 maintenance.wait()
@@ -1053,12 +1055,12 @@ def create_app(test_config=None):
             return redirect(url_for('change_password'))
         if g.user and g.user['account_kind'] == 'house' and request.method in (
             'POST', 'PUT', 'PATCH', 'DELETE') and request.endpoint not in ('logout',):
-            abort(403)
+            abort(HTTPStatus.FORBIDDEN)
         if request.method in ('POST','PUT','PATCH','DELETE'):
             token = session.get('csrf_token')
             supplied = request.form.get('_csrf', '') or request.headers.get('X-CSRF-Token', '')
             if not token or not secrets.compare_digest(token, supplied):
-                abort(400, description='Invalid CSRF token')
+                abort(HTTPStatus.BAD_REQUEST, description='Invalid CSRF token')
 
     @app.context_processor
     def inject_globals():
@@ -1085,7 +1087,7 @@ def create_app(test_config=None):
             calendar_month = int(request.args.get('month', today.month))
             calendar_year = int(request.args.get('year', today.year))
         except ValueError:
-            abort(400)
+            abort(HTTPStatus.BAD_REQUEST)
         retention = db.execute(
             "SELECT value FROM app_settings WHERE key='calendar_retention_years'"
         ).fetchone()
@@ -1094,7 +1096,7 @@ def create_app(test_config=None):
         maximum_calendar_year = today.year + 10
         if (not 1 <= calendar_month <= 12
                 or not minimum_calendar_year <= calendar_year <= maximum_calendar_year):
-            abort(400)
+            abort(HTTPStatus.BAD_REQUEST)
         calendar_year_options = range(minimum_calendar_year, maximum_calendar_year + 1)
         if calendar_month == 1:
             previous_month, previous_year = 12, calendar_year - 1
@@ -1198,13 +1200,13 @@ def create_app(test_config=None):
             ])
         list_kind = request.args.get('kind', 'shopping')
         if list_kind not in ('shopping', 'todo', 'chores'):
-            abort(400)
+            abort(HTTPStatus.BAD_REQUEST)
         lists = visible_lists(db, g.user, list_kind)
         selected_id = request.args.get('list_id')
         if selected_id:
             selected_list = visible_list(db, g.user, selected_id)
             if selected_list['kind'] != list_kind:
-                abort(404)
+                abort(HTTPStatus.NOT_FOUND)
         else:
             selected_list = next((item for item in lists if item['is_default']), None)
             if selected_list is None and lists:
@@ -1235,17 +1237,17 @@ def create_app(test_config=None):
         try:
             selected_weekday = int(selected_weekday)
         except ValueError:
-            abort(400)
+            abort(HTTPStatus.BAD_REQUEST)
         if not 0 <= selected_weekday < len(weekdays):
-            abort(400)
+            abort(HTTPStatus.BAD_REQUEST)
         chore_filter = request.args.get('assignee_id', '')
         if chore_filter:
             try:
                 chore_filter = int(chore_filter)
             except ValueError:
-                abort(400)
+                abort(HTTPStatus.BAD_REQUEST)
             if chore_filter not in {user['id'] for user in list_users}:
-                abort(400)
+                abort(HTTPStatus.BAD_REQUEST)
         chore_groups = []
         if list_kind == 'chores':
             week_key = week_start_for(today).isoformat()
@@ -1309,15 +1311,15 @@ def create_app(test_config=None):
         scope = request.form.get('scope', 'personal')
         if scope == 'household':
             if g.user['role'] != 'admin':
-                abort(403)
+                abort(HTTPStatus.FORBIDDEN)
         elif scope == 'personal':
             if g.user['account_kind'] != 'person':
-                abort(403)
+                abort(HTTPStatus.FORBIDDEN)
         else:
-            abort(400)
+            abort(HTTPStatus.BAD_REQUEST)
         allow_lan = request.form.get('allow_lan') == '1'
         if allow_lan and scope != 'household':
-            abort(400)
+            abort(HTTPStatus.BAD_REQUEST)
         try:
             normalized_url = validate_feed_url(request.form.get('feed_url', ''),
                                                allow_lan=allow_lan)
@@ -1363,12 +1365,12 @@ def create_app(test_config=None):
         db = get_db()
         feed = db.execute('SELECT * FROM rss_feeds WHERE id=?', (feed_id,)).fetchone()
         if not feed:
-            abort(404)
+            abort(HTTPStatus.NOT_FOUND)
         if feed['scope'] == 'household':
             if g.user['role'] != 'admin':
-                abort(403)
+                abort(HTTPStatus.FORBIDDEN)
         elif g.user['account_kind'] != 'person' or feed['owner_user_id'] != g.user['id']:
-            abort(403)
+            abort(HTTPStatus.FORBIDDEN)
         db.execute('DELETE FROM rss_feeds WHERE id=?', (feed_id,))
         db.commit()
         flash('Feed removed.')
@@ -1379,19 +1381,19 @@ def create_app(test_config=None):
     def move_rss_feed(feed_id):
         direction = request.form.get('direction')
         if direction not in ('up', 'down'):
-            abort(400)
+            abort(HTTPStatus.BAD_REQUEST)
         db = get_db()
         feed = db.execute('SELECT * FROM rss_feeds WHERE id=?', (feed_id,)).fetchone()
         if not feed:
-            abort(404)
+            abort(HTTPStatus.NOT_FOUND)
         if feed['scope'] == 'household':
             if g.user['role'] != 'admin':
-                abort(403)
+                abort(HTTPStatus.FORBIDDEN)
             peers = db.execute("SELECT id FROM rss_feeds WHERE scope='household' "
                                'ORDER BY sort_order,id').fetchall()
         else:
             if g.user['account_kind'] != 'person' or feed['owner_user_id'] != g.user['id']:
-                abort(403)
+                abort(HTTPStatus.FORBIDDEN)
             peers = db.execute("SELECT id FROM rss_feeds WHERE scope='personal' "
                                'AND owner_user_id=? ORDER BY sort_order,id',
                                (g.user['id'],)).fetchall()
@@ -1443,7 +1445,7 @@ def create_app(test_config=None):
             if username_failures >= LOGIN_USERNAME_LIMIT or address_failures >= LOGIN_ADDRESS_LIMIT:
                 db.commit()
                 flash('Too many sign-in attempts. Wait a few minutes and try again.')
-                return render_template('login.html'), 429
+                return render_template('login.html'), HTTPStatus.TOO_MANY_REQUESTS
 
             user = db.execute('SELECT * FROM users WHERE username=? AND active=1', (username,)).fetchone()
             ok = False
@@ -1543,7 +1545,10 @@ def create_app(test_config=None):
                                weather_forecast_days=setting(db, 'weather_forecast_days', 5),
                                weather_units=weather_units,
                                weather_outbound_enabled=setting(db, 'weather_outbound_enabled', 1),
-                               rss_refresh_minutes=setting(db, 'rss_refresh_minutes', 30),
+                               rss_refresh_minutes=setting(
+                                   db, 'rss_refresh_minutes', DEFAULT_RSS_REFRESH_MINUTES),
+                               rss_refresh_minimum=MIN_RSS_REFRESH_MINUTES,
+                               rss_refresh_maximum=MAX_RSS_REFRESH_MINUTES,
                                rss_outbound_enabled=setting(db, 'rss_outbound_enabled', 1),
                                weather_location_candidates=session.get('weather_location_candidates', []),
                                weather_location_query=session.get('weather_location_query', ''),
@@ -1573,11 +1578,11 @@ def create_app(test_config=None):
         try:
             forecast_days = int(request.form.get('forecast_days', ''))
         except ValueError:
-            abort(400)
+            abort(HTTPStatus.BAD_REQUEST)
         units = request.form.get('units', '')
         outbound_enabled = '1' if request.form.get('outbound_enabled') == '1' else '0'
         if not 1 <= forecast_days <= 15 or units not in ('metric', 'imperial'):
-            abort(400)
+            abort(HTTPStatus.BAD_REQUEST)
         db = get_db()
         with db:
             db.executemany(
@@ -1595,9 +1600,9 @@ def create_app(test_config=None):
         try:
             refresh_minutes = int(request.form.get('refresh_minutes', ''))
         except ValueError:
-            abort(400)
-        if not 10 <= refresh_minutes <= 240:
-            abort(400)
+            abort(HTTPStatus.BAD_REQUEST)
+        if not MIN_RSS_REFRESH_MINUTES <= refresh_minutes <= MAX_RSS_REFRESH_MINUTES:
+            abort(HTTPStatus.BAD_REQUEST)
         outbound_enabled = '1' if request.form.get('outbound_enabled') == '1' else '0'
         db = get_db()
         with db:
@@ -1614,7 +1619,7 @@ def create_app(test_config=None):
     def search_weather_locations():
         db = get_db()
         if not setting(db, 'weather_outbound_enabled', 1):
-            abort(400, description='Enable outbound weather access before searching for a location.')
+            abort(HTTPStatus.BAD_REQUEST, description='Enable outbound weather access before searching for a location.')
         query = request.form.get('location_query', '').strip()
         try:
             results = geocode_location(query)
@@ -1655,14 +1660,14 @@ def create_app(test_config=None):
     def select_weather_location():
         db = get_db()
         if not setting(db, 'weather_outbound_enabled', 1):
-            abort(400, description='Enable outbound weather access before selecting a location.')
+            abort(HTTPStatus.BAD_REQUEST, description='Enable outbound weather access before selecting a location.')
         candidates = session.get('weather_location_candidates', [])
         try:
             candidate_index = int(request.form.get('candidate_index', ''))
         except ValueError:
-            abort(400)
+            abort(HTTPStatus.BAD_REQUEST)
         if not 0 <= candidate_index < len(candidates):
-            abort(400)
+            abort(HTTPStatus.BAD_REQUEST)
         location = candidates[candidate_index]
         with db:
             db.executemany(
@@ -1686,9 +1691,9 @@ def create_app(test_config=None):
             events_per_day = int(request.form.get('events_per_day', ''))
             events_per_month = int(request.form.get('events_per_month', ''))
         except ValueError:
-            abort(400, description='Enter valid daily and monthly event limits.')
+            abort(HTTPStatus.BAD_REQUEST, description='Enter valid daily and monthly event limits.')
         if events_per_day < 1 or not 7 <= events_per_month <= 512:
-            abort(400, description='Daily event limit must be at least 1; monthly limit must be from 7 to 512.')
+            abort(HTTPStatus.BAD_REQUEST, description='Daily event limit must be at least 1; monthly limit must be from 7 to 512.')
         with db:
             db.executemany('INSERT INTO app_settings(key,value) VALUES(?,?) '
                            'ON CONFLICT(key) DO UPDATE SET value=excluded.value',
@@ -1753,11 +1758,11 @@ def create_app(test_config=None):
             path = configured_backup_directory(get_db()) / filename
             if (path.is_symlink() or path.resolve().parent != path.parent.resolve()
                     or not path.is_file()):
-                abort(404)
+                abort(HTTPStatus.NOT_FOUND)
             return send_file(path, as_attachment=True, download_name=path.name,
                              mimetype='application/vnd.sqlite3', max_age=0)
         except BackupError:
-            abort(404)
+            abort(HTTPStatus.NOT_FOUND)
 
     @app.post('/admin/backups/<filename>/delete')
     @admin_required
@@ -1765,7 +1770,7 @@ def create_app(test_config=None):
         try:
             delete_backup(configured_backup_directory(get_db()), filename)
         except BackupError as exc:
-            abort(400, description=str(exc))
+            abort(HTTPStatus.BAD_REQUEST, description=str(exc))
         flash(f'Backup {filename} deleted.')
         return redirect(url_for('accounts'))
 
@@ -1802,13 +1807,13 @@ def create_app(test_config=None):
         if (not 3 <= len(username) <= 32 or not username.replace('_', '').isalnum()
                 or not 1 <= len(display_name) <= 80 or role not in ('user', 'admin')
                 or kind not in ('person', 'house') or (kind == 'house' and role != 'user')):
-            abort(400)
+            abort(HTTPStatus.BAD_REQUEST)
         if db.execute('SELECT COUNT(*) FROM users').fetchone()[0] >= 32:
-            abort(409, description='The household account limit has been reached.')
+            abort(HTTPStatus.CONFLICT, description='The household account limit has been reached.')
         if role == 'admin' and db.execute("SELECT COUNT(*) FROM users WHERE role='admin'").fetchone()[0] >= 4:
-            abort(409, description='The admin account limit has been reached.')
+            abort(HTTPStatus.CONFLICT, description='The admin account limit has been reached.')
         if kind == 'house' and db.execute("SELECT COUNT(*) FROM users WHERE account_kind='house'").fetchone()[0]:
-            abort(409, description='A house-wide account already exists.')
+            abort(HTTPStatus.CONFLICT, description='A house-wide account already exists.')
         password = temporary_password()
         try:
             db.execute('INSERT INTO users(username,display_name,password_hash,role,account_kind,must_change_password) '
@@ -1816,7 +1821,7 @@ def create_app(test_config=None):
                                              int(kind == 'person')))
             db.commit()
         except sqlite3.IntegrityError:
-            abort(409, description='That username is already in use.')
+            abort(HTTPStatus.CONFLICT, description='That username is already in use.')
         return temporary_password_page(username, password, kind == 'person')
 
     @app.post('/admin/accounts/<int:user_id>/reset-password')
@@ -1825,7 +1830,7 @@ def create_app(test_config=None):
         db = get_db()
         user = db.execute('SELECT * FROM users WHERE id=?', (user_id,)).fetchone()
         if not user:
-            abort(404)
+            abort(HTTPStatus.NOT_FOUND)
         password = temporary_password()
         db.execute('UPDATE users SET password_hash=?, must_change_password=?, '
                    'session_version=session_version+1 WHERE id=?',
@@ -1842,26 +1847,26 @@ def create_app(test_config=None):
         db = get_db()
         user = db.execute('SELECT * FROM users WHERE id=?', (user_id,)).fetchone()
         if not user:
-            abort(404)
+            abort(HTTPStatus.NOT_FOUND)
         if user_id == g.user['id']:
-            abort(400, description='You cannot remove your own account.')
+            abort(HTTPStatus.BAD_REQUEST, description='You cannot remove your own account.')
         if user['role'] == 'admin' and db.execute(
                 "SELECT COUNT(*) FROM users WHERE role='admin'").fetchone()[0] <= 1:
-            abort(409, description='The last admin cannot be removed.')
+            abort(HTTPStatus.CONFLICT, description='The last admin cannot be removed.')
         if request.form.get('confirm_username') != user['username']:
-            abort(400, description='Type the username to confirm removal.')
+            abort(HTTPStatus.BAD_REQUEST, description='Type the username to confirm removal.')
         choice = request.form.get('content_choice')
         if choice not in ('transfer', 'delete'):
-            abort(400)
+            abort(HTTPStatus.BAD_REQUEST)
         if choice == 'transfer':
             try:
                 target_id = int(request.form.get('transfer_to', ''))
             except ValueError:
-                abort(400)
+                abort(HTTPStatus.BAD_REQUEST)
             target = db.execute('SELECT id FROM users WHERE id=? AND id!=? AND account_kind=?',
                                 (target_id, user_id, 'person')).fetchone()
             if not target:
-                abort(400)
+                abort(HTTPStatus.BAD_REQUEST)
         with db:
             if choice == 'transfer':
                 for table in ('shopping_items', 'recipes', 'events'):
@@ -1881,9 +1886,9 @@ def create_app(test_config=None):
             idle = int(request.form.get('idle_hours', ''))
             absolute = int(request.form.get('absolute_days', ''))
         except ValueError:
-            abort(400)
+            abort(HTTPStatus.BAD_REQUEST)
         if not 1 <= idle <= 168 or not 1 <= absolute <= 30:
-            abort(400)
+            abort(HTTPStatus.BAD_REQUEST)
         db = get_db()
         with db:
             db.executemany('INSERT INTO app_settings(key,value) VALUES(?,?) '
@@ -1901,11 +1906,11 @@ def create_app(test_config=None):
         visibility = request.form.get('visibility', 'shared').strip()
         category = request.form.get('category', 'Other').strip()
         if kind not in ('shopping', 'todo') or visibility not in ('shared', 'private'):
-            abort(400)
+            abort(HTTPStatus.BAD_REQUEST)
         if not title or len(title) > 80:
-            abort(400)
+            abort(HTTPStatus.BAD_REQUEST)
         if kind == 'shopping' and category not in SHOPPING_CATEGORIES:
-            abort(400)
+            abort(HTTPStatus.BAD_REQUEST)
         if kind == 'todo':
             category = 'Other'
 
@@ -1916,7 +1921,7 @@ def create_app(test_config=None):
                     int(value) for value in request.form.getlist('allowed_user_ids')
                 ))
             except ValueError:
-                abort(400)
+                abort(HTTPStatus.BAD_REQUEST)
         db = get_db()
         if allowed_ids:
             placeholders = ','.join('?' for _ in allowed_ids)
@@ -1925,7 +1930,7 @@ def create_app(test_config=None):
                 f"AND id IN ({placeholders})", allowed_ids
             ).fetchall()}
             if valid_ids != set(allowed_ids):
-                abort(400)
+                abort(HTTPStatus.BAD_REQUEST)
         with db:
             cursor = db.execute(
                 'INSERT INTO household_lists(kind,title,category,visibility,created_by) '
@@ -1946,9 +1951,9 @@ def create_app(test_config=None):
         try:
             weekday = int(request.form.get('weekday', ''))
         except ValueError:
-            abort(400)
+            abort(HTTPStatus.BAD_REQUEST)
         if not 0 <= weekday <= 6 or not text or len(text) > 240:
-            abort(400)
+            abort(HTTPStatus.BAD_REQUEST)
         db = get_db()
         assigned_everyone = assignee.casefold() == 'everyone'
         assignee_id = None
@@ -1956,13 +1961,13 @@ def create_app(test_config=None):
             try:
                 assignee_id = int(assignee)
             except ValueError:
-                abort(400)
+                abort(HTTPStatus.BAD_REQUEST)
             assigned_user = db.execute(
                 "SELECT id FROM users WHERE id=? AND active=1 AND account_kind='person'",
                 (assignee_id,)
             ).fetchone()
             if not assigned_user:
-                abort(400)
+                abort(HTTPStatus.BAD_REQUEST)
         with db:
             db.execute(
                 'INSERT INTO chores(weekday,text,created_by,assignee_id,assigned_everyone) '
@@ -1977,10 +1982,10 @@ def create_app(test_config=None):
         db = get_db()
         chore = db.execute('SELECT * FROM chores WHERE id=?', (chore_id,)).fetchone()
         if not chore:
-            abort(404)
+            abort(HTTPStatus.NOT_FOUND)
         if (g.user['account_kind'] != 'person' or
                 (not chore['assigned_everyone'] and chore['assignee_id'] != g.user['id'])):
-            abort(403)
+            abort(HTTPStatus.FORBIDDEN)
         week_key = week_start_for(household_today()).isoformat()
         with db:
             completion = db.execute(
@@ -2006,9 +2011,9 @@ def create_app(test_config=None):
         db = get_db()
         chore = db.execute('SELECT * FROM chores WHERE id=?', (chore_id,)).fetchone()
         if not chore:
-            abort(404)
+            abort(HTTPStatus.NOT_FOUND)
         if chore['created_by'] != g.user['id'] and g.user['role'] != 'admin':
-            abort(403)
+            abort(HTTPStatus.FORBIDDEN)
         with db:
             db.execute('DELETE FROM chores WHERE id=?', (chore_id,))
         return redirect(url_for('index', kind='chores', weekday=chore['weekday']))
@@ -2016,7 +2021,7 @@ def create_app(test_config=None):
     def add_list_item(expected_kind):
         text = request.form.get('text','').strip()
         if not text or len(text) > 240:
-            abort(400)
+            abort(HTTPStatus.BAD_REQUEST)
         db = get_db()
         due_date = None
         assignee_id = None
@@ -2025,21 +2030,21 @@ def create_app(test_config=None):
             if due_date:
                 try:
                     if date.fromisoformat(due_date).isoformat() != due_date:
-                        abort(400)
+                        abort(HTTPStatus.BAD_REQUEST)
                 except ValueError:
-                    abort(400)
+                    abort(HTTPStatus.BAD_REQUEST)
             raw_assignee = request.form.get('assignee_id', '').strip()
             if raw_assignee:
                 try:
                     assignee_id = int(raw_assignee)
                 except ValueError:
-                    abort(400)
+                    abort(HTTPStatus.BAD_REQUEST)
                 assignee = db.execute(
                     "SELECT id FROM users WHERE id=? AND active=1 AND account_kind='person'",
                     (assignee_id,)
                 ).fetchone()
                 if not assignee:
-                    abort(400)
+                    abort(HTTPStatus.BAD_REQUEST)
         selected_id = request.form.get('list_id')
         if selected_id:
             target = visible_list(db, g.user, selected_id)
@@ -2048,9 +2053,9 @@ def create_app(test_config=None):
                 "SELECT * FROM household_lists WHERE kind='shopping' AND is_default=1"
             ).fetchone()
         else:
-            abort(400)
+            abort(HTTPStatus.BAD_REQUEST)
         if not target or target['kind'] != expected_kind:
-            abort(404)
+            abort(HTTPStatus.NOT_FOUND)
         if (assignee_id and target['kind'] == 'todo' and target['visibility'] == 'private'
                 and assignee_id != target['created_by']):
             allowed = db.execute(
@@ -2058,7 +2063,7 @@ def create_app(test_config=None):
                 (target['id'], assignee_id)
             ).fetchone()
             if not allowed:
-                abort(400)
+                abort(HTTPStatus.BAD_REQUEST)
         with db:
             db.execute('INSERT INTO shopping_items(text,created_by,list_id,due_date,assignee_id,updated_at) '
                        'VALUES(?,?,?,?,?,CURRENT_TIMESTAMP)',
@@ -2082,40 +2087,40 @@ def create_app(test_config=None):
         db = get_db()
         item = db.execute('SELECT * FROM shopping_items WHERE id=?', (item_id,)).fetchone()
         if not item or not item['list_id']:
-            abort(404)
+            abort(HTTPStatus.NOT_FOUND)
         target = visible_list(db, g.user, item['list_id'])
         if target['kind'] != 'todo':
-            abort(404)
+            abort(HTTPStatus.NOT_FOUND)
         text = request.form.get('text', '').strip()
         if not text or len(text) > 240:
-            abort(400)
+            abort(HTTPStatus.BAD_REQUEST)
         due_date = request.form.get('due_date', '').strip() or None
         if due_date:
             try:
                 if date.fromisoformat(due_date).isoformat() != due_date:
-                    abort(400)
+                    abort(HTTPStatus.BAD_REQUEST)
             except ValueError:
-                abort(400)
+                abort(HTTPStatus.BAD_REQUEST)
         raw_assignee = request.form.get('assignee_id', '').strip()
         assignee_id = None
         if raw_assignee:
             try:
                 assignee_id = int(raw_assignee)
             except ValueError:
-                abort(400)
+                abort(HTTPStatus.BAD_REQUEST)
             assignee = db.execute(
                 "SELECT id FROM users WHERE id=? AND active=1 AND account_kind='person'",
                 (assignee_id,)
             ).fetchone()
             if not assignee:
-                abort(400)
+                abort(HTTPStatus.BAD_REQUEST)
             if target['visibility'] == 'private' and assignee_id != target['created_by']:
                 allowed = db.execute(
                     'SELECT 1 FROM list_access WHERE list_id=? AND user_id=?',
                     (target['id'], assignee_id)
                 ).fetchone()
                 if not allowed:
-                    abort(400)
+                    abort(HTTPStatus.BAD_REQUEST)
         with db:
             db.execute('UPDATE shopping_items SET text=?,due_date=?,assignee_id=?,updated_at=CURRENT_TIMESTAMP '
                        'WHERE id=?', (text, due_date, assignee_id, item_id))
@@ -2127,10 +2132,10 @@ def create_app(test_config=None):
         db = get_db()
         item = db.execute('SELECT * FROM shopping_items WHERE id=?', (item_id,)).fetchone()
         if not item or not item['list_id']:
-            abort(404)
+            abort(HTTPStatus.NOT_FOUND)
         target = visible_list(db, g.user, item['list_id'])
         if target['kind'] not in ('shopping', 'todo'):
-            abort(404)
+            abort(HTTPStatus.NOT_FOUND)
         with db:
             db.execute("UPDATE shopping_items SET done=1-done,updated_at="
                        "strftime('%Y-%m-%d %H:%M:%f','now') "
@@ -2144,10 +2149,10 @@ def create_app(test_config=None):
         db = get_db()
         item = db.execute('SELECT * FROM shopping_items WHERE id=?', (item_id,)).fetchone()
         if not item or not item['list_id']:
-            abort(404)
+            abort(HTTPStatus.NOT_FOUND)
         target = visible_list(db, g.user, item['list_id'])
         if item['created_by'] != g.user['id'] and g.user['role'] != 'admin':
-            abort(403)
+            abort(HTTPStatus.FORBIDDEN)
         with db:
             db.execute('DELETE FROM shopping_items WHERE id=?', (item_id,))
         return redirect(url_for('index', kind=target['kind'], list_id=target['id']) +
@@ -2159,9 +2164,9 @@ def create_app(test_config=None):
         db = get_db()
         target = db.execute('SELECT * FROM household_lists WHERE id=?', (list_id,)).fetchone()
         if not target:
-            abort(404)
+            abort(HTTPStatus.NOT_FOUND)
         if target['created_by'] != g.user['id'] and g.user['role'] != 'admin':
-            abort(403)
+            abort(HTTPStatus.FORBIDDEN)
         kind = target['kind']
         with db:
             db.execute('DELETE FROM household_lists WHERE id=?', (list_id,))
@@ -2179,7 +2184,7 @@ def create_app(test_config=None):
                 "SELECT * FROM household_lists WHERE kind='shopping' AND is_default=1"
             ).fetchone()
         if not target or target['kind'] != 'shopping':
-            abort(404)
+            abort(HTTPStatus.NOT_FOUND)
         items = db.execute('SELECT text,done FROM shopping_items WHERE list_id=? ORDER BY id',
                            (target['id'],)).fetchall()
         body = target['title'] + '\n\n' + '\n'.join(
@@ -2193,7 +2198,7 @@ def create_app(test_config=None):
         db = get_db()
         target = visible_list(db, g.user, request.args.get('list_id'))
         if target['kind'] != 'shopping':
-            abort(404)
+            abort(HTTPStatus.NOT_FOUND)
         items = db.execute(
             'SELECT id,text,done,updated_at FROM shopping_items WHERE list_id=? ORDER BY id',
             (target['id'],)
@@ -2210,22 +2215,22 @@ def create_app(test_config=None):
     @login_required
     def shopping_sync_apply():
         if g.user['account_kind'] == 'house':
-            abort(403)
+            abort(HTTPStatus.FORBIDDEN)
         payload = request.get_json(silent=True)
         if not isinstance(payload, dict):
-            abort(400)
+            abort(HTTPStatus.BAD_REQUEST)
         list_id = payload.get('list_id')
         changes = payload.get('changes')
         if (not isinstance(list_id, int) or isinstance(list_id, bool)
                 or not isinstance(changes, list) or len(changes) > 500):
-            abort(400)
+            abort(HTTPStatus.BAD_REQUEST)
         target = visible_list(get_db(), g.user, list_id)
         if target['kind'] != 'shopping':
-            abort(404)
+            abort(HTTPStatus.NOT_FOUND)
         ids = set()
         for change in changes:
             if not isinstance(change, dict):
-                abort(400)
+                abort(HTTPStatus.BAD_REQUEST)
             item_id = change.get('id')
             base_updated_at = change.get('base_updated_at')
             if (not isinstance(item_id, int) or isinstance(item_id, bool) or item_id < 1
@@ -2233,7 +2238,7 @@ def create_app(test_config=None):
                     or not isinstance(change.get('base_done'), bool)
                     or (base_updated_at is not None and
                         (not isinstance(base_updated_at, str) or len(base_updated_at) > 64))):
-                abort(400)
+                abort(HTTPStatus.BAD_REQUEST)
             ids.add(item_id)
 
         db = get_db()
@@ -2284,7 +2289,7 @@ def create_app(test_config=None):
         count = db.execute('SELECT COUNT(*) FROM recipes WHERE created_by=?',
                            (g.user['id'],)).fetchone()[0]
         if count >= 128:
-            abort(409, description='Your recipe book is full (128 recipes).')
+            abort(HTTPStatus.CONFLICT, description='Your recipe book is full (128 recipes).')
         with db:
             cursor = db.execute(
                 'INSERT INTO recipes(title,description,default_servings,created_by,visibility) '
@@ -2306,11 +2311,11 @@ def create_app(test_config=None):
         if raw_servings is None:
             selected_servings = recipe['default_servings']
         elif not re.fullmatch(r'[0-9]+', raw_servings):
-            abort(400, description='Servings must be a whole number from 1 to 99.')
+            abort(HTTPStatus.BAD_REQUEST, description='Servings must be a whole number from 1 to 99.')
         else:
             selected_servings = int(raw_servings)
             if not RECIPE_SERVING_MIN <= selected_servings <= RECIPE_SERVING_MAX:
-                abort(400, description='Servings must be a whole number from 1 to 99.')
+                abort(HTTPStatus.BAD_REQUEST, description='Servings must be a whole number from 1 to 99.')
         ingredient_rows = db.execute(
             'SELECT quantity,unit,name,note FROM recipe_ingredients WHERE recipe_id=? ORDER BY position',
             (recipe_id,)
@@ -2353,18 +2358,18 @@ def create_app(test_config=None):
     @login_required
     def add_recipe_to_shopping(recipe_id):
         if g.user['account_kind'] == 'house':
-            abort(403)
+            abort(HTTPStatus.FORBIDDEN)
         db = get_db()
         recipe = visible_recipe(db, g.user, recipe_id)
         raw_servings = request.form.get('servings', str(recipe['default_servings']))
         if not re.fullmatch(r'[0-9]+', raw_servings):
-            abort(400, description='Servings must be a whole number from 1 to 99.')
+            abort(HTTPStatus.BAD_REQUEST, description='Servings must be a whole number from 1 to 99.')
         servings = int(raw_servings)
         if not RECIPE_SERVING_MIN <= servings <= RECIPE_SERVING_MAX:
-            abort(400, description='Servings must be a whole number from 1 to 99.')
+            abort(HTTPStatus.BAD_REQUEST, description='Servings must be a whole number from 1 to 99.')
         target = visible_list(db, g.user, request.form.get('list_id'))
         if target['kind'] != 'shopping':
-            abort(404)
+            abort(HTTPStatus.NOT_FOUND)
         ingredients = db.execute(
             'SELECT quantity,unit,name,note FROM recipe_ingredients '
             'WHERE recipe_id=? ORDER BY position', (recipe_id,)
@@ -2377,7 +2382,7 @@ def create_app(test_config=None):
             snapshots = [line.strip() for line in recipe['ingredients'].splitlines()
                          if line.strip()]
         if not snapshots or any(len(text) > 240 for text in snapshots):
-            abort(400, description='Recipe ingredients must each fit within 240 characters to copy.')
+            abort(HTTPStatus.BAD_REQUEST, description='Recipe ingredients must each fit within 240 characters to copy.')
         with db:
             db.executemany(
                 'INSERT INTO shopping_items(text,created_by,list_id,updated_at) '
@@ -2393,9 +2398,9 @@ def create_app(test_config=None):
         db = get_db()
         recipe = db.execute('SELECT * FROM recipes WHERE id=?', (recipe_id,)).fetchone()
         if not recipe:
-            abort(404)
+            abort(HTTPStatus.NOT_FOUND)
         if recipe['created_by'] != g.user['id']:
-            abort(403)
+            abort(HTTPStatus.FORBIDDEN)
         if request.method == 'POST':
             values = recipe_form_values(request.form)
             visibility, allowed_ids = recipe_sharing_values(db, request.form, g.user['id'])
@@ -2442,12 +2447,12 @@ def create_app(test_config=None):
     @login_required
     def save_recipe_note(recipe_id):
         if g.user['account_kind'] == 'house':
-            abort(403)
+            abort(HTTPStatus.FORBIDDEN)
         db = get_db()
         visible_recipe(db, g.user, recipe_id)
         note = request.form.get('text', '').strip()
         if not note or len(note) > 128:
-            abort(400)
+            abort(HTTPStatus.BAD_REQUEST)
         with db:
             db.execute(
                 'INSERT INTO recipe_notes(recipe_id,user_id,note) VALUES(?,?,?) '
@@ -2464,9 +2469,9 @@ def create_app(test_config=None):
         note = db.execute('SELECT user_id FROM recipe_notes WHERE id=? AND recipe_id=?',
                           (note_id, recipe_id)).fetchone()
         if not note:
-            abort(404)
+            abort(HTTPStatus.NOT_FOUND)
         if note['user_id'] != g.user['id']:
-            abort(403)
+            abort(HTTPStatus.FORBIDDEN)
         with db:
             db.execute('DELETE FROM recipe_notes WHERE id=?', (note_id,))
         return redirect(url_for('recipe_detail', recipe_id=recipe_id))
@@ -2477,9 +2482,9 @@ def create_app(test_config=None):
         db = get_db()
         recipe = db.execute('SELECT id,created_by FROM recipes WHERE id=?', (recipe_id,)).fetchone()
         if not recipe:
-            abort(404)
+            abort(HTTPStatus.NOT_FOUND)
         if recipe['created_by'] != g.user['id'] and g.user['role'] != 'admin':
-            abort(403)
+            abort(HTTPStatus.FORBIDDEN)
         with db:
             db.execute('DELETE FROM recipes WHERE id=?', (recipe_id,))
         return redirect(url_for('index') + '#recipes')
@@ -2488,7 +2493,7 @@ def create_app(test_config=None):
     @login_required
     def new_event():
         if g.user['account_kind'] == 'house':
-            abort(403)
+            abort(HTTPStatus.FORBIDDEN)
         db = get_db()
         recipes = visible_recipes(db, g.user)
         recipe = None
@@ -2497,17 +2502,17 @@ def create_app(test_config=None):
             recipe = visible_recipe(db, g.user, recipe_id)
         meal_prep = request.args.get('meal_prep') == '1'
         if meal_prep and not recipe:
-            abort(400, description='Meal prep events must link to one visible recipe.')
+            abort(HTTPStatus.BAD_REQUEST, description='Meal prep events must link to one visible recipe.')
         try:
             servings = (int(request.args.get('servings', recipe['default_servings']))
                         if recipe else None)
         except ValueError:
-            abort(400, description='Recipe servings must be from 1 to 99.')
+            abort(HTTPStatus.BAD_REQUEST, description='Recipe servings must be from 1 to 99.')
         if servings is not None and not 1 <= servings <= 99:
-            abort(400, description='Recipe servings must be from 1 to 99.')
+            abort(HTTPStatus.BAD_REQUEST, description='Recipe servings must be from 1 to 99.')
         meal_slot = request.args.get('meal_slot', '')
         if meal_slot not in ('', 'breakfast', 'lunch', 'dinner'):
-            abort(400, description='Choose breakfast, lunch, or dinner.')
+            abort(HTTPStatus.BAD_REQUEST, description='Choose breakfast, lunch, or dinner.')
         default_title = ('Meal prep' if recipe and recipe['visibility'] == 'private'
                          else recipe['title'] if recipe else '')
         event = {'title': '', 'event_date': household_today().isoformat(),
@@ -2530,7 +2535,7 @@ def create_app(test_config=None):
     @login_required
     def add_event():
         if g.user['account_kind'] == 'house':
-            abort(403)
+            abort(HTTPStatus.FORBIDDEN)
         values = event_form_values(request.form)
         db = get_db()
         recipe_values = event_recipe_values(db, g.user, request.form, values)
@@ -2569,7 +2574,7 @@ def create_app(test_config=None):
         db = get_db()
         event = db.execute('SELECT * FROM events WHERE id=?', (event_id,)).fetchone()
         if not event:
-            abort(404)
+            abort(HTTPStatus.NOT_FOUND)
         can_edit = (event['created_by'] == g.user['id'] or g.user['role'] == 'admin')
         can_view_details = (
             event['visibility'] == 'shared' or can_edit or db.execute(
@@ -2607,9 +2612,9 @@ def create_app(test_config=None):
         db = get_db()
         event = db.execute('SELECT * FROM events WHERE id=?', (event_id,)).fetchone()
         if not event:
-            abort(404)
+            abort(HTTPStatus.NOT_FOUND)
         if event['created_by'] != g.user['id'] and g.user['role'] != 'admin':
-            abort(403)
+            abort(HTTPStatus.FORBIDDEN)
         if request.method == 'GET':
             users = db.execute(
                 'SELECT id,display_name,username,account_kind FROM users '
@@ -2629,7 +2634,7 @@ def create_app(test_config=None):
         visibility, participant_ids = event_access_values(db, request.form)
         edit_scope = request.form.get('edit_scope', 'series' if event['series_id'] else 'occurrence')
         if edit_scope not in ('occurrence', 'series'):
-            abort(400)
+            abort(HTTPStatus.BAD_REQUEST)
         with db:
             db.execute('BEGIN IMMEDIATE')
             group_id = event['series_id'] or event['id']
@@ -2699,14 +2704,14 @@ def create_app(test_config=None):
         event = db.execute('SELECT id,created_by,series_id,recurrence_frequency FROM events WHERE id=?',
                            (event_id,)).fetchone()
         if not event:
-            abort(404)
+            abort(HTTPStatus.NOT_FOUND)
         if event['created_by'] != g.user['id'] and g.user['role'] != 'admin':
-            abort(403)
+            abort(HTTPStatus.FORBIDDEN)
         delete_scope = request.form.get(
             'delete_scope', 'series' if event['series_id'] else 'occurrence'
         )
         if delete_scope not in ('occurrence', 'series'):
-            abort(400)
+            abort(HTTPStatus.BAD_REQUEST)
         with db:
             if delete_scope == 'series' and event['series_id']:
                 db.execute('DELETE FROM events WHERE series_id=?', (event['series_id'],))

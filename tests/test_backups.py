@@ -1,3 +1,4 @@
+from http import HTTPStatus
 import logging
 import sqlite3
 import time
@@ -22,7 +23,7 @@ def make_admin_client(tmp_path):
     response = client.post('/login', data={'username': 'admin',
                                           'password': 'correct horse battery',
                                           '_csrf': csrf})
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
     return app, client, database
 
 
@@ -46,14 +47,14 @@ def test_admin_can_create_download_and_delete_verified_backup(tmp_path):
         assert backup.execute('SELECT username FROM users').fetchone() == ('admin',)
 
     download = client.get(f'/admin/backups/{backups[0].name}/download')
-    assert download.status_code == 200
+    assert download.status_code == HTTPStatus.OK
     assert download.headers['Content-Disposition'].startswith('attachment;')
     download.get_data()
     download.close()
 
     deleted = client.post(f'/admin/backups/{backups[0].name}/delete',
                           data={'_csrf': token(client)})
-    assert deleted.status_code == 302, deleted.data
+    assert deleted.status_code == HTTPStatus.FOUND, deleted.data
     assert not backups[0].exists()
 
 
@@ -70,7 +71,7 @@ def test_restore_replaces_data_and_revokes_existing_sessions(tmp_path):
     backup = next((tmp_path / 'backups').glob('homehub-*.sqlite3'))
     response = client.post(f'/admin/backups/{backup.name}/restore',
                            data={'_csrf': token(client)}, follow_redirects=True)
-    assert response.status_code == 200
+    assert response.status_code == HTTPStatus.OK
     assert b'Backup restored and verified' in response.data
     assert client.get('/').headers['Location'].endswith('/login')
     with closing(sqlite3.connect(database)) as db:
@@ -90,7 +91,7 @@ def test_restore_rejects_corrupt_copy_without_changing_live_database(tmp_path):
     response = client.post(f'/admin/backups/{corrupt.name}/restore',
                            data={'_csrf': token(client)}, follow_redirects=True)
     assert b'could not be restored safely' in response.data
-    assert client.get('/admin/accounts').status_code == 200
+    assert client.get('/admin/accounts').status_code == HTTPStatus.OK
     with closing(sqlite3.connect(database)) as db:
         assert db.execute('SELECT username FROM users').fetchone() == ('admin',)
         assert db.execute('PRAGMA integrity_check').fetchone()[0] == 'ok'
@@ -103,7 +104,7 @@ def test_backup_settings_validate_and_allow_turning_automatic_backups_off(tmp_pa
     response = client.post('/admin/backups/settings', data={
         '_csrf': token(client), 'backups_off': 'on', 'backup_folder': str(folder),
     })
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
     with closing(sqlite3.connect(database)) as db:
         settings = dict(db.execute('SELECT key,value FROM app_settings'))
     assert settings['backup_folder'] == str(folder)
@@ -114,7 +115,7 @@ def test_backup_settings_validate_and_allow_turning_automatic_backups_off(tmp_pa
         '_csrf': token(client), 'backup_folder': str(folder),
         'backup_frequency': '32', 'backup_retention': '14',
     })
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
     with closing(sqlite3.connect(database)) as db:
         assert db.execute('SELECT value FROM app_settings WHERE key="backup_interval_days"').fetchone()[0] == '0'
 
@@ -122,7 +123,7 @@ def test_backup_settings_validate_and_allow_turning_automatic_backups_off(tmp_pa
 def test_backup_routes_require_admin_and_csrf(tmp_path):
     app, admin_client, database = make_admin_client(tmp_path)
     response = admin_client.post('/admin/backups/create')
-    assert response.status_code == 400
+    assert response.status_code == HTTPStatus.BAD_REQUEST
 
     with closing(sqlite3.connect(database)) as db:
         with db:
@@ -134,8 +135,8 @@ def test_backup_routes_require_admin_and_csrf(tmp_path):
         csrf = session['csrf_token']
     member.post('/login', data={'username': 'member', 'password': 'another long password',
                                 '_csrf': csrf})
-    assert member.get('/admin/accounts').status_code == 403
-    assert member.post('/admin/backups/create', data={'_csrf': token(member)}).status_code == 403
+    assert member.get('/admin/accounts').status_code == HTTPStatus.FORBIDDEN
+    assert member.post('/admin/backups/create', data={'_csrf': token(member)}).status_code == HTTPStatus.FORBIDDEN
 
 
 def test_scheduler_respects_interval_and_off_setting(tmp_path):
@@ -169,7 +170,7 @@ def test_scheduler_uses_current_settings_after_pause_and_folder_change(tmp_path)
         '_csrf': token(client), 'backup_folder': str(first_folder),
         'backup_frequency': '1', 'backup_retention': '14',
     })
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
 
     now = time.time() + 5
     logger = logging.getLogger('test-backup-settings-reload')
@@ -180,7 +181,7 @@ def test_scheduler_uses_current_settings_after_pause_and_folder_change(tmp_path)
         '_csrf': token(client), 'backups_off': 'on',
         'backup_folder': str(next_folder), 'backup_retention': '14',
     })
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
     assert not run_backup_cycle(database, logger, now=now + 86400)
     assert not list(next_folder.glob('homehub-*.sqlite3'))
 
@@ -188,7 +189,7 @@ def test_scheduler_uses_current_settings_after_pause_and_folder_change(tmp_path)
         '_csrf': token(client), 'backup_folder': str(next_folder),
         'backup_frequency': '1', 'backup_retention': '1',
     })
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
     assert run_backup_cycle(database, logger, now=now + 86400)
     assert len(list(first_folder.glob('homehub-*.sqlite3'))) == 1
     assert len(list(next_folder.glob('homehub-*.sqlite3'))) == 1

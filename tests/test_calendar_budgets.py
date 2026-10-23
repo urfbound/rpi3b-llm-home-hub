@@ -1,3 +1,4 @@
+from http import HTTPStatus
 import sqlite3
 
 import pytest
@@ -35,7 +36,7 @@ def signed_in(app, username, password):
     response = client.post('/login', data={
         'username': username, 'password': password, '_csrf': token,
     })
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
     return client
 
 
@@ -81,7 +82,7 @@ def test_calendar_limit_settings_show_approved_defaults_and_can_be_changed_by_ad
         '_csrf': csrf(admin), 'events_per_day': '32', 'events_per_month': '512',
     })
 
-    assert saved.status_code == 302
+    assert saved.status_code == HTTPStatus.FOUND
     with sqlite3.connect(app.config['DATABASE']) as db:
         assert db.execute(
             "SELECT key,value FROM app_settings WHERE key IN "
@@ -101,7 +102,7 @@ def test_admin_rejects_calendar_budget_values_outside_configured_ranges(app, dai
         '_csrf': csrf(admin), 'events_per_day': daily, 'events_per_month': monthly,
     })
 
-    assert response.status_code == 400
+    assert response.status_code == HTTPStatus.BAD_REQUEST
     with sqlite3.connect(app.config['DATABASE']) as db:
         assert db.execute('SELECT COUNT(*) FROM app_settings WHERE key LIKE "calendar_events_%"').fetchone()[0] == 0
 
@@ -113,7 +114,7 @@ def test_only_admin_can_change_calendar_budgets(app):
         '_csrf': csrf(bob), 'events_per_day': '12', 'events_per_month': '140',
     })
 
-    assert response.status_code == 403
+    assert response.status_code == HTTPStatus.FORBIDDEN
 
 
 def test_daily_budget_is_per_creator_and_counts_recurring_occurrences(app):
@@ -125,8 +126,8 @@ def test_daily_budget_is_per_creator_and_counts_recurring_occurrences(app):
     denied = bob.post('/events', data=event_form(bob))
     allowed = carol.post('/events', data=event_form(carol))
 
-    assert denied.status_code == 400
-    assert allowed.status_code == 302
+    assert denied.status_code == HTTPStatus.BAD_REQUEST
+    assert allowed.status_code == HTTPStatus.FOUND
     with sqlite3.connect(app.config['DATABASE']) as db:
         assert db.execute('SELECT COUNT(*) FROM events WHERE created_by=2').fetchone()[0] == 8
         assert db.execute('SELECT COUNT(*) FROM events WHERE created_by=3').fetchone()[0] == 1
@@ -146,7 +147,7 @@ def test_monthly_budget_counts_occurrences_and_rejects_without_partial_series(ap
         bob, recurrence_frequency='daily', recurrence_until='2026-10-26',
     ))
 
-    assert denied.status_code == 400
+    assert denied.status_code == HTTPStatus.BAD_REQUEST
     with sqlite3.connect(app.config['DATABASE']) as db:
         assert db.execute('SELECT COUNT(*) FROM events WHERE created_by=2').fetchone()[0] == 128
 
@@ -160,7 +161,7 @@ def test_daily_budget_is_checked_for_every_date_in_a_recurrence_atomically(app):
         bob, recurrence_frequency='daily', recurrence_until='2026-10-26',
     ))
 
-    assert denied.status_code == 400
+    assert denied.status_code == HTTPStatus.BAD_REQUEST
     with sqlite3.connect(app.config['DATABASE']) as db:
         assert db.execute('SELECT COUNT(*) FROM events').fetchone()[0] == 1
 
@@ -178,7 +179,7 @@ def test_series_edit_cannot_move_occurrences_over_daily_budget(app):
         recurrence_until='2026-11-07',
     ))
 
-    assert response.status_code == 400
+    assert response.status_code == HTTPStatus.BAD_REQUEST
     with sqlite3.connect(app.config['DATABASE']) as db:
         assert db.execute(
             'SELECT event_date FROM events WHERE series_id=1 ORDER BY event_date'
@@ -195,7 +196,7 @@ def test_single_occurrence_edit_cannot_move_event_over_daily_budget(app):
         bob, event_date='2026-10-25', edit_scope='occurrence',
     ))
 
-    assert response.status_code == 400
+    assert response.status_code == HTTPStatus.BAD_REQUEST
     with sqlite3.connect(app.config['DATABASE']) as db:
         assert db.execute('SELECT event_date FROM events WHERE id=1').fetchone() == (
             '2026-10-24',

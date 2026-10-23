@@ -1,3 +1,4 @@
+from http import HTTPStatus
 import sqlite3
 from datetime import date
 
@@ -43,7 +44,7 @@ def sign_in(client, username, password):
     response = client.post('/login', data={
         'username': username, 'password': password, '_csrf': csrf_token(client),
     })
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
 
 
 def create_chore(client, *, text='Put clothes away', weekday=0, assignee='everyone'):
@@ -56,7 +57,7 @@ def create_chore(client, *, text='Put clothes away', weekday=0, assignee='everyo
 def test_chores_tab_shows_seven_days_and_everyone_controls(household):
     _, client = household
     page = client.get('/?kind=chores')
-    assert page.status_code == 200
+    assert page.status_code == HTTPStatus.OK
     for day in ('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'):
         assert day.encode() in page.data
     assert page.data.count(b'>Everyone</option>') == 2
@@ -85,7 +86,7 @@ def test_home_chore_card_groups_today_and_filters_to_signed_in_user(household, m
 def test_everyone_chore_is_grouped_per_person_and_excludes_house_account(household):
     app, client = household
     response = create_chore(client)
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
     page = client.get('/?kind=chores&weekday=0')
     assert b'Alice' in page.data
     assert b'Bob' in page.data
@@ -103,7 +104,7 @@ def test_person_assignment_and_filter_show_only_that_users_chore(household):
     with sqlite3.connect(app.config['DATABASE']) as db:
         bob_id = db.execute("SELECT id FROM users WHERE username='bob'").fetchone()[0]
         alice_id = db.execute("SELECT id FROM users WHERE username='alice'").fetchone()[0]
-    assert create_chore(client, text='Feed dog', assignee=str(bob_id)).status_code == 302
+    assert create_chore(client, text='Feed dog', assignee=str(bob_id)).status_code == HTTPStatus.FOUND
     with sqlite3.connect(app.config['DATABASE']) as db:
         chore_id = db.execute("SELECT id FROM chores WHERE text='Feed dog'").fetchone()[0]
     assert b'Feed dog</span>' in client.get('/?kind=chores&weekday=0').data
@@ -112,12 +113,12 @@ def test_person_assignment_and_filter_show_only_that_users_chore(household):
     assert b'Feed dog</span>' in client.get(
         f'/?kind=chores&weekday=0&assignee_id={bob_id}').data
     assert client.post(f'/chores/{chore_id}/toggle',
-                       data={'_csrf': csrf_token(client)}).status_code == 403
+                       data={'_csrf': csrf_token(client)}).status_code == HTTPStatus.FORBIDDEN
 
     bob = app.test_client()
     sign_in(bob, 'bob', 'bob test password')
     assert bob.post(f'/chores/{chore_id}/toggle',
-                    data={'_csrf': csrf_token(bob)}).status_code == 302
+                    data={'_csrf': csrf_token(bob)}).status_code == HTTPStatus.FOUND
 
 
 def test_chore_completion_is_independent_for_each_assigned_user(household):
@@ -128,7 +129,7 @@ def test_chore_completion_is_independent_for_each_assigned_user(household):
         alice_id = db.execute("SELECT id FROM users WHERE username='alice'").fetchone()[0]
         bob_id = db.execute("SELECT id FROM users WHERE username='bob'").fetchone()[0]
     assert client.post(f'/chores/{chore_id}/toggle',
-                       data={'_csrf': csrf_token(client)}).status_code == 302
+                       data={'_csrf': csrf_token(client)}).status_code == HTTPStatus.FOUND
     with sqlite3.connect(app.config['DATABASE']) as db:
         completed = db.execute('SELECT user_id,completed_week FROM chore_completions '
                                'WHERE chore_id=?', (chore_id,)).fetchall()
@@ -141,7 +142,7 @@ def test_chore_completion_is_independent_for_each_assigned_user(household):
     bob_page = bob.get('/?kind=chores&weekday=0&assignee_id=' + str(bob_id))
     assert b'class="done"' not in bob_page.data
     assert bob.post(f'/chores/{chore_id}/toggle',
-                    data={'_csrf': csrf_token(bob)}).status_code == 302
+                    data={'_csrf': csrf_token(bob)}).status_code == HTTPStatus.FOUND
     with sqlite3.connect(app.config['DATABASE']) as db:
         completed_users = {row[0] for row in db.execute(
             'SELECT user_id FROM chore_completions WHERE chore_id=?', (chore_id,))}
@@ -159,7 +160,7 @@ def test_house_account_can_view_but_cannot_change_chores(household):
     assert b'Put clothes away' in page.data
     assert b'/chores/' not in page.data
     assert house.post(f'/chores/{chore_id}/toggle',
-                      data={'_csrf': csrf_token(house)}).status_code == 403
+                      data={'_csrf': csrf_token(house)}).status_code == HTTPStatus.FORBIDDEN
 
 
 def test_chore_completion_resets_at_next_sunday_without_deleting_chore(household, monkeypatch):
@@ -189,23 +190,23 @@ def test_only_creator_or_admin_can_delete_a_chore(household):
     with sqlite3.connect(app.config['DATABASE']) as db:
         bob_id = db.execute("SELECT id FROM users WHERE username='bob'").fetchone()[0]
     response = create_chore(bob, text='Bob task', weekday=1, assignee=str(bob_id))
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
     with sqlite3.connect(app.config['DATABASE']) as db:
         chore_id = db.execute("SELECT id FROM chores WHERE text='Bob task'").fetchone()[0]
     assert client.post(f'/chores/{chore_id}/delete',
-                       data={'_csrf': csrf_token(client)}).status_code == 302
+                       data={'_csrf': csrf_token(client)}).status_code == HTTPStatus.FOUND
     with sqlite3.connect(app.config['DATABASE']) as db:
         assert db.execute('SELECT COUNT(*) FROM chores WHERE id=?',
                           (chore_id,)).fetchone() == (0,)
 
     response = create_chore(client, text='Owner task', weekday=1, assignee='everyone')
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
     with sqlite3.connect(app.config['DATABASE']) as db:
         chore_id = db.execute("SELECT id FROM chores WHERE text='Owner task'").fetchone()[0]
     assert bob.post(f'/chores/{chore_id}/delete',
-                    data={'_csrf': csrf_token(bob)}).status_code == 403
+                    data={'_csrf': csrf_token(bob)}).status_code == HTTPStatus.FORBIDDEN
     assert client.post(f'/chores/{chore_id}/delete',
-                       data={'_csrf': csrf_token(client)}).status_code == 302
+                       data={'_csrf': csrf_token(client)}).status_code == HTTPStatus.FOUND
 
 
 def test_chore_creation_rejects_house_assignment_and_invalid_values(household):
@@ -219,6 +220,6 @@ def test_chore_creation_rejects_house_assignment_and_invalid_values(household):
     ):
         assert client.post('/chores', data={
             **values, '_csrf': csrf_token(client),
-        }).status_code == 400
+        }).status_code == HTTPStatus.BAD_REQUEST
     with sqlite3.connect(app.config['DATABASE']) as db:
         assert db.execute('SELECT COUNT(*) FROM chores').fetchone() == (0,)
