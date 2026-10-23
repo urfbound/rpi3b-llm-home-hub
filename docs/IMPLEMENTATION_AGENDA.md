@@ -18,10 +18,11 @@ to `main` only after the user approves the completed change.
 - **Lists and Recipes:** Shopping, To-do, Chores, recipe privacy/notes,
   serving scaling, and Add to list snapshots are merged to main. Copy/Paste is
   awaiting review. Weekend, weather, and system status cards remain.
-- **Calendar:** Month navigation and the event grid are merged to main. Event
-  details, all-day/timed events, and a data-preserving schema upgrade are
-  implemented on a feature branch and await review. Recurrence, participants,
-  privacy, budgets, and retention settings remain.
+- **Calendar:** Month navigation, the event grid, all-day/timed event details,
+  and data-preserving schema upgrades are merged to main. Daily, weekly,
+  monthly, and yearly recurrence with occurrence/series actions is implemented
+  on a feature branch and awaits review. Participants, privacy, budgets, and
+  retention settings remain.
 - **Current app prototype:** login/admin, a single shopping list, recipe
   create/view, basic event creation and ICS export, and light/dark theme exist.
   The approved full tab designs are not yet implemented as complete features.
@@ -94,11 +95,12 @@ to `main` only after the user approves the completed change.
   retained-year dropdown are merged to main. The year range currently defaults
   to three previous years plus ten future years; admin configuration remains.
 - Event details, all-day/timed entry, edit/delete controls, title/description
-  validation, and the v7 migration preserving existing events are implemented
-  on a feature branch and await review. Timed events export to floating local
-  times in ICS.
-- Add daily/weekly/monthly/yearly recurrence with single-occurrence or series
-  edits/cancellation.
+  validation, and v7-to-v8 migration preserving existing events are merged.
+  Timed events export to floating local times in ICS.
+- Daily/weekly/monthly/yearly recurrence, one-year default end date, and
+  single-occurrence or whole-series edits/cancellation are implemented on a
+  feature branch and await review. Occurrences are materialized so they appear
+  in month views and ICS downloads.
 - Add event participants and privacy, per-user daily/monthly budgets, ICS
   visibility filtering, recipe/meal-prep links, and Home weekend summaries.
 - Add admin timezone and retention settings. Archive excluded years to ICS

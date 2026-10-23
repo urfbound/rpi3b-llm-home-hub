@@ -14,6 +14,25 @@
       <label>Starts at<input type="time" name="start_time" value="{{ event['start_time'] or '' }}"></label>
       <label>Ends at (optional)<input type="time" name="end_time" value="{{ event['end_time'] or '' }}"></label>
     </div>
+    {% if not editing or event['series_id'] %}
+    <fieldset class="event-recurrence">
+      <legend>Repeat</legend>
+      <label>Frequency<select name="recurrence_frequency">
+        <option value="" {% if not event['recurrence_frequency'] %}selected{% endif %}>Does not repeat</option>
+        {% for frequency in ('daily','weekly','monthly','yearly') %}
+        <option value="{{ frequency }}" {% if event['recurrence_frequency']==frequency %}selected{% endif %}>{{ frequency|capitalize }}</option>
+        {% endfor %}
+      </select></label>
+      <label>Repeat through (optional)<input type="date" name="recurrence_until" value="{{ event['recurrence_until'] or '' }}"></label>
+      <small class="muted">If left blank, the series ends one year after its first date. The end date is included.</small>
+    </fieldset>
+    {% endif %}
+    {% if editing and event['series_id'] %}
+    <label>Apply changes to<select name="edit_scope">
+      <option value="occurrence">Only this occurrence</option>
+      <option value="series" selected>Entire series</option>
+    </select></label>
+    {% endif %}
     <div class="actions"><a class="button" href="{{ url_for('index') }}#calendar">Cancel</a><button class="primary">{{ 'Save event' if editing else 'Add event' }}</button></div>
   </form>
 </section>

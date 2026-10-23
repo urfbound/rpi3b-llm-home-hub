@@ -24,7 +24,7 @@ from .backups import (BackupError, backup_filename, create_backup,
                       prune_backups, restore_backup, validate_backup_directory)
 
 PH = PasswordHasher(memory_cost=16384, time_cost=2, parallelism=1)
-SCHEMA_VERSION = 7
+SCHEMA_VERSION = 8
 LOGIN_WINDOW_SECONDS = 15 * 60
 LOGIN_USERNAME_LIMIT = 5
 LOGIN_ADDRESS_LIMIT = 30
@@ -321,7 +321,8 @@ CREATE TABLE IF NOT EXISTS events (
  created_by INTEGER NOT NULL REFERENCES users(id),
  description TEXT NOT NULL DEFAULT '',
  all_day INTEGER NOT NULL DEFAULT 1 CHECK(all_day IN (0,1)),
- start_time TEXT, end_time TEXT
+ start_time TEXT, end_time TEXT,
+ series_id INTEGER, recurrence_frequency TEXT, recurrence_until TEXT
 );
 CREATE INDEX IF NOT EXISTS events_date ON events(event_date,id);
 CREATE TABLE IF NOT EXISTS chores (
@@ -522,6 +523,9 @@ def initialize_database(db_path):
                 ('all_day', 'INTEGER NOT NULL DEFAULT 1'),
                 ('start_time', 'TEXT'),
                 ('end_time', 'TEXT'),
+                ('series_id', 'INTEGER'),
+                ('recurrence_frequency', 'TEXT'),
+                ('recurrence_until', 'TEXT'),
             ):
                 if column not in event_columns:
                     db.execute(f'ALTER TABLE events ADD COLUMN {column} {definition}')
@@ -576,6 +580,58 @@ def event_form_values(form):
         'title': title, 'event_date': event_date, 'description': description,
         'all_day': int(all_day), 'start_time': start_time, 'end_time': end_time,
     }
+
+def recurrence_values(form, event_date):
+    """Validate a recurrence rule and return its inclusive end date."""
+    frequency = form.get('recurrence_frequency', '').strip()
+    if frequency not in ('', 'daily', 'weekly', 'monthly', 'yearly'):
+        abort(400, description='Choose a supported recurrence interval.')
+    if not frequency:
+        return None, None
+    try:
+        until_text = form.get('recurrence_until', '').strip()
+        if until_text:
+            until = date.fromisoformat(until_text)
+            if until.isoformat() != until_text:
+                raise ValueError
+        else:
+            start = date.fromisoformat(event_date)
+            try:
+                until = start.replace(year=start.year + 1)
+            except ValueError:
+                until = start.replace(year=start.year + 1, day=28)
+    except ValueError:
+        abort(400, description='Enter a valid recurrence end date.')
+    if until < date.fromisoformat(event_date):
+        abort(400, description='The recurrence end date must be on or after the event date.')
+    return frequency, until.isoformat()
+
+def recurrence_dates(start_text, frequency, until_text):
+    """Generate dates through the inclusive end date; month/year dates clamp."""
+    start = date.fromisoformat(start_text)
+    until = date.fromisoformat(until_text)
+    result = []
+    index = 0
+    while True:
+        if frequency == 'daily':
+            occurrence = start + timedelta(days=index)
+        elif frequency == 'weekly':
+            occurrence = start + timedelta(weeks=index)
+        elif frequency in ('monthly', 'yearly'):
+            months = index if frequency == 'monthly' else index * 12
+            year = start.year + (start.month - 1 + months) // 12
+            month = (start.month - 1 + months) % 12 + 1
+            day = min(start.day, pycalendar.monthrange(year, month)[1])
+            occurrence = date(year, month, day)
+        else:
+            raise ValueError('Unsupported recurrence frequency')
+        if occurrence > until:
+            break
+        result.append(occurrence.isoformat())
+        index += 1
+        if index > 3660:
+            abort(400, description='A recurring series cannot exceed 3,660 occurrences.')
+    return result
 
 def event_time_label(value):
     if not value:
@@ -1821,15 +1877,28 @@ def create_app(test_config=None):
         if g.user['account_kind'] == 'house':
             abort(403)
         values = event_form_values(request.form)
+        frequency, until = recurrence_values(request.form, values['event_date'])
+        occurrence_dates = (recurrence_dates(values['event_date'], frequency, until)
+                            if frequency else [values['event_date']])
         db = get_db()
         with db:
-            cursor = db.execute(
-                'INSERT INTO events(title,event_date,created_by,description,all_day,start_time,end_time) '
-                'VALUES(?,?,?,?,?,?,?)',
-                (values['title'], values['event_date'], g.user['id'], values['description'],
-                 values['all_day'], values['start_time'], values['end_time']),
-            )
-        return redirect(url_for('event_detail', event_id=cursor.lastrowid))
+            first_id = None
+            occurrence_ids = []
+            for occurrence_date in occurrence_dates:
+                cursor = db.execute(
+                    'INSERT INTO events(title,event_date,created_by,description,all_day,start_time,end_time,'
+                    'series_id,recurrence_frequency,recurrence_until) VALUES(?,?,?,?,?,?,?,?,?,?)',
+                    (values['title'], occurrence_date, g.user['id'], values['description'],
+                     values['all_day'], values['start_time'], values['end_time'], None,
+                     frequency, until),
+                )
+                occurrence_ids.append(cursor.lastrowid)
+                if first_id is None:
+                    first_id = cursor.lastrowid
+            if frequency:
+                db.executemany('UPDATE events SET series_id=? WHERE id=?',
+                               [(first_id, occurrence_id) for occurrence_id in occurrence_ids])
+        return redirect(url_for('event_detail', event_id=first_id))
 
     @app.get('/events/<int:event_id>')
     @login_required
@@ -1840,6 +1909,7 @@ def create_app(test_config=None):
         can_edit = (event['created_by'] == g.user['id'] or g.user['role'] == 'admin')
         return render_template(
             'event_detail.html', event=event, can_edit=can_edit,
+            recurring=bool(event['series_id'] and event['recurrence_frequency']),
             start_label=event_time_label(event['start_time']),
             end_label=event_time_label(event['end_time']),
         )
@@ -1856,26 +1926,70 @@ def create_app(test_config=None):
         if request.method == 'GET':
             return render_template('event_form.html', event=event, editing=True)
         values = event_form_values(request.form)
+        edit_scope = request.form.get('edit_scope', 'series' if event['series_id'] else 'occurrence')
+        if edit_scope not in ('occurrence', 'series'):
+            abort(400)
         with db:
-            db.execute(
-                'UPDATE events SET title=?,event_date=?,description=?,all_day=?,start_time=?,end_time=? '
-                'WHERE id=?',
-                (values['title'], values['event_date'], values['description'], values['all_day'],
-                 values['start_time'], values['end_time'], event_id),
-            )
-        return redirect(url_for('event_detail', event_id=event_id))
+            group_id = event['series_id'] or event['id']
+            if edit_scope == 'series' and event['series_id']:
+                frequency, until = recurrence_values(request.form, values['event_date'])
+                occurrence_dates = (recurrence_dates(values['event_date'], frequency, until)
+                                    if frequency else [values['event_date']])
+                existing = db.execute(
+                    'SELECT id FROM events WHERE series_id=? ORDER BY event_date,id',
+                    (group_id,),
+                ).fetchall()
+                for index, occurrence_date in enumerate(occurrence_dates):
+                    columns = (values['title'], occurrence_date, values['description'],
+                               values['all_day'], values['start_time'], values['end_time'],
+                               group_id if frequency else None, frequency, until)
+                    if index < len(existing):
+                        db.execute(
+                            'UPDATE events SET title=?,event_date=?,description=?,all_day=?,start_time=?,end_time=?,'
+                            'series_id=?,recurrence_frequency=?,recurrence_until=? WHERE id=?',
+                            (*columns, existing[index]['id']),
+                        )
+                    else:
+                        db.execute(
+                            'INSERT INTO events(title,event_date,created_by,description,all_day,start_time,end_time,'
+                            'series_id,recurrence_frequency,recurrence_until) VALUES(?,?,?,?,?,?,?,?,?,?)',
+                            (values['title'], occurrence_date, event['created_by'], values['description'],
+                             values['all_day'], values['start_time'], values['end_time'],
+                             group_id if frequency else None, frequency, until),
+                        )
+                for row in existing[len(occurrence_dates):]:
+                    db.execute('DELETE FROM events WHERE id=?', (row['id'],))
+                redirect_id = existing[0]['id']
+            else:
+                db.execute(
+                    'UPDATE events SET title=?,event_date=?,description=?,all_day=?,start_time=?,end_time=?,'
+                    'series_id=NULL,recurrence_frequency=NULL,recurrence_until=NULL WHERE id=?',
+                    (values['title'], values['event_date'], values['description'], values['all_day'],
+                     values['start_time'], values['end_time'], event_id),
+                )
+                redirect_id = event_id
+        return redirect(url_for('event_detail', event_id=redirect_id))
 
     @app.post('/events/<int:event_id>/delete')
     @login_required
     def delete_event(event_id):
         db = get_db()
-        event = db.execute('SELECT id,created_by FROM events WHERE id=?', (event_id,)).fetchone()
+        event = db.execute('SELECT id,created_by,series_id,recurrence_frequency FROM events WHERE id=?',
+                           (event_id,)).fetchone()
         if not event:
             abort(404)
         if event['created_by'] != g.user['id'] and g.user['role'] != 'admin':
             abort(403)
+        delete_scope = request.form.get(
+            'delete_scope', 'series' if event['series_id'] else 'occurrence'
+        )
+        if delete_scope not in ('occurrence', 'series'):
+            abort(400)
         with db:
-            db.execute('DELETE FROM events WHERE id=?', (event_id,))
+            if delete_scope == 'series' and event['series_id']:
+                db.execute('DELETE FROM events WHERE series_id=?', (event['series_id'],))
+            else:
+                db.execute('DELETE FROM events WHERE id=?', (event_id,))
         return redirect(url_for('index') + '#calendar')
 
     @app.get('/calendar.ics')
