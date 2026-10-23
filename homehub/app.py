@@ -26,6 +26,7 @@ from .weather import (WeatherError, geocode_location, get_cached_forecast,
                       present_forecast)
 from .system_status import (collect_system_snapshot, cpu_usage_percent,
                             cpu_bar_class, record_metric_sample)
+from .rss import RSSFeedError, validate_feed_url
 
 PH = PasswordHasher(memory_cost=16384, time_cost=2, parallelism=1)
 SCHEMA_VERSION = 13
@@ -1280,6 +1281,120 @@ def create_app(test_config=None):
               db, g.user, app, system_monitor
           ),
           weekend_groups=weekend_groups, just_my_events=just_my_events)
+
+    @app.get('/rss')
+    @login_required
+    def rss_page():
+        db = get_db()
+        personal_feeds = []
+        if g.user['account_kind'] == 'person':
+            personal_feeds = db.execute(
+                "SELECT * FROM rss_feeds WHERE scope='personal' AND owner_user_id=? "
+                'ORDER BY sort_order,id', (g.user['id'],)
+            ).fetchall()
+        household_feeds = db.execute(
+            "SELECT * FROM rss_feeds WHERE scope='household' ORDER BY sort_order,id"
+        ).fetchall()
+        return render_template('rss.html', personal_feeds=personal_feeds,
+                               household_feeds=household_feeds)
+
+    @app.post('/rss/feeds')
+    @login_required
+    def add_rss_feed():
+        scope = request.form.get('scope', 'personal')
+        if scope == 'household':
+            if g.user['role'] != 'admin':
+                abort(403)
+        elif scope == 'personal':
+            if g.user['account_kind'] != 'person':
+                abort(403)
+        else:
+            abort(400)
+        try:
+            normalized_url = validate_feed_url(request.form.get('feed_url', ''))
+        except RSSFeedError as exc:
+            flash(str(exc))
+            return redirect(url_for('rss_page'))
+        db = get_db()
+        existing = db.execute('SELECT scope,owner_user_id FROM rss_feeds WHERE normalized_url=?',
+                               (normalized_url,)).fetchone()
+        if existing:
+            if scope == 'personal' and existing['scope'] == 'household':
+                flash('This feed is already available in the household feeds.')
+            elif scope == 'personal' and existing['owner_user_id'] == g.user['id']:
+                flash('This feed is already in your feeds.')
+            else:
+                flash('This feed is already in the feed list.')
+            return redirect(url_for('rss_page'))
+        if scope == 'household' and db.execute(
+            "SELECT COUNT(*) FROM rss_feeds WHERE scope='household'"
+        ).fetchone()[0] >= 3:
+            flash('You can have up to three house-wide feeds.')
+            return redirect(url_for('rss_page'))
+        from urllib.parse import urlsplit
+        title = urlsplit(normalized_url).hostname or normalized_url
+        owner = g.user['id'] if scope == 'personal' else None
+        try:
+            db.execute(
+                'INSERT INTO rss_feeds(normalized_url,title,scope,owner_user_id,created_by,sort_order) '
+                'VALUES(?,?,?,?,?,COALESCE((SELECT MAX(sort_order)+1 FROM rss_feeds '
+                'WHERE scope=? AND owner_user_id IS ?),0))',
+                (normalized_url, title, scope, owner, g.user['id'], scope, owner),
+            )
+            db.commit()
+            flash('Feed added.')
+        except sqlite3.IntegrityError:
+            db.rollback()
+            flash('This feed is already in the feed list.')
+        return redirect(url_for('rss_page'))
+
+    @app.post('/rss/feeds/<int:feed_id>/delete')
+    @login_required
+    def delete_rss_feed(feed_id):
+        db = get_db()
+        feed = db.execute('SELECT * FROM rss_feeds WHERE id=?', (feed_id,)).fetchone()
+        if not feed:
+            abort(404)
+        if feed['scope'] == 'household':
+            if g.user['role'] != 'admin':
+                abort(403)
+        elif g.user['account_kind'] != 'person' or feed['owner_user_id'] != g.user['id']:
+            abort(403)
+        db.execute('DELETE FROM rss_feeds WHERE id=?', (feed_id,))
+        db.commit()
+        flash('Feed removed.')
+        return redirect(url_for('rss_page'))
+
+    @app.post('/rss/feeds/<int:feed_id>/move')
+    @login_required
+    def move_rss_feed(feed_id):
+        direction = request.form.get('direction')
+        if direction not in ('up', 'down'):
+            abort(400)
+        db = get_db()
+        feed = db.execute('SELECT * FROM rss_feeds WHERE id=?', (feed_id,)).fetchone()
+        if not feed:
+            abort(404)
+        if feed['scope'] == 'household':
+            if g.user['role'] != 'admin':
+                abort(403)
+            peers = db.execute("SELECT id FROM rss_feeds WHERE scope='household' "
+                               'ORDER BY sort_order,id').fetchall()
+        else:
+            if g.user['account_kind'] != 'person' or feed['owner_user_id'] != g.user['id']:
+                abort(403)
+            peers = db.execute("SELECT id FROM rss_feeds WHERE scope='personal' "
+                               'AND owner_user_id=? ORDER BY sort_order,id',
+                               (g.user['id'],)).fetchall()
+        ordered = [row['id'] for row in peers]
+        index = ordered.index(feed_id)
+        target = index + (-1 if direction == 'up' else 1)
+        if 0 <= target < len(ordered):
+            ordered[index], ordered[target] = ordered[target], ordered[index]
+            db.executemany('UPDATE rss_feeds SET sort_order=? WHERE id=?',
+                           [(position, item_id) for position, item_id in enumerate(ordered)])
+            db.commit()
+        return redirect(url_for('rss_page'))
 
     @app.get('/weather')
     @login_required
