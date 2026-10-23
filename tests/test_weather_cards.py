@@ -1,3 +1,4 @@
+from http import HTTPStatus
 import sqlite3
 
 import pytest
@@ -71,7 +72,7 @@ def sign_in(app, username, password):
     response = client.post('/login', data={
         'username': username, 'password': password, '_csrf': csrf,
     })
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
     return client
 
 
@@ -87,7 +88,7 @@ def configure_location(app, outbound='1'):
 
 
 def test_weather_page_requires_login(app):
-    assert app.test_client().get('/weather').status_code == 302
+    assert app.test_client().get('/weather').status_code == HTTPStatus.FOUND
 
 
 def test_weather_home_summary_and_detail_use_shared_forecast(app, monkeypatch):
@@ -139,7 +140,7 @@ def test_weather_page_reports_unconfigured_location_without_fetching(app, monkey
 
     page = bob.get('/weather')
 
-    assert page.status_code == 200
+    assert page.status_code == HTTPStatus.OK
     assert b'Weather location is not set up yet' in page.data
 
 

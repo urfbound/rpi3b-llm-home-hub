@@ -1,3 +1,4 @@
+from http import HTTPStatus
 import sqlite3
 from datetime import date
 
@@ -42,7 +43,7 @@ def test_calendar_shows_selected_month_grid_and_only_its_events(client):
 
     response = client.get('/?month=10&year=2026')
 
-    assert response.status_code == 200
+    assert response.status_code == HTTPStatus.OK
     assert b'October 2026' in response.data
     assert b'Autumn dinner' in response.data
     assert b'November plans' not in response.data
@@ -70,17 +71,17 @@ def test_calendar_year_range_respects_retention_setting_and_disables_boundary_na
         db.execute("INSERT INTO app_settings(key,value) VALUES('calendar_retention_years','0')")
     previous_year = date.today().year - 1
 
-    assert client.get(f'/?month=1&year={previous_year}').status_code == 400
+    assert client.get(f'/?month=1&year={previous_year}').status_code == HTTPStatus.BAD_REQUEST
     response = client.get(f'/?month=1&year={date.today().year}')
-    assert response.status_code == 200
+    assert response.status_code == HTTPStatus.OK
     assert b'No earlier retained month' in response.data
 
 
 @pytest.mark.parametrize(('query', 'expected'), [
-    ('month=0&year=2026', 400),
-    ('month=13&year=2026', 400),
-    ('month=abc&year=2026', 400),
-    ('month=10&year=1899', 400),
+    ('month=0&year=2026', HTTPStatus.BAD_REQUEST),
+    ('month=13&year=2026', HTTPStatus.BAD_REQUEST),
+    ('month=abc&year=2026', HTTPStatus.BAD_REQUEST),
+    ('month=10&year=1899', HTTPStatus.BAD_REQUEST),
 ])
 def test_calendar_rejects_invalid_month_or_year(client, query, expected):
     assert client.get(f'/?{query}').status_code == expected

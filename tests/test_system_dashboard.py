@@ -1,3 +1,4 @@
+from http import HTTPStatus
 import sqlite3
 from datetime import datetime, timedelta, timezone
 
@@ -47,7 +48,7 @@ def sign_in(app, username, password):
     response = client.post('/login', data={
         'username': username, 'password': password, '_csrf': csrf,
     })
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
     return client
 
 
@@ -101,7 +102,7 @@ def test_admin_can_hide_metrics_from_household_and_optionally_allow_house_accoun
     house_page = house.get('/')
     admin_page = admin.get('/')
 
-    assert saved.status_code == 302
+    assert saved.status_code == HTTPStatus.FOUND
     assert b'System Status' not in bob_page.data
     assert b'System Status' in house_page.data
     assert b'System Status' in admin_page.data
@@ -121,4 +122,4 @@ def test_only_admin_can_change_metrics_visibility(app):
         '_csrf': csrf(bob), 'house_account_enabled': '1',
     })
 
-    assert response.status_code == 403
+    assert response.status_code == HTTPStatus.FORBIDDEN

@@ -1,3 +1,4 @@
+from http import HTTPStatus
 import sqlite3
 
 import pytest
@@ -34,7 +35,7 @@ def sign_in(client, username='alice', password='a long test password'):
     response = client.post('/login', data={
         'username': username, 'password': password, '_csrf': token,
     })
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
 
 
 def setup_todo(client, visibility='shared'):
@@ -63,7 +64,7 @@ def test_todo_creation_saves_optional_due_date_and_assignee(client):
         '_csrf': token_for(client),
     })
 
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
     with sqlite3.connect(db_path) as db:
         row = db.execute("SELECT due_date,assignee_id FROM shopping_items "
                          "WHERE text='Water plants' ORDER BY id DESC LIMIT 1").fetchone()
@@ -83,7 +84,7 @@ def test_todo_creation_rejects_invalid_due_date_or_assignee(client, fields):
         '_csrf': token_for(client),
     })
 
-    assert response.status_code == 400
+    assert response.status_code == HTTPStatus.BAD_REQUEST
     with sqlite3.connect(db_path) as db:
         assert db.execute("SELECT COUNT(*) FROM shopping_items WHERE text='Invalid task'").fetchone()[0] == 0
 
@@ -99,7 +100,7 @@ def test_any_member_with_shared_todo_access_can_edit_task(client):
         'assignee_id': str(bob_id), '_csrf': token_for(bob),
     })
 
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
     with sqlite3.connect(db_path) as db:
         row = db.execute('SELECT text,due_date,assignee_id FROM shopping_items WHERE id=?',
                          (item_id,)).fetchone()
@@ -122,8 +123,8 @@ def test_todo_edit_requires_list_visibility_and_does_not_edit_shopping_items(cli
     sign_in(bob, 'bob', 'bob test password')
     payload = {'text': 'Changed', 'due_date': '', 'assignee_id': '', '_csrf': token_for(bob)}
 
-    assert bob.post(f'/todo/{item_id}/edit', data=payload).status_code == 404
-    assert bob.post(f'/todo/{shopping_item_id}/edit', data=payload).status_code == 404
+    assert bob.post(f'/todo/{item_id}/edit', data=payload).status_code == HTTPStatus.NOT_FOUND
+    assert bob.post(f'/todo/{shopping_item_id}/edit', data=payload).status_code == HTTPStatus.NOT_FOUND
     with sqlite3.connect(db_path) as db:
         assert db.execute('SELECT text FROM shopping_items WHERE id=?', (item_id,)).fetchone()[0] == 'Water plants'
         assert db.execute('SELECT text FROM shopping_items WHERE id=?', (shopping_item_id,)).fetchone()[0] == 'Milk'
@@ -143,7 +144,7 @@ def test_read_only_house_account_cannot_edit_todo(client):
         'text': 'Changed', 'due_date': '', 'assignee_id': '', '_csrf': token_for(house),
     })
 
-    assert response.status_code == 403
+    assert response.status_code == HTTPStatus.FORBIDDEN
     with sqlite3.connect(db_path) as db:
         assert db.execute('SELECT text FROM shopping_items WHERE id=?', (item_id,)).fetchone()[0] == 'Water plants'
 
@@ -183,11 +184,11 @@ def test_private_todo_assignment_is_limited_to_list_members(client):
         '_csrf': token_for(bob),
     })
 
-    assert response.status_code == 400
+    assert response.status_code == HTTPStatus.BAD_REQUEST
     edit_response = bob.post(f'/todo/{_}/edit', data={
         'text': 'Private task', 'due_date': '', 'assignee_id': str(carol_id),
         '_csrf': token_for(bob),
     })
-    assert edit_response.status_code == 400
+    assert edit_response.status_code == HTTPStatus.BAD_REQUEST
     with sqlite3.connect(db_path) as db:
         assert db.execute("SELECT COUNT(*) FROM shopping_items WHERE text='Private task'").fetchone()[0] == 0

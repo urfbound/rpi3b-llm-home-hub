@@ -15,7 +15,7 @@ def test_feed_registry_separates_personal_and_household_feeds(app):
     with sqlite3.connect(app.config['DATABASE']) as db:
         columns = {row[1] for row in db.execute('PRAGMA table_info(rss_feeds)')}
 
-    assert {'id', 'normalized_url', 'title', 'scope', 'owner_user_id',
+    assert {'id', 'normalized_url', 'title', 'scope', 'owner_user_id', 'allow_lan',
             'created_by', 'sort_order'} <= columns
 
 

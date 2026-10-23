@@ -1,3 +1,4 @@
+from http import HTTPStatus
 import sqlite3
 
 import pytest
@@ -42,7 +43,7 @@ def sign_in(app, username, password):
     response = client.post('/login', data={
         'username': username, 'password': password, '_csrf': csrf,
     })
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
     return client
 
 
@@ -74,13 +75,13 @@ def test_weather_settings_reject_invalid_units_and_forecast_range(app):
 
     assert admin.post('/admin/weather/settings', data={
         '_csrf': token, 'forecast_days': '0', 'units': 'metric', 'outbound_enabled': '1',
-    }).status_code == 400
+    }).status_code == HTTPStatus.BAD_REQUEST
     assert admin.post('/admin/weather/settings', data={
         '_csrf': token, 'forecast_days': '16', 'units': 'metric', 'outbound_enabled': '1',
-    }).status_code == 400
+    }).status_code == HTTPStatus.BAD_REQUEST
     assert admin.post('/admin/weather/settings', data={
         '_csrf': token, 'forecast_days': '5', 'units': 'kelvin', 'outbound_enabled': '1',
-    }).status_code == 400
+    }).status_code == HTTPStatus.BAD_REQUEST
     assert settings(app) == {}
 
 
@@ -91,7 +92,7 @@ def test_admin_can_save_units_forecast_length_and_disable_outbound(app):
         '_csrf': csrf(admin), 'forecast_days': '15', 'units': 'imperial',
     })
 
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
     assert settings(app) == {
         'weather_forecast_days': '15', 'weather_units': 'imperial',
         'weather_outbound_enabled': '0',
@@ -110,8 +111,8 @@ def test_only_admins_can_change_weather_settings_or_search_locations(app, monkey
         '_csrf': csrf(bob), 'location_query': 'Brigus',
     })
 
-    assert update.status_code == 403
-    assert search.status_code == 403
+    assert update.status_code == HTTPStatus.FORBIDDEN
+    assert search.status_code == HTTPStatus.FORBIDDEN
     assert settings(app) == {}
 
 
@@ -125,7 +126,7 @@ def test_location_search_requires_outbound_access_and_does_not_save_unselected_c
         '_csrf': csrf(admin), 'location_query': 'Brigus',
     }, follow_redirects=True)
 
-    assert response.status_code == 200
+    assert response.status_code == HTTPStatus.OK
     assert b'Brigus, Newfoundland and Labrador, Canada' in response.data
     assert calls == ['Brigus']
     assert 'weather_latitude' not in settings(app)
@@ -136,7 +137,7 @@ def test_location_search_requires_outbound_access_and_does_not_save_unselected_c
     blocked = admin.post('/admin/weather/location/search', data={
         '_csrf': csrf(admin), 'location_query': 'Brigus',
     })
-    assert blocked.status_code == 400
+    assert blocked.status_code == HTTPStatus.BAD_REQUEST
     assert calls == ['Brigus']
 
 
@@ -151,7 +152,7 @@ def test_admin_selects_a_geocoded_location_for_the_household(app, monkeypatch):
         '_csrf': csrf(admin), 'candidate_index': '0',
     })
 
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
     assert settings(app) == {
         'weather_location_name': 'Brigus, Newfoundland and Labrador, Canada',
         'weather_latitude': '47.533', 'weather_longitude': '-53.55',
@@ -166,5 +167,5 @@ def test_invalid_location_candidate_cannot_be_selected(app):
         '_csrf': csrf(admin), 'candidate_index': '0',
     })
 
-    assert response.status_code == 400
+    assert response.status_code == HTTPStatus.BAD_REQUEST
     assert settings(app) == {}

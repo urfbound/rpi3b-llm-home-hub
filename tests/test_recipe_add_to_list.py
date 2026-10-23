@@ -1,3 +1,4 @@
+from http import HTTPStatus
 import sqlite3
 
 import pytest
@@ -36,7 +37,7 @@ def signed_in(app, username, password):
     response = client.post('/login', data={
         'username': username, 'password': password, '_csrf': csrf,
     })
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
     return client
 
 
@@ -77,7 +78,7 @@ def test_recipe_detail_offers_selected_visible_shopping_list_and_keeps_servings(
 
     response = bob.get(f'/recipes/{recipe_id}?servings=8')
 
-    assert response.status_code == 200
+    assert response.status_code == HTTPStatus.OK
     assert b'Add ingredients to list' in response.data
     assert f'value="{list_id}"'.encode() in response.data
     assert b'name="servings" value="8"' in response.data
@@ -100,7 +101,7 @@ def test_add_to_list_scales_combines_convertible_units_and_keeps_uncertain_items
         '_csrf': csrf(bob), 'list_id': str(list_id), 'servings': '8',
     })
 
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
     with sqlite3.connect(app.config['DATABASE']) as db:
         rows = db.execute(
             'SELECT text,created_by,list_id FROM shopping_items ORDER BY id'
@@ -147,7 +148,7 @@ def test_add_to_list_rejects_inaccessible_private_recipe_and_private_list(app):
     hidden_recipe = carol.post(f'/recipes/{recipe_id}/shopping', data={
         '_csrf': csrf(carol), 'list_id': str(list_id), 'servings': '4',
     })
-    assert hidden_recipe.status_code == 404
+    assert hidden_recipe.status_code == HTTPStatus.NOT_FOUND
 
     shared_recipe_id = add_recipe(app)
     hidden_list = carol.post(f'/recipes/{shared_recipe_id}/shopping', data={
@@ -156,8 +157,8 @@ def test_add_to_list_rejects_inaccessible_private_recipe_and_private_list(app):
     wrong_kind = carol.post(f'/recipes/{shared_recipe_id}/shopping', data={
         '_csrf': csrf(carol), 'list_id': str(todo_id), 'servings': '4',
     })
-    assert hidden_list.status_code == 404
-    assert wrong_kind.status_code == 404
+    assert hidden_list.status_code == HTTPStatus.NOT_FOUND
+    assert wrong_kind.status_code == HTTPStatus.NOT_FOUND
     with sqlite3.connect(app.config['DATABASE']) as db:
         assert db.execute('SELECT COUNT(*) FROM shopping_items').fetchone()[0] == 0
 
@@ -172,7 +173,7 @@ def test_house_wide_account_cannot_copy_recipe_to_shopping_list(app):
         '_csrf': csrf(house), 'list_id': str(list_id), 'servings': '4',
     })
 
-    assert response.status_code == 403
+    assert response.status_code == HTTPStatus.FORBIDDEN
     with sqlite3.connect(app.config['DATABASE']) as db:
         assert db.execute('SELECT COUNT(*) FROM shopping_items').fetchone()[0] == 0
 
@@ -190,7 +191,7 @@ def test_add_to_list_rejects_invalid_servings_and_oversized_snapshot_atomically(
         '_csrf': csrf(bob), 'list_id': str(list_id), 'servings': '4',
     })
 
-    assert invalid.status_code == 400
-    assert too_long.status_code == 400
+    assert invalid.status_code == HTTPStatus.BAD_REQUEST
+    assert too_long.status_code == HTTPStatus.BAD_REQUEST
     with sqlite3.connect(app.config['DATABASE']) as db:
         assert db.execute('SELECT COUNT(*) FROM shopping_items').fetchone()[0] == 0

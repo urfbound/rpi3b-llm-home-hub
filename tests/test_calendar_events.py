@@ -1,3 +1,4 @@
+from http import HTTPStatus
 import sqlite3
 
 import pytest
@@ -36,7 +37,7 @@ def signed_in(app, username, password):
     response = client.post('/login', data={
         'username': username, 'password': password, '_csrf': csrf,
     })
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
     return client
 
 
@@ -60,7 +61,7 @@ def test_create_all_day_event_and_detail_page_has_description_budget(app):
 
     response = bob.post('/events', data=event_form(bob))
 
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
     with sqlite3.connect(app.config['DATABASE']) as db:
         event = db.execute(
             'SELECT title,event_date,description,all_day,start_time,end_time,created_by '
@@ -68,7 +69,7 @@ def test_create_all_day_event_and_detail_page_has_description_budget(app):
         ).fetchone()
     assert event == ('Pasta night', '2026-10-24', 'Dinner together', 1, None, None, 2)
     detail = bob.get('/events/1')
-    assert detail.status_code == 200
+    assert detail.status_code == HTTPStatus.OK
     assert b'Dinner together' in detail.data
     assert b'Edit event' in detail.data
     assert b'characters remaining (256 maximum)' in bob.get('/events/1/edit').data
@@ -81,7 +82,7 @@ def test_create_timed_event_requires_start_and_accepts_optional_later_end(app):
         bob, all_day='', start_time='18:15', end_time='19:45',
     ))
 
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
     with sqlite3.connect(app.config['DATABASE']) as db:
         assert db.execute(
             'SELECT all_day,start_time,end_time FROM events'
@@ -116,7 +117,7 @@ def test_invalid_event_details_are_rejected_without_partial_event(app, overrides
 
     response = bob.post('/events', data=event_form(bob, **overrides))
 
-    assert response.status_code == 400
+    assert response.status_code == HTTPStatus.BAD_REQUEST
     with sqlite3.connect(app.config['DATABASE']) as db:
         assert db.execute('SELECT COUNT(*) FROM events').fetchone()[0] == 0
 
@@ -130,11 +131,11 @@ def test_creator_can_edit_event_but_other_user_cannot_and_admin_can_delete(app):
     assert b'Edit event' in bob.get('/events/1').data
     assert b'Edit event' not in carol.get('/events/1').data
     denied = carol.post('/events/1/edit', data=event_form(carol, title='Changed'))
-    assert denied.status_code == 403
+    assert denied.status_code == HTTPStatus.FORBIDDEN
     edited = bob.post('/events/1/edit', data=event_form(bob, title='Changed'))
-    assert edited.status_code == 302
+    assert edited.status_code == HTTPStatus.FOUND
     deleted = admin.post('/events/1/delete', data={'_csrf': csrf(admin)})
-    assert deleted.status_code == 302
+    assert deleted.status_code == HTTPStatus.FOUND
     with sqlite3.connect(app.config['DATABASE']) as db:
         assert db.execute('SELECT COUNT(*) FROM events').fetchone()[0] == 0
 
@@ -144,7 +145,7 @@ def test_house_wide_account_cannot_create_event(app):
 
     response = house.post('/events', data=event_form(house))
 
-    assert response.status_code == 403
+    assert response.status_code == HTTPStatus.FORBIDDEN
     with sqlite3.connect(app.config['DATABASE']) as db:
         assert db.execute('SELECT COUNT(*) FROM events').fetchone()[0] == 0
 
@@ -175,7 +176,7 @@ def test_recurring_event_materializes_daily_weekly_monthly_and_yearly_dates(app)
             bob, title=f'{frequency} event', recurrence_frequency=frequency,
             recurrence_until=until,
         ))
-        assert response.status_code == 302
+        assert response.status_code == HTTPStatus.FOUND
         with sqlite3.connect(app.config['DATABASE']) as db:
             dates = [row[0] for row in db.execute(
                 'SELECT event_date FROM events WHERE title=? ORDER BY event_date',
@@ -191,7 +192,7 @@ def test_recurrence_end_defaults_to_one_year_and_invalid_ranges_are_rejected(app
         bob, recurrence_frequency='weekly',
     ))
 
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
     with sqlite3.connect(app.config['DATABASE']) as db:
         rows = db.execute(
             'SELECT event_date,recurrence_frequency,recurrence_until,series_id '
@@ -205,7 +206,7 @@ def test_recurrence_end_defaults_to_one_year_and_invalid_ranges_are_rejected(app
     invalid = bob.post('/events', data=event_form(
         bob, recurrence_frequency='monthly', recurrence_until='2026-10-23',
     ))
-    assert invalid.status_code == 400
+    assert invalid.status_code == HTTPStatus.BAD_REQUEST
     with sqlite3.connect(app.config['DATABASE']) as db:
         assert db.execute('SELECT COUNT(*) FROM events').fetchone()[0] == 53
 
@@ -234,7 +235,7 @@ def test_single_occurrence_edit_and_delete_leave_the_rest_of_series_intact(app):
     edited = bob.post('/events/2/edit', data=event_form(
         bob, title='One changed date', event_date='2026-10-31', edit_scope='occurrence',
     ))
-    assert edited.status_code == 302
+    assert edited.status_code == HTTPStatus.FOUND
     with sqlite3.connect(app.config['DATABASE']) as db:
         assert db.execute(
             'SELECT title,series_id,recurrence_frequency FROM events WHERE id=2'
@@ -246,7 +247,7 @@ def test_single_occurrence_edit_and_delete_leave_the_rest_of_series_intact(app):
     deleted = bob.post('/events/3/delete', data={
         '_csrf': csrf(bob), 'delete_scope': 'occurrence',
     })
-    assert deleted.status_code == 302
+    assert deleted.status_code == HTTPStatus.FOUND
     with sqlite3.connect(app.config['DATABASE']) as db:
         assert db.execute(
             'SELECT event_date FROM events WHERE series_id=1 ORDER BY event_date'
@@ -263,7 +264,7 @@ def test_series_edit_and_delete_apply_to_all_remaining_occurrences(app):
         bob, title='Updated series', recurrence_frequency='weekly',
         recurrence_until='2026-11-14', edit_scope='series',
     ))
-    assert edited.status_code == 302
+    assert edited.status_code == HTTPStatus.FOUND
     with sqlite3.connect(app.config['DATABASE']) as db:
         assert db.execute(
             'SELECT event_date,title FROM events WHERE series_id=1 ORDER BY event_date'
@@ -275,7 +276,7 @@ def test_series_edit_and_delete_apply_to_all_remaining_occurrences(app):
     deleted = bob.post('/events/1/delete', data={
         '_csrf': csrf(bob), 'delete_scope': 'series',
     })
-    assert deleted.status_code == 302
+    assert deleted.status_code == HTTPStatus.FOUND
     with sqlite3.connect(app.config['DATABASE']) as db:
         assert db.execute('SELECT COUNT(*) FROM events').fetchone()[0] == 0
 
@@ -311,8 +312,8 @@ def test_other_user_cannot_edit_or_cancel_recurring_series(app):
         '_csrf': csrf(carol), 'delete_scope': 'series',
     })
 
-    assert edited.status_code == 403
-    assert deleted.status_code == 403
+    assert edited.status_code == HTTPStatus.FORBIDDEN
+    assert deleted.status_code == HTTPStatus.FORBIDDEN
     with sqlite3.connect(app.config['DATABASE']) as db:
         assert db.execute('SELECT COUNT(*) FROM events').fetchone()[0] == 3
 
@@ -332,7 +333,7 @@ def test_v7_upgrade_adds_recurrence_columns_without_losing_event(tmp_path):
                 'DATABASE': str(path)})
 
     with sqlite3.connect(path) as db:
-        assert db.execute('PRAGMA user_version').fetchone()[0] == 13
+        assert db.execute('PRAGMA user_version').fetchone()[0] == 14
         assert db.execute(
             'SELECT id,title,event_date,series_id,recurrence_frequency,recurrence_until '
             'FROM events'
@@ -384,7 +385,7 @@ def test_invited_user_sees_private_details_but_cannot_edit_event(app):
     assert b'Secret anniversary' in detail.data
     assert b'Surprise party plans' in detail.data
     assert b'Edit event' not in detail.data
-    assert denied.status_code == 403
+    assert denied.status_code == HTTPStatus.FORBIDDEN
     assert b'SUMMARY:Secret anniversary' in export.data
 
 
@@ -394,7 +395,7 @@ def test_creator_can_manage_event_participants_and_house_account_is_explicitly_i
     created = bob.post('/events', data=event_form(
         bob, visibility='private', participant_ids=['3', '4'],
     ))
-    assert created.status_code == 302
+    assert created.status_code == HTTPStatus.FOUND
 
     with sqlite3.connect(app.config['DATABASE']) as db:
         assert db.execute(
@@ -408,7 +409,7 @@ def test_creator_can_manage_event_participants_and_house_account_is_explicitly_i
     updated = bob.post('/events/1/edit', data=event_form(
         bob, visibility='private', participant_ids=['3'],
     ))
-    assert updated.status_code == 302
+    assert updated.status_code == HTTPStatus.FOUND
     with sqlite3.connect(app.config['DATABASE']) as db:
         assert db.execute(
             'SELECT user_id FROM event_participants WHERE event_id=1'
@@ -448,7 +449,7 @@ def test_v8_upgrade_adds_private_event_access_without_losing_existing_event(tmp_
                 'DATABASE': str(path)})
 
     with sqlite3.connect(path) as db:
-        assert db.execute('PRAGMA user_version').fetchone()[0] == 13
+        assert db.execute('PRAGMA user_version').fetchone()[0] == 14
         assert db.execute(
             'SELECT id,title,event_date,visibility FROM events'
         ).fetchone() == (1, 'Dinner', '2026-10-24', 'shared')
@@ -477,10 +478,10 @@ def test_v6_upgrade_preserves_events_and_adds_all_day_defaults(tmp_path):
                 'DATABASE': str(path)})
 
     with sqlite3.connect(path) as db:
-        assert db.execute('PRAGMA user_version').fetchone()[0] == 13
+        assert db.execute('PRAGMA user_version').fetchone()[0] == 14
         assert db.execute(
             'SELECT id,title,event_date,description,all_day,start_time,end_time FROM events'
         ).fetchone() == (23, 'Dinner', '2026-10-24', '', 1, None, None)
         assert db.execute('PRAGMA foreign_key_check').fetchall() == []
-    backups = list(tmp_path.glob('v6.pre-v13-*.sqlite3'))
+    backups = list(tmp_path.glob('v6.pre-v14-*.sqlite3'))
     assert len(backups) == 1

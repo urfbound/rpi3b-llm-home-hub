@@ -1,3 +1,4 @@
+from http import HTTPStatus
 import sqlite3
 
 import pytest
@@ -35,7 +36,7 @@ def signed_in(app, username, password):
     response = client.post('/login', data={
         'username': username, 'password': password, '_csrf': token(client),
     })
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
     return client
 
 
@@ -70,7 +71,7 @@ def test_recipe_owner_can_edit_structured_content(users):
 
     response = bob.post(f'/recipes/{recipe_id}/edit', data=replacement_fields(bob))
 
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
     with sqlite3.connect(users.config['DATABASE']) as db:
         assert db.execute('SELECT title,description,default_servings FROM recipes WHERE id=?',
                           (recipe_id,)).fetchone() == ('New soup', 'A brighter soup', 6)
@@ -86,7 +87,7 @@ def test_only_recipe_owner_can_edit_even_when_admin_views_it(users):
 
     response = admin.post(f'/recipes/{recipe_id}/edit', data=replacement_fields(admin))
 
-    assert response.status_code == 403
+    assert response.status_code == HTTPStatus.FORBIDDEN
     with sqlite3.connect(users.config['DATABASE']) as db:
         assert db.execute('SELECT title FROM recipes WHERE id=?', (recipe_id,)).fetchone()[0] == 'Old soup'
 
@@ -97,7 +98,7 @@ def test_recipe_owner_can_delete_and_children_are_removed(users):
 
     response = bob.post(f'/recipes/{recipe_id}/delete', data={'_csrf': token(bob)})
 
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
     with sqlite3.connect(users.config['DATABASE']) as db:
         assert db.execute('SELECT COUNT(*) FROM recipes WHERE id=?', (recipe_id,)).fetchone()[0] == 0
         assert db.execute('SELECT COUNT(*) FROM recipe_ingredients WHERE recipe_id=?', (recipe_id,)).fetchone()[0] == 0
@@ -110,14 +111,14 @@ def test_non_owner_cannot_delete_and_admin_can_delete_any_recipe(users):
 
     denied = bob.post(f'/recipes/{recipe_id}/delete', data={'_csrf': token(bob)})
 
-    assert denied.status_code == 403
+    assert denied.status_code == HTTPStatus.FORBIDDEN
     with sqlite3.connect(users.config['DATABASE']) as db:
         assert db.execute('SELECT COUNT(*) FROM recipes WHERE id=?', (recipe_id,)).fetchone()[0] == 1
 
     admin = signed_in(users, 'alex', 'alex recipe password')
     allowed = admin.post(f'/recipes/{recipe_id}/delete', data={'_csrf': token(admin)})
 
-    assert allowed.status_code == 302
+    assert allowed.status_code == HTTPStatus.FOUND
     with sqlite3.connect(users.config['DATABASE']) as db:
         assert db.execute('SELECT COUNT(*) FROM recipes WHERE id=?', (recipe_id,)).fetchone()[0] == 0
 
@@ -130,7 +131,7 @@ def test_invalid_recipe_edit_keeps_previous_content_atomic(users):
         bob, title='x' * 129, ingredient_name=['must not save'],
     ))
 
-    assert response.status_code == 400
+    assert response.status_code == HTTPStatus.BAD_REQUEST
     with sqlite3.connect(users.config['DATABASE']) as db:
         assert db.execute('SELECT title FROM recipes WHERE id=?', (recipe_id,)).fetchone()[0] == 'Old soup'
         assert db.execute('SELECT name FROM recipe_ingredients WHERE recipe_id=?',
@@ -166,7 +167,7 @@ def test_recipe_detail_scales_structured_amounts_to_selected_servings(users):
 
     response = bob.get(f'/recipes/{recipe_id}?servings=8')
 
-    assert response.status_code == 200
+    assert response.status_code == HTTPStatus.OK
     assert b'value="8"' in response.data
     assert b'for 8 servings' in response.data
     assert b'<strong>2 cup</strong>' in response.data
@@ -202,7 +203,7 @@ def test_recipe_detail_scales_mixed_fraction_and_range_amounts(users, quantity, 
 
     response = bob.get(f'/recipes/{recipe_id}?servings=8')
 
-    assert response.status_code == 200
+    assert response.status_code == HTTPStatus.OK
     assert f'<strong>{expected} cup</strong>'.encode() in response.data
 
 
@@ -216,7 +217,7 @@ def test_recipe_detail_keeps_legacy_freeform_amounts_and_explains_scaling_limit(
 
     response = bob.get(f'/recipes/{recipe_id}?servings=8')
 
-    assert response.status_code == 200
+    assert response.status_code == HTTPStatus.OK
     assert b'1 cup beans' in response.data
     assert b'cannot be scaled automatically' in response.data
 
@@ -240,7 +241,7 @@ def test_recipe_detail_rejects_invalid_serving_counts(users, servings):
 
     response = bob.get(f'/recipes/{recipe_id}?servings={servings}')
 
-    assert response.status_code == 400
+    assert response.status_code == HTTPStatus.BAD_REQUEST
 
 
 def test_house_wide_read_only_account_cannot_edit_or_delete_recipe(users):
@@ -254,7 +255,7 @@ def test_house_wide_read_only_account_cannot_edit_or_delete_recipe(users):
     edit = house.post(f'/recipes/{recipe_id}/edit', data=replacement_fields(house))
     delete = house.post(f'/recipes/{recipe_id}/delete', data={'_csrf': token(house)})
 
-    assert edit.status_code == 403
-    assert delete.status_code == 403
+    assert edit.status_code == HTTPStatus.FORBIDDEN
+    assert delete.status_code == HTTPStatus.FORBIDDEN
     with sqlite3.connect(users.config['DATABASE']) as db:
         assert db.execute('SELECT title FROM recipes WHERE id=?', (recipe_id,)).fetchone()[0] == 'Old soup'

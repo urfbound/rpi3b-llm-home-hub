@@ -1,3 +1,4 @@
+from http import HTTPStatus
 import sqlite3
 
 import pytest
@@ -32,7 +33,7 @@ def sign_in(client):
     response = client.post('/login', data={
         'username': 'alex', 'password': 'recipe test password', '_csrf': csrf(client),
     })
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
 
 
 def recipe_form(client, **overrides):
@@ -55,7 +56,7 @@ def test_create_structured_recipe_and_render_detail(client):
 
     response = client.post('/recipes', data=recipe_form(client))
 
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
     with sqlite3.connect(client.application.config['DATABASE']) as db:
         recipe = db.execute('SELECT title,description,default_servings FROM recipes').fetchone()
         ingredients = db.execute('SELECT quantity,unit,name,note,position FROM recipe_ingredients '
@@ -66,7 +67,7 @@ def test_create_structured_recipe_and_render_detail(client):
     assert steps == [('Mix the flour.', 0), ('Add salt and stir.', 1)]
 
     page = client.get('/recipes/1')
-    assert page.status_code == 200
+    assert page.status_code == HTTPStatus.OK
     assert b'Quick weeknight meal' in page.data
     assert b'2 cups' in page.data
     assert b'flour' in page.data
@@ -95,7 +96,7 @@ def test_recipe_limits_reject_invalid_content_without_partial_save(client, overr
 
     response = client.post('/recipes', data=recipe_form(client, **overrides))
 
-    assert response.status_code == 400
+    assert response.status_code == HTTPStatus.BAD_REQUEST
     with sqlite3.connect(client.application.config['DATABASE']) as db:
         assert db.execute('SELECT COUNT(*) FROM recipes').fetchone()[0] == 0
         assert db.execute('SELECT COUNT(*) FROM recipe_ingredients').fetchone()[0] == 0
@@ -112,7 +113,7 @@ def test_recipe_book_limit_is_per_user_and_rejects_129th(client):
 
     response = client.post('/recipes', data=recipe_form(client))
 
-    assert response.status_code == 409
+    assert response.status_code == HTTPStatus.CONFLICT
     with sqlite3.connect(db_path) as db:
         assert db.execute('SELECT COUNT(*) FROM recipes WHERE created_by=1').fetchone()[0] == 128
 
@@ -124,7 +125,7 @@ def test_recipe_create_rejects_missing_or_blank_structured_rows(client):
 
     response = client.post('/recipes', data=data)
 
-    assert response.status_code == 400
+    assert response.status_code == HTTPStatus.BAD_REQUEST
     with sqlite3.connect(client.application.config['DATABASE']) as db:
         assert db.execute('SELECT COUNT(*) FROM recipes').fetchone()[0] == 0
 
@@ -142,7 +143,7 @@ def test_recipe_accepts_all_documented_unicode_field_limits(client):
 
     response = client.post('/recipes', data=data)
 
-    assert response.status_code == 302
+    assert response.status_code == HTTPStatus.FOUND
     with sqlite3.connect(client.application.config['DATABASE']) as db:
         assert db.execute('SELECT COUNT(*) FROM recipe_ingredients').fetchone()[0] == 64
         assert db.execute('SELECT COUNT(*) FROM recipe_steps').fetchone()[0] == 64
