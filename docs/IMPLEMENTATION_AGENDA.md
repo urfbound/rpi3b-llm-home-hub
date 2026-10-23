@@ -20,8 +20,9 @@ to `main` only after the user approves the completed change.
   awaiting review. Weekend, weather, and system status cards remain.
 - **Calendar:** Month navigation, event details, daily/weekly/monthly/yearly
   recurrence, and their data-preserving schema upgrades are merged to main.
-  Event participants, private-event access, and ICS filtering are implemented
-  on a feature branch and await review. Budgets, recipe links, Home summaries,
+  Event participants, private-event access, and ICS filtering are committed
+  for review. Per-user daily/monthly budget enforcement and Admin limits are
+  implemented on a dependent feature branch. Recipe links, Home summaries,
   and retention settings remain.
 - **Current app prototype:** login/admin, a single shopping list, recipe
   create/view, basic event creation and ICS export, and light/dark theme exist.
@@ -101,8 +102,10 @@ to `main` only after the user approves the completed change.
   single-occurrence or whole-series edits/cancellation are merged. Occurrences
   are materialized so they appear in month views and ICS downloads.
 - Event participants, private-event details, Busy placeholders, and ICS
-  visibility filtering are implemented on a feature branch and await review.
-  Per-user budgets, recipe/meal-prep links, and Home weekend summaries remain.
+  visibility filtering are committed on a review branch. Per-user daily and
+  monthly occurrence budgets, including Admin limit settings, are implemented
+  on a dependent feature branch. Recipe/meal-prep links and Home weekend
+  summaries remain.
 - Add admin timezone and retention settings. Archive excluded years to ICS
   before deletion, report failed exports without deleting events, and keep
   archive metadata. Include the ICS calendar archive template behavior.

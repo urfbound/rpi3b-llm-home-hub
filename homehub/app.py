@@ -664,6 +664,51 @@ def set_event_participants(db, event_id, participant_ids):
     db.executemany('INSERT INTO event_participants(event_id,user_id) VALUES(?,?)',
                    [(event_id, user_id) for user_id in participant_ids])
 
+def enforce_event_budget(db, user_id, occurrence_dates, *, exclude_event_id=None,
+                         exclude_series_id=None):
+    """Keep each user's proposed occurrence set within the daily/monthly caps."""
+    from collections import Counter
+
+    if not occurrence_dates:
+        return
+    daily_limit = setting(db, 'calendar_events_per_day', 8)
+    monthly_limit = setting(db, 'calendar_events_per_month', 128)
+    required_days = Counter(occurrence_dates)
+    required_months = Counter(day[:7] for day in occurrence_dates)
+    first_day, last_day = min(occurrence_dates), max(occurrence_dates)
+    existing_days = Counter(dict(db.execute(
+        'SELECT event_date,COUNT(*) FROM events WHERE created_by=? '
+        'AND event_date>=? AND event_date<=? GROUP BY event_date',
+        (user_id, first_day, last_day),
+    ).fetchall()))
+    first_month, last_month = first_day[:7], last_day[:7]
+    existing_months = Counter(dict(db.execute(
+        'SELECT substr(event_date,1,7),COUNT(*) FROM events WHERE created_by=? '
+        'AND substr(event_date,1,7)>=? AND substr(event_date,1,7)<=? '
+        'GROUP BY substr(event_date,1,7)',
+        (user_id, first_month, last_month),
+    ).fetchall()))
+    if exclude_series_id is not None:
+        excluded_dates = [row['event_date'] for row in db.execute(
+            'SELECT event_date FROM events WHERE created_by=? AND series_id=?',
+            (user_id, exclude_series_id),
+        ).fetchall()]
+    elif exclude_event_id is not None:
+        excluded_dates = [row['event_date'] for row in db.execute(
+            'SELECT event_date FROM events WHERE created_by=? AND id=?',
+            (user_id, exclude_event_id),
+        ).fetchall()]
+    else:
+        excluded_dates = []
+    excluded_days = Counter(excluded_dates)
+    excluded_months = Counter(day[:7] for day in excluded_dates)
+    for occurrence_date, proposed in required_days.items():
+        if existing_days[occurrence_date] - excluded_days[occurrence_date] + proposed > daily_limit:
+            abort(400, description=f'You have reached your limit of {daily_limit} events for that day.')
+    for occurrence_month, proposed in required_months.items():
+        if existing_months[occurrence_month] - excluded_months[occurrence_month] + proposed > monthly_limit:
+            abort(400, description=f'You have reached your limit of {monthly_limit} events for that month.')
+
 def event_time_label(value):
     if not value:
         return ''
@@ -1117,11 +1162,32 @@ def create_app(test_config=None):
                                ownership=ownership,
                                idle_hours=setting(db, 'session_idle_hours', 24),
                                absolute_days=setting(db, 'session_absolute_days', 7),
+                               events_per_day=setting(db, 'calendar_events_per_day', 8),
+                               events_per_month=setting(db, 'calendar_events_per_month', 128),
                                backup_folder=str(configured_folder),
                                backup_folder_available=backup_folder_available,
                                backup_frequency=backup_frequency,
                                backup_retention=backup_retention,
                                backups=backups)
+
+    @app.post('/admin/calendar/limits')
+    @admin_required
+    def update_calendar_limits():
+        db = get_db()
+        try:
+            events_per_day = int(request.form.get('events_per_day', ''))
+            events_per_month = int(request.form.get('events_per_month', ''))
+        except ValueError:
+            abort(400, description='Enter valid daily and monthly event limits.')
+        if events_per_day < 1 or not 7 <= events_per_month <= 512:
+            abort(400, description='Daily event limit must be at least 1; monthly limit must be from 7 to 512.')
+        with db:
+            db.executemany('INSERT INTO app_settings(key,value) VALUES(?,?) '
+                           'ON CONFLICT(key) DO UPDATE SET value=excluded.value',
+                           (('calendar_events_per_day', str(events_per_day)),
+                            ('calendar_events_per_month', str(events_per_month))))
+        flash('Calendar limits updated.')
+        return redirect(url_for('accounts') + '#calendar-limits-section')
 
     def configured_backup_directory(db):
         row = db.execute('SELECT value FROM app_settings WHERE key=?',
@@ -1932,6 +1998,8 @@ def create_app(test_config=None):
         occurrence_dates = (recurrence_dates(values['event_date'], frequency, until)
                             if frequency else [values['event_date']])
         with db:
+            db.execute('BEGIN IMMEDIATE')
+            enforce_event_budget(db, g.user['id'], occurrence_dates)
             first_id = None
             occurrence_ids = []
             for occurrence_date in occurrence_dates:
@@ -2005,6 +2073,7 @@ def create_app(test_config=None):
         if edit_scope not in ('occurrence', 'series'):
             abort(400)
         with db:
+            db.execute('BEGIN IMMEDIATE')
             group_id = event['series_id'] or event['id']
             if edit_scope == 'series' and event['series_id']:
                 frequency, until = recurrence_values(request.form, values['event_date'])
@@ -2014,6 +2083,8 @@ def create_app(test_config=None):
                     'SELECT id FROM events WHERE series_id=? ORDER BY event_date,id',
                     (group_id,),
                 ).fetchall()
+                enforce_event_budget(db, event['created_by'], occurrence_dates,
+                                     exclude_series_id=group_id)
                 for index, occurrence_date in enumerate(occurrence_dates):
                     columns = (values['title'], occurrence_date, values['description'],
                                values['all_day'], values['start_time'], values['end_time'],
@@ -2040,6 +2111,8 @@ def create_app(test_config=None):
                     db.execute('DELETE FROM events WHERE id=?', (row['id'],))
                 redirect_id = existing[0]['id']
             else:
+                enforce_event_budget(db, event['created_by'], [values['event_date']],
+                                     exclude_event_id=event_id)
                 db.execute(
                     'UPDATE events SET title=?,event_date=?,description=?,all_day=?,start_time=?,end_time=?,'
                     'series_id=NULL,recurrence_frequency=NULL,recurrence_until=NULL,visibility=? WHERE id=?',
