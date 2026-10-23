@@ -58,7 +58,7 @@
     <a href="{{ url_for('export_calendar') }}">Download calendar (.ics)</a>
   </section>
 
-  <section class="panel" id="shopping">
+  <section class="panel" id="shopping" {% if list_kind == 'shopping' and selected_list %}data-away-list-id="{{ selected_list['id'] }}" data-away-list-title="{{ selected_list['title'] }}"{% endif %}>
     <h2>Lists</h2>
     <nav aria-label="List categories" class="list-tabs">
       <a href="{{ url_for('index', kind='shopping') }}" {% if list_kind == 'shopping' %}aria-current="page"{% endif %}>Shopping</a>
@@ -124,9 +124,10 @@
         <button class="primary">Add</button>
       </form>
       {% endif %}
+      {% if list_kind == 'shopping' %}<div class="away-sync" id="away-sync" role="status" aria-live="polite"><span data-away-message>Changes to this shopping list will be saved on this phone and synced when the hub is reachable.</span><a href="{{ url_for('login') }}" data-away-login hidden>Sign in to sync</a><button type="button" data-away-sync hidden>Sync now</button></div>{% endif %}
       <ul class="checks">
         {% for item in items %}
-        <li><form method="post" action="{{ url_for('toggle_item', item_id=item['id']) }}">
+        <li {% if list_kind == 'shopping' %}data-away-item data-away-id="{{ item['id'] }}" data-away-text="{{ item['text'] }}" data-away-done="{{ 'true' if item['done'] else 'false' }}" data-away-updated-at="{{ item['updated_at'] or '' }}"{% endif %}><form method="post" action="{{ url_for('toggle_item', item_id=item['id']) }}" {% if list_kind == 'shopping' %}data-away-toggle{% endif %}>
           <input type="hidden" name="_csrf" value="{{ csrf_token }}">
           <button aria-label="{{ 'Mark incomplete' if item['done'] else 'Mark complete' }}">{{ '✓' if item['done'] else '○' }}</button>
           <span class="{{ 'done' if item['done'] else '' }}">{{ item['text'] }}</span>
