@@ -2,7 +2,7 @@
 {% block content %}
 <div class="crumb">Admin / <strong>Accounts</strong></div>
 <div class="page-heading"><div><p class="eyebrow">Your household</p><h1>People at home</h1><p class="muted">Give each person their own space, and manage access to the shared home.</p></div><button class="primary" type="button" onclick="document.getElementById('create-dialog').showModal()">+ Add account</button></div>
-<nav class="admin-jumps" aria-label="Jump to admin section"><a href="#accounts-section">Accounts</a><a href="#access-section">Access</a><a href="#calendar-limits-section">Calendar limits</a><a href="#weather-settings-section">Weather</a><a href="#backup-restore-section">Backup and restore</a><a href="#house-wide-section">House-wide access</a></nav>
+<nav class="admin-jumps" aria-label="Jump to admin section"><a href="#accounts-section">Accounts</a><a href="#access-section">Access</a><a href="#calendar-limits-section">Calendar limits</a><a href="#weather-settings-section">Weather</a><a href="#system-status-settings-section">System status</a><a href="#backup-restore-section">Backup and restore</a><a href="#house-wide-section">House-wide access</a></nav>
 <section class="stats" aria-label="Account counts">
   <div class="stat"><strong>{{ counts.users }} <small>/ 32</small></strong><span>Accounts</span></div>
   <div class="stat"><strong>{{ counts.admins }} <small>/ 4</small></strong><span>Admins</span></div>
@@ -60,6 +60,15 @@
     <label class="weather-outbound"><input type="checkbox" name="outbound_enabled" value="1" {% if weather_outbound_enabled %}checked{% endif %}> Allow outbound access for weather</label>
     <p class="muted">Open-Meteo provides the forecast and location search. Weather data is shared and cached locally for up to 30 minutes.</p>
     <button class="primary">Save weather settings</button>
+  </form>
+</section>
+<section class="panel" id="system-status-settings-section"><p class="eyebrow">Dashboard visibility</p><h2>System status</h2>
+  <form method="post" action="{{ url_for('update_system_status_settings') }}" class="system-status-settings">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <label class="system-status-check"><input type="checkbox" name="visible_to_all" value="1" {% if system_metrics_visible_to_all %}checked{% endif %}> Show performance data to everyone</label>
+    <label class="system-status-check"><input type="checkbox" name="house_account_enabled" value="1" {% if system_metrics_house_account %}checked{% endif %}> When hidden, allow the house-wide account to see it</label>
+    <p class="muted">Admins can always view system performance data. CPU history is normalized to 0–100% across all cores.</p>
+    <button class="primary">Save visibility</button>
   </form>
 </section>
 <section class="backup-admin" id="backup-restore-section" aria-label="Backup and restore">

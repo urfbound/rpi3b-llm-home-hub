@@ -24,9 +24,11 @@ from .backups import (BackupError, backup_filename, create_backup,
                       prune_backups, restore_backup, validate_backup_directory)
 from .weather import (WeatherError, geocode_location, get_cached_forecast,
                       present_forecast)
+from .system_status import (collect_system_snapshot, cpu_usage_percent,
+                            cpu_bar_class, record_metric_sample)
 
 PH = PasswordHasher(memory_cost=16384, time_cost=2, parallelism=1)
-SCHEMA_VERSION = 11
+SCHEMA_VERSION = 12
 LOGIN_WINDOW_SECONDS = 15 * 60
 LOGIN_USERNAME_LIMIT = 5
 LOGIN_ADDRESS_LIMIT = 30
@@ -344,6 +346,15 @@ CREATE TABLE IF NOT EXISTS weather_cache (
  payload TEXT NOT NULL,
  fetched_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS system_metrics (
+ sampled_at TEXT PRIMARY KEY,
+ cpu_percent REAL,
+ ram_percent REAL NOT NULL,
+ temperature_c REAL,
+ disk_used_bytes INTEGER NOT NULL,
+ disk_total_bytes INTEGER NOT NULL,
+ app_rss_bytes INTEGER
+);
 CREATE TABLE IF NOT EXISTS chores (
  id INTEGER PRIMARY KEY,
  weekday INTEGER NOT NULL CHECK(weekday BETWEEN 0 AND 6),
@@ -434,6 +445,49 @@ def household_weather(db):
         'configured': True, 'location_name': name, 'view':
         present_forecast(result['data']) if result['data'] else None,
         'stale': result['stale'], 'age_label': age_label, 'error': result['error'],
+    }
+
+def format_bytes(value):
+    if value is None:
+        return 'Unavailable'
+    size = float(value)
+    for unit in ('B', 'KiB', 'MiB', 'GiB', 'TiB'):
+        if size < 1024 or unit == 'TiB':
+            return f'{size:.1f} {unit}'
+        size /= 1024
+
+def system_status_for_dashboard(db, user, app, monitor):
+    if (user['role'] != 'admin'
+            and not setting(db, 'system_metrics_visible_to_all', 1)
+            and not (user['account_kind'] == 'house'
+                     and setting(db, 'system_metrics_house_account', 0))):
+        return None
+    with monitor['lock']:
+        snapshot = collect_system_snapshot(
+            app_path=app.root_path, previous_cpu=monitor['cpu_counters']
+        )
+        if not snapshot:
+            return None
+        monitor['cpu_counters'] = snapshot.pop('cpu_counters', None)
+    now = datetime.now(timezone.utc)
+    if snapshot.get('ram_percent') is not None:
+        record_metric_sample(db, snapshot, now)
+    cutoff = (now - timedelta(hours=1)).isoformat()
+    history = [dict(row) for row in db.execute(
+        'SELECT sampled_at,cpu_percent FROM system_metrics WHERE sampled_at>=? '
+        'ORDER BY sampled_at', (cutoff,)
+    ).fetchall()]
+    for entry in history:
+        entry['css_class'] = cpu_bar_class(entry['cpu_percent'])
+        entry['height'] = entry['cpu_percent'] if entry['cpu_percent'] is not None else 0
+    return {
+        **snapshot,
+        'disk_used_label': format_bytes(snapshot.get('disk_used_bytes')),
+        'disk_total_label': format_bytes(snapshot.get('disk_total_bytes')),
+        'ram_used_label': format_bytes(snapshot.get('ram_used_bytes')),
+        'ram_total_label': format_bytes(snapshot.get('ram_total_bytes')),
+        'app_rss_label': format_bytes(snapshot.get('app_rss_bytes')),
+        'history': history,
     }
 
 def household_today():
@@ -930,6 +984,8 @@ def create_app(test_config=None):
     db_path = Path(app.config['DATABASE'])
     db_path.parent.mkdir(parents=True, exist_ok=True)
     initialize_database(db_path)
+    system_monitor = {'cpu_counters': None, 'lock': threading.Lock()}
+    app.extensions['homehub_system_monitor'] = system_monitor
     maintenance = threading.Condition()
     request_state = {'active': 0, 'restoring': False}
 
@@ -1206,6 +1262,9 @@ def create_app(test_config=None):
           chore_groups=chore_groups, home_weekday=home_weekday,
           home_chore_groups=home_chore_groups, just_my_chores=just_my_chores,
           weather=household_weather(db),
+          system_status=system_status_for_dashboard(
+              db, g.user, app, system_monitor
+          ),
           weekend_groups=weekend_groups, just_my_events=just_my_events)
 
     @app.get('/weather')
@@ -1347,7 +1406,26 @@ def create_app(test_config=None):
                                weather_units=weather_units,
                                weather_outbound_enabled=setting(db, 'weather_outbound_enabled', 1),
                                weather_location_candidates=session.get('weather_location_candidates', []),
-                               weather_location_query=session.get('weather_location_query', ''))
+                               weather_location_query=session.get('weather_location_query', ''),
+                               system_metrics_visible_to_all=setting(
+                                   db, 'system_metrics_visible_to_all', 1),
+                               system_metrics_house_account=setting(
+                                   db, 'system_metrics_house_account', 0))
+
+    @app.post('/admin/system-status')
+    @admin_required
+    def update_system_status_settings():
+        visible_to_all = '1' if request.form.get('visible_to_all') == '1' else '0'
+        house_account = '1' if request.form.get('house_account_enabled') == '1' else '0'
+        db = get_db()
+        with db:
+            db.executemany(
+                'INSERT INTO app_settings(key,value) VALUES(?,?) '
+                'ON CONFLICT(key) DO UPDATE SET value=excluded.value',
+                (('system_metrics_visible_to_all', visible_to_all),
+                 ('system_metrics_house_account', house_account)),
+            )
+        return redirect(url_for('accounts') + '#system-status-settings-section')
 
     @app.post('/admin/weather/settings')
     @admin_required
