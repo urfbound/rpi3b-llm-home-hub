@@ -290,7 +290,7 @@ def test_recurring_events_appear_on_calendar_and_offer_occurrence_or_series_acti
     detail = bob.get('/events/2')
     edit = bob.get('/events/2/edit')
 
-    assert calendar.data.count(b'Pasta night') == 2
+    assert calendar.data.count(b'class="calendar-event"') == 2
     assert b'Only this occurrence' in detail.data
     assert b'Entire series' in detail.data
     assert b'name="edit_scope"' in edit.data

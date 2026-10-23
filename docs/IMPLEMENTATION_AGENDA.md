@@ -153,11 +153,12 @@ to `main` only after the user approves the completed change.
 
 ### Home
 
-- Complete the dashboard after its data sources exist: first row Chores and
-  This weekend; then current weather and system status. Show invitees and event
-  descriptions under weekend titles, support Just my events, and apply privacy
-  rules. Keep the responsive two-column desktop layout and single-column
-  narrow-phone layout.
+- The Chores and This weekend cards now occupy the first dashboard row. The
+  weekend summary includes Friday through Sunday, invitee and description
+  sub-lines, timed-event ranges, private-event placeholders, and Just my events
+  filtering. This slice is implemented on the current review branch. Weather
+  and system status cards remain; keep the responsive two-column desktop
+  layout and single-column narrow-phone layout.
 
 ### Chat
 

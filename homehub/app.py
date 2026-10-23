@@ -1003,6 +1003,55 @@ def create_app(test_config=None):
                 event['description'] = ''
                 event['recipe_id'] = None
             event['display_start_time'] = event_time_label(event['start_time'])
+        weekend_start = (today if today.weekday() >= 4 else
+                         today + timedelta(days=4 - today.weekday()))
+        weekend_end = weekend_start + timedelta(days=6 - weekend_start.weekday())
+        just_my_events = request.args.get('just_my_events') == '1'
+        weekend_rows = db.execute(
+            'SELECT events.id,events.title,events.event_date,events.created_by,events.description,'
+            'events.all_day,events.start_time,events.end_time,events.visibility,'
+            'users.id AS participant_id,users.display_name AS participant_name '
+            'FROM events LEFT JOIN event_participants ON event_participants.event_id=events.id '
+            'LEFT JOIN users ON users.id=event_participants.user_id '
+            'WHERE events.event_date>=? AND events.event_date<=? '
+            'ORDER BY events.event_date,events.all_day DESC,events.start_time,events.id,'
+            'users.display_name COLLATE NOCASE,users.id',
+            (weekend_start.isoformat(), weekend_end.isoformat()),
+        ).fetchall()
+        weekend_by_id = {}
+        for row in weekend_rows:
+            event = weekend_by_id.setdefault(row['id'], {
+                key: row[key] for key in ('id', 'title', 'event_date', 'created_by',
+                                          'description', 'all_day', 'start_time',
+                                          'end_time', 'visibility')
+            } | {'participants': []})
+            if row['participant_id'] is not None:
+                event['participants'].append({
+                    'id': row['participant_id'], 'display_name': row['participant_name'],
+                })
+        weekend_groups = []
+        for event in weekend_by_id.values():
+            participants = event['participants']
+            participant_ids = {person['id'] for person in participants}
+            is_mine = event['created_by'] == g.user['id'] or g.user['id'] in participant_ids
+            if just_my_events and not is_mine:
+                continue
+            event['can_view_details'] = (
+                event['visibility'] == 'shared' or g.user['role'] == 'admin' or is_mine
+            )
+            if not event['can_view_details']:
+                event['title'] = 'Busy'
+                event['description'] = ''
+                participants = []
+            event['participants'] = participants
+            event['display_start_time'] = event_time_label(event['start_time'])
+            event['display_end_time'] = event_time_label(event['end_time'])
+            event_day = date.fromisoformat(event['event_date'])
+            event['day_label'] = f'{event_day.strftime("%A, %B")} {event_day.day}'
+            if not weekend_groups or weekend_groups[-1]['date'] != event['event_date']:
+                weekend_groups.append({'date': event['event_date'],
+                                      'label': event['day_label'], 'events': []})
+            weekend_groups[-1]['events'].append(event)
         events_by_date = {}
         for event in month_events:
             events_by_date.setdefault(event['event_date'], []).append(event)
@@ -1105,7 +1154,8 @@ def create_app(test_config=None):
           today=today.isoformat(), weekdays=weekdays,
           selected_weekday=selected_weekday, chore_filter=chore_filter,
           chore_groups=chore_groups, home_weekday=home_weekday,
-          home_chore_groups=home_chore_groups, just_my_chores=just_my_chores)
+          home_chore_groups=home_chore_groups, just_my_chores=just_my_chores,
+          weekend_groups=weekend_groups, just_my_events=just_my_events)
 
     @app.get('/offline.html')
     def offline_shell():
