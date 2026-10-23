@@ -82,6 +82,7 @@
     </table>
     {% if current_user['account_kind'] != 'house' %}<p><a class="button primary" href="{{ url_for('new_event') }}">Add event</a></p>{% endif %}
     <a href="{{ url_for('export_calendar') }}">Download calendar (.ics)</a>
+    <a href="{{ url_for('export_calendar', only_required=1) }}">Download only events involving me (.ics)</a>
   </section>
 
   <section class="panel" id="shopping" {% if list_kind == 'shopping' and selected_list %}data-away-list-id="{{ selected_list['id'] }}" data-away-list-title="{{ selected_list['title'] }}"{% endif %}>

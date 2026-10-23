@@ -24,7 +24,7 @@ from .backups import (BackupError, backup_filename, create_backup,
                       prune_backups, restore_backup, validate_backup_directory)
 
 PH = PasswordHasher(memory_cost=16384, time_cost=2, parallelism=1)
-SCHEMA_VERSION = 8
+SCHEMA_VERSION = 9
 LOGIN_WINDOW_SECONDS = 15 * 60
 LOGIN_USERNAME_LIMIT = 5
 LOGIN_ADDRESS_LIMIT = 30
@@ -322,9 +322,17 @@ CREATE TABLE IF NOT EXISTS events (
  description TEXT NOT NULL DEFAULT '',
  all_day INTEGER NOT NULL DEFAULT 1 CHECK(all_day IN (0,1)),
  start_time TEXT, end_time TEXT,
- series_id INTEGER, recurrence_frequency TEXT, recurrence_until TEXT
+ series_id INTEGER, recurrence_frequency TEXT, recurrence_until TEXT,
+ visibility TEXT NOT NULL DEFAULT 'shared' CHECK(visibility IN ('shared','private'))
 );
 CREATE INDEX IF NOT EXISTS events_date ON events(event_date,id);
+CREATE TABLE IF NOT EXISTS event_participants (
+ event_id INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
+ user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ added_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ PRIMARY KEY(event_id,user_id)
+);
+CREATE INDEX IF NOT EXISTS event_participants_user ON event_participants(user_id,event_id);
 CREATE TABLE IF NOT EXISTS chores (
  id INTEGER PRIMARY KEY,
  weekday INTEGER NOT NULL CHECK(weekday BETWEEN 0 AND 6),
@@ -526,6 +534,7 @@ def initialize_database(db_path):
                 ('series_id', 'INTEGER'),
                 ('recurrence_frequency', 'TEXT'),
                 ('recurrence_until', 'TEXT'),
+                ('visibility', "TEXT NOT NULL DEFAULT 'shared'"),
             ):
                 if column not in event_columns:
                     db.execute(f'ALTER TABLE events ADD COLUMN {column} {definition}')
@@ -632,6 +641,28 @@ def recurrence_dates(start_text, frequency, until_text):
         if index > 3660:
             abort(400, description='A recurring series cannot exceed 3,660 occurrences.')
     return result
+
+def event_access_values(db, form):
+    visibility = form.get('visibility', 'shared').strip()
+    if visibility not in ('shared', 'private'):
+        abort(400, description='Choose whether this event is shared or private.')
+    participant_ids = set()
+    for raw_id in form.getlist('participant_ids'):
+        try:
+            user_id = int(raw_id)
+        except ValueError:
+            abort(400, description='Choose valid event participants.')
+        user = db.execute('SELECT id FROM users WHERE id=? AND active=1',
+                          (user_id,)).fetchone()
+        if not user:
+            abort(400, description='Choose active household accounts as participants.')
+        participant_ids.add(user_id)
+    return visibility, sorted(participant_ids)
+
+def set_event_participants(db, event_id, participant_ids):
+    db.execute('DELETE FROM event_participants WHERE event_id=?', (event_id,))
+    db.executemany('INSERT INTO event_participants(event_id,user_id) VALUES(?,?)',
+                   [(event_id, user_id) for user_id in participant_ids])
 
 def event_time_label(value):
     if not value:
@@ -844,12 +875,24 @@ def create_app(test_config=None):
         calendar_end = date(calendar_year + (calendar_month == 12),
                             calendar_month % 12 + 1, 1)
         month_events = [dict(row) for row in db.execute(
-            'SELECT id,title,event_date,recipe_id,created_by,description,all_day,start_time,end_time '
+            'SELECT id,title,event_date,recipe_id,created_by,description,all_day,start_time,end_time,visibility '
             'FROM events '
-            'WHERE event_date>=? AND event_date<? ORDER BY event_date,title COLLATE NOCASE,id',
+            'WHERE event_date>=? AND event_date<? ORDER BY event_date,id',
             (calendar_start.isoformat(), calendar_end.isoformat())
         ).fetchall()]
+        viewer_participant_ids = {row['event_id'] for row in db.execute(
+            'SELECT event_id FROM event_participants WHERE user_id=?', (g.user['id'],)
+        ).fetchall()}
         for event in month_events:
+            event['can_view_details'] = (
+                event['visibility'] == 'shared' or g.user['role'] == 'admin'
+                or event['created_by'] == g.user['id']
+                or event['id'] in viewer_participant_ids
+            )
+            if not event['can_view_details']:
+                event['title'] = 'Busy'
+                event['description'] = ''
+                event['recipe_id'] = None
             event['display_start_time'] = event_time_label(event['start_time'])
         events_by_date = {}
         for event in month_events:
@@ -1868,8 +1911,14 @@ def create_app(test_config=None):
         if g.user['account_kind'] == 'house':
             abort(403)
         event = {'title': '', 'event_date': household_today().isoformat(),
-                 'description': '', 'all_day': 1, 'start_time': '', 'end_time': ''}
-        return render_template('event_form.html', event=event, editing=False)
+                 'description': '', 'all_day': 1, 'start_time': '', 'end_time': '',
+                 'visibility': 'shared', 'recurrence_frequency': '', 'recurrence_until': ''}
+        users = get_db().execute(
+            'SELECT id,display_name,username,account_kind FROM users '
+            'WHERE active=1 ORDER BY account_kind,display_name COLLATE NOCASE,id'
+        ).fetchall()
+        return render_template('event_form.html', event=event, editing=False,
+                               users=users, selected_participant_ids=[])
 
     @app.post('/events')
     @login_required
@@ -1877,22 +1926,25 @@ def create_app(test_config=None):
         if g.user['account_kind'] == 'house':
             abort(403)
         values = event_form_values(request.form)
+        db = get_db()
+        visibility, participant_ids = event_access_values(db, request.form)
         frequency, until = recurrence_values(request.form, values['event_date'])
         occurrence_dates = (recurrence_dates(values['event_date'], frequency, until)
                             if frequency else [values['event_date']])
-        db = get_db()
         with db:
             first_id = None
             occurrence_ids = []
             for occurrence_date in occurrence_dates:
                 cursor = db.execute(
                     'INSERT INTO events(title,event_date,created_by,description,all_day,start_time,end_time,'
-                    'series_id,recurrence_frequency,recurrence_until) VALUES(?,?,?,?,?,?,?,?,?,?)',
+                    'series_id,recurrence_frequency,recurrence_until,visibility) '
+                    'VALUES(?,?,?,?,?,?,?,?,?,?,?)',
                     (values['title'], occurrence_date, g.user['id'], values['description'],
                      values['all_day'], values['start_time'], values['end_time'], None,
-                     frequency, until),
+                     frequency, until, visibility),
                 )
                 occurrence_ids.append(cursor.lastrowid)
+                set_event_participants(db, cursor.lastrowid, participant_ids)
                 if first_id is None:
                     first_id = cursor.lastrowid
             if frequency:
@@ -1903,12 +1955,26 @@ def create_app(test_config=None):
     @app.get('/events/<int:event_id>')
     @login_required
     def event_detail(event_id):
-        event = get_db().execute('SELECT * FROM events WHERE id=?', (event_id,)).fetchone()
+        db = get_db()
+        event = db.execute('SELECT * FROM events WHERE id=?', (event_id,)).fetchone()
         if not event:
             abort(404)
         can_edit = (event['created_by'] == g.user['id'] or g.user['role'] == 'admin')
+        can_view_details = (
+            event['visibility'] == 'shared' or can_edit or db.execute(
+                'SELECT 1 FROM event_participants WHERE event_id=? AND user_id=?',
+                (event_id, g.user['id']),
+            ).fetchone() is not None
+        )
+        participants = db.execute(
+            'SELECT users.id,users.display_name,users.account_kind FROM event_participants '
+            'JOIN users ON users.id=event_participants.user_id '
+            'WHERE event_participants.event_id=? ORDER BY users.display_name COLLATE NOCASE,users.id',
+            (event_id,),
+        ).fetchall() if can_view_details else []
         return render_template(
             'event_detail.html', event=event, can_edit=can_edit,
+            can_view_details=can_view_details, participants=participants,
             recurring=bool(event['series_id'] and event['recurrence_frequency']),
             start_label=event_time_label(event['start_time']),
             end_label=event_time_label(event['end_time']),
@@ -1924,8 +1990,17 @@ def create_app(test_config=None):
         if event['created_by'] != g.user['id'] and g.user['role'] != 'admin':
             abort(403)
         if request.method == 'GET':
-            return render_template('event_form.html', event=event, editing=True)
+            users = db.execute(
+                'SELECT id,display_name,username,account_kind FROM users '
+                'WHERE active=1 ORDER BY account_kind,display_name COLLATE NOCASE,id'
+            ).fetchall()
+            selected_participant_ids = [row['user_id'] for row in db.execute(
+                'SELECT user_id FROM event_participants WHERE event_id=?', (event_id,)
+            ).fetchall()]
+            return render_template('event_form.html', event=event, editing=True,
+                                   users=users, selected_participant_ids=selected_participant_ids)
         values = event_form_values(request.form)
+        visibility, participant_ids = event_access_values(db, request.form)
         edit_scope = request.form.get('edit_scope', 'series' if event['series_id'] else 'occurrence')
         if edit_scope not in ('occurrence', 'series'):
             abort(400)
@@ -1942,31 +2017,36 @@ def create_app(test_config=None):
                 for index, occurrence_date in enumerate(occurrence_dates):
                     columns = (values['title'], occurrence_date, values['description'],
                                values['all_day'], values['start_time'], values['end_time'],
-                               group_id if frequency else None, frequency, until)
+                               group_id if frequency else None, frequency, until, visibility)
                     if index < len(existing):
                         db.execute(
                             'UPDATE events SET title=?,event_date=?,description=?,all_day=?,start_time=?,end_time=?,'
-                            'series_id=?,recurrence_frequency=?,recurrence_until=? WHERE id=?',
+                            'series_id=?,recurrence_frequency=?,recurrence_until=?,visibility=? WHERE id=?',
                             (*columns, existing[index]['id']),
                         )
+                        set_event_participants(db, existing[index]['id'], participant_ids)
                     else:
                         db.execute(
                             'INSERT INTO events(title,event_date,created_by,description,all_day,start_time,end_time,'
-                            'series_id,recurrence_frequency,recurrence_until) VALUES(?,?,?,?,?,?,?,?,?,?)',
+                            'series_id,recurrence_frequency,recurrence_until,visibility) '
+                            'VALUES(?,?,?,?,?,?,?,?,?,?,?)',
                             (values['title'], occurrence_date, event['created_by'], values['description'],
                              values['all_day'], values['start_time'], values['end_time'],
-                             group_id if frequency else None, frequency, until),
+                             group_id if frequency else None, frequency, until, visibility),
                         )
+                        new_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
+                        set_event_participants(db, new_id, participant_ids)
                 for row in existing[len(occurrence_dates):]:
                     db.execute('DELETE FROM events WHERE id=?', (row['id'],))
                 redirect_id = existing[0]['id']
             else:
                 db.execute(
                     'UPDATE events SET title=?,event_date=?,description=?,all_day=?,start_time=?,end_time=?,'
-                    'series_id=NULL,recurrence_frequency=NULL,recurrence_until=NULL WHERE id=?',
+                    'series_id=NULL,recurrence_frequency=NULL,recurrence_until=NULL,visibility=? WHERE id=?',
                     (values['title'], values['event_date'], values['description'], values['all_day'],
-                     values['start_time'], values['end_time'], event_id),
+                     values['start_time'], values['end_time'], visibility, event_id),
                 )
+                set_event_participants(db, event_id, participant_ids)
                 redirect_id = event_id
         return redirect(url_for('event_detail', event_id=redirect_id))
 
@@ -1995,10 +2075,21 @@ def create_app(test_config=None):
     @app.get('/calendar.ics')
     @login_required
     def export_calendar():
-        events=get_db().execute('SELECT * FROM events ORDER BY event_date').fetchall()
+        db = get_db()
+        events = db.execute('SELECT * FROM events ORDER BY event_date,id').fetchall()
+        participant_ids = {row['event_id'] for row in db.execute(
+            'SELECT event_id FROM event_participants WHERE user_id=?', (g.user['id'],)
+        ).fetchall()}
+        only_required = request.args.get('only_required', '') == '1'
         lines=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//HomeHub//Local Calendar//EN','CALSCALE:GREGORIAN']
         stamp=datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
         for ev in events:
+            required = ev['created_by'] == g.user['id'] or ev['id'] in participant_ids
+            if only_required and not required:
+                continue
+            can_view_details = (
+                ev['visibility'] == 'shared' or g.user['role'] == 'admin' or required
+            )
             lines.extend(['BEGIN:VEVENT', f'UID:homehub-{ev["id"]}@local', f'DTSTAMP:{stamp}'])
             if ev['all_day']:
                 lines.append(f'DTSTART;VALUE=DATE:{ev["event_date"].replace("-", "")}')
@@ -2008,8 +2099,8 @@ def create_app(test_config=None):
                 if ev['end_time']:
                     end_value = f'{ev["event_date"].replace("-", "")}T{ev["end_time"].replace(":", "")}00'
                     lines.append(f'DTEND:{end_value}')
-            lines.append(f'SUMMARY:{safe_ics_text(ev["title"])}')
-            if ev['description']:
+            lines.append(f'SUMMARY:{safe_ics_text(ev["title"] if can_view_details else "Busy")}')
+            if can_view_details and ev['description']:
                 lines.append(f'DESCRIPTION:{safe_ics_text(ev["description"])}')
             lines.append('END:VEVENT')
         lines.append('END:VCALENDAR')

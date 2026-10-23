@@ -18,11 +18,11 @@ to `main` only after the user approves the completed change.
 - **Lists and Recipes:** Shopping, To-do, Chores, recipe privacy/notes,
   serving scaling, and Add to list snapshots are merged to main. Copy/Paste is
   awaiting review. Weekend, weather, and system status cards remain.
-- **Calendar:** Month navigation, the event grid, all-day/timed event details,
-  and data-preserving schema upgrades are merged to main. Daily, weekly,
-  monthly, and yearly recurrence with occurrence/series actions is implemented
-  on a feature branch and awaits review. Participants, privacy, budgets, and
-  retention settings remain.
+- **Calendar:** Month navigation, event details, daily/weekly/monthly/yearly
+  recurrence, and their data-preserving schema upgrades are merged to main.
+  Event participants, private-event access, and ICS filtering are implemented
+  on a feature branch and await review. Budgets, recipe links, Home summaries,
+  and retention settings remain.
 - **Current app prototype:** login/admin, a single shopping list, recipe
   create/view, basic event creation and ICS export, and light/dark theme exist.
   The approved full tab designs are not yet implemented as complete features.
@@ -98,11 +98,11 @@ to `main` only after the user approves the completed change.
   validation, and v7-to-v8 migration preserving existing events are merged.
   Timed events export to floating local times in ICS.
 - Daily/weekly/monthly/yearly recurrence, one-year default end date, and
-  single-occurrence or whole-series edits/cancellation are implemented on a
-  feature branch and await review. Occurrences are materialized so they appear
-  in month views and ICS downloads.
-- Add event participants and privacy, per-user daily/monthly budgets, ICS
-  visibility filtering, recipe/meal-prep links, and Home weekend summaries.
+  single-occurrence or whole-series edits/cancellation are merged. Occurrences
+  are materialized so they appear in month views and ICS downloads.
+- Event participants, private-event details, Busy placeholders, and ICS
+  visibility filtering are implemented on a feature branch and await review.
+  Per-user budgets, recipe/meal-prep links, and Home weekend summaries remain.
 - Add admin timezone and retention settings. Archive excluded years to ICS
   before deletion, report failed exports without deleting events, and keep
   archive metadata. Include the ICS calendar archive template behavior.

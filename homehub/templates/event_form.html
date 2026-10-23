@@ -7,6 +7,14 @@
     <input type="hidden" name="_csrf" value="{{ csrf_token }}">
     <label>Event title<input name="title" maxlength="128" value="{{ event['title'] }}" required></label>
     <label>Date<input type="date" name="event_date" value="{{ event['event_date'] }}" required></label>
+    <label>Visibility<select name="visibility">
+      <option value="shared" {% if event['visibility']=='shared' %}selected{% endif %}>Shared with the household</option>
+      <option value="private" {% if event['visibility']=='private' %}selected{% endif %}>Private</option>
+    </select></label>
+    <label>People invited (optional)<select name="participant_ids" multiple size="4">
+      {% for user in users %}<option value="{{ user['id'] }}" {% if user['id'] in selected_participant_ids %}selected{% endif %}>{{ user['display_name'] }}{% if user['account_kind']=='house' %} (house-wide account){% endif %}</option>{% endfor %}
+    </select></label>
+    <small class="muted">Invitees can see event details. Only you and admins can edit it.</small>
     <label>Description<textarea name="description" maxlength="256" rows="3" aria-describedby="event-description-count">{{ event['description'] }}</textarea></label>
     <small id="event-description-count" class="muted">{{ 256 - event['description']|length }} characters remaining (256 maximum).</small>
     <label class="event-all-day"><input type="checkbox" name="all_day" value="1" {% if event['all_day'] %}checked{% endif %}> All-day event</label>
