@@ -107,8 +107,13 @@
           {% if prompt_after_done %}<button type="button" onclick="openDonePrompt(this.form)">Done reading</button>
           {% else %}<button type="submit">Done reading</button>{% endif %}
         </form>{% endif %}
+        <form method="post" action="{{ url_for('toggle_rss_favourite', article_id=article['id']) }}">
+          <input type="hidden" name="_csrf" value="{{ csrf_token }}"><button type="submit" class="rss-favourite" aria-pressed="{{ 'true' if article['is_favourite'] else 'false' }}">{% if article['is_favourite'] %}★ Favourited{% else %}☆ Favourite{% endif %}</button>
+        </form>
         <form method="post" action="{{ url_for('delete_rss_article', article_id=article['id']) }}">
-          <input type="hidden" name="_csrf" value="{{ csrf_token }}"><button type="submit">Delete</button>
+          <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+          {% if article['is_favourite'] %}<button type="button" onclick="openFavouriteDeletePrompt(this.form)">Delete</button>
+          {% else %}<button type="submit">Delete</button>{% endif %}
         </form>
       </div>
     </li>{% endfor %}
@@ -131,14 +136,37 @@
           {% if prompt_after_done %}<button type="button" onclick="openDonePrompt(this.form)">Done reading</button>
           {% else %}<button type="submit">Done reading</button>{% endif %}
         </form>{% endif %}
+        <form method="post" action="{{ url_for('toggle_rss_favourite', article_id=article['id']) }}">
+          <input type="hidden" name="_csrf" value="{{ csrf_token }}"><button type="submit" class="rss-favourite" aria-pressed="{{ 'true' if article['is_favourite'] else 'false' }}">{% if article['is_favourite'] %}★ Favourited{% else %}☆ Favourite{% endif %}</button>
+        </form>
         <form method="post" action="{{ url_for('delete_rss_article', article_id=article['id']) }}">
-          <input type="hidden" name="_csrf" value="{{ csrf_token }}"><button type="submit">Delete</button>
+          <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+          {% if article['is_favourite'] %}<button type="button" onclick="openFavouriteDeletePrompt(this.form)">Delete</button>
+          {% else %}<button type="submit">Delete</button>{% endif %}
         </form>
       </div>
     </li>{% endfor %}
   </ul>{% else %}<p class="muted">No cached articles yet.</p>{% endif %}
 </section>
 {% endfor %}
+<section class="rss-favourites-card" id="favourites-card" aria-labelledby="favourites-heading">
+  <div class="rss-favourites-heading"><div><h2 id="favourites-heading">Favourites</h2>
+    <p>Saved articles that are protected from automatic eviction ({{ favourite_articles|length }}/32).</p></div></div>
+  {% if favourite_articles %}<ul class="rss-favourites-list">
+    {% for article in favourite_articles %}<li>
+      <div><a href="{{ url_for('open_rss_article', article_id=article['id']) }}" target="_blank" rel="noopener noreferrer">{{ article['title'] or article['url'] }}</a>
+        <small>{{ article['feed_title'] }}{% if article['published'] %} · {{ article['published'] }}{% endif %}</small></div>
+      <div class="rss-article-actions">
+        <form method="post" action="{{ url_for('toggle_rss_favourite', article_id=article['id']) }}">
+          <input type="hidden" name="_csrf" value="{{ csrf_token }}"><button type="submit">Remove favourite</button>
+        </form>
+        <form method="post" action="{{ url_for('delete_rss_article', article_id=article['id']) }}">
+          <input type="hidden" name="_csrf" value="{{ csrf_token }}"><button type="button" onclick="openFavouriteDeletePrompt(this.form)">Delete</button>
+        </form>
+      </div>
+    </li>{% endfor %}
+  </ul>{% else %}<p class="rss-favourites-empty">No favourite articles yet.</p>{% endif %}
+</section>
 <dialog id="done-reading-dialog" aria-labelledby="done-reading-heading">
   <h2 id="done-reading-heading">Done reading?</h2>
   <p>Would you like to keep this article or delete it?</p>
@@ -152,10 +180,26 @@
     </div>
   </form>
 </dialog>
+<dialog id="delete-favourite-dialog" aria-labelledby="delete-favourite-heading">
+  <h2 id="delete-favourite-heading">Delete favourite?</h2>
+  <p>This removes the article from your favourites and deletes it from your reading shelf.</p>
+  <form id="delete-favourite-form" method="post">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <div class="rss-dialog-actions">
+      <button type="submit" name="confirm_favourite_delete" value="1">Delete article</button>
+      <button type="button" onclick="document.getElementById('delete-favourite-dialog').close()">Cancel</button>
+    </div>
+  </form>
+</dialog>
 <script>
 function openDonePrompt(form) {
   const dialog = document.getElementById('done-reading-dialog');
   document.getElementById('done-reading-form').action = form.action;
+  dialog.showModal();
+}
+function openFavouriteDeletePrompt(form) {
+  const dialog = document.getElementById('delete-favourite-dialog');
+  document.getElementById('delete-favourite-form').action = form.action;
   dialog.showModal();
 }
 </script>

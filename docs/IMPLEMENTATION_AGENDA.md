@@ -154,8 +154,8 @@ to `main` only after the user approves the completed change.
   cached copies visible when outbound access is off or refresh fails, and
   expires personal articles after 90 days and household articles after three
   days. Per-user open/read tracking, Done reading choices, manual deletion, and
-  the saved prompt preference are implemented on this review branch. Per-user
-  favorites, favorite confirmation/cap, and the bottom favorites card remain.
+  the saved prompt preference, up to 32 favorites, favorite-delete confirmation,
+  and the bottom favorites card are implemented on this review branch.
 - Enforce the 64 MB per-user cap with the approved eviction order, exempting
   favorited articles; retain up to 30 ordinary articles per feed. If favorites
   alone fill the quota, stop saving new articles for that user until they free

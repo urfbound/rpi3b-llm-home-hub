@@ -1395,11 +1395,19 @@ def create_app(test_config=None):
         ).fetchone()
         prompt_after_done = bool(preference['prompt_after_done']) if preference else True
         done_without_prompt = preference['done_without_prompt'] if preference else None
+        favourite_articles = db.execute(
+            'SELECT a.id,a.title,a.url,a.published,f.title AS feed_title '
+            'FROM rss_article_states s JOIN rss_articles a ON a.id=s.article_id '
+            'JOIN rss_feeds f ON f.id=a.feed_id WHERE s.user_id=? AND s.is_favourite=1 '
+            'AND s.deleted_at IS NULL ORDER BY a.title COLLATE NOCASE,a.id',
+            (g.user['id'],),
+        ).fetchall()
         return render_template('rss.html', personal_feeds=personal_feeds,
                                household_feeds=household_feeds,
                                outbound_enabled=bool(setting(db, 'rss_outbound_enabled', 1)),
                                prompt_after_done=prompt_after_done,
-                               done_without_prompt=done_without_prompt)
+                               done_without_prompt=done_without_prompt,
+                               favourite_articles=favourite_articles)
 
     @app.get('/rss/articles/<int:article_id>/open')
     @login_required
@@ -1460,14 +1468,45 @@ def create_app(test_config=None):
     @login_required
     def delete_rss_article(article_id):
         db = get_db()
-        _article, _state = visible_rss_article(db, g.user, article_id)
+        _article, state = visible_rss_article(db, g.user, article_id)
+        if (state and state['is_favourite']
+                and request.form.get('confirm_favourite_delete') != '1'):
+            abort(HTTPStatus.CONFLICT, description='Confirm before deleting a favourite article.')
         db.execute(
-            'INSERT INTO rss_article_states(article_id,user_id,deleted_at) VALUES(?,?,?) '
-            'ON CONFLICT(article_id,user_id) DO UPDATE SET deleted_at=excluded.deleted_at',
+            'INSERT INTO rss_article_states(article_id,user_id,deleted_at,is_favourite) VALUES(?,?,?,0) '
+            'ON CONFLICT(article_id,user_id) DO UPDATE SET '
+            'deleted_at=excluded.deleted_at,is_favourite=0',
             (article_id, g.user['id'], datetime.now(timezone.utc).isoformat()),
         )
         db.commit()
         flash('Article deleted.')
+        return redirect(url_for('rss_page'))
+
+    @app.post('/rss/articles/<int:article_id>/favourite')
+    @login_required
+    def toggle_rss_favourite(article_id):
+        db = get_db()
+        _article, state = visible_rss_article(db, g.user, article_id)
+        is_favourite = bool(state and state['is_favourite'])
+        if is_favourite:
+            db.execute('UPDATE rss_article_states SET is_favourite=0 '
+                       'WHERE article_id=? AND user_id=?', (article_id, g.user['id']))
+            flash('Removed from favourites.')
+        else:
+            count = db.execute(
+                'SELECT COUNT(*) FROM rss_article_states WHERE user_id=? AND is_favourite=1',
+                (g.user['id'],),
+            ).fetchone()[0]
+            if count >= 32:
+                flash('You can keep up to 32 favourite articles. Remove one before adding another.')
+                return redirect(url_for('rss_page'))
+            db.execute(
+                'INSERT INTO rss_article_states(article_id,user_id,is_favourite) VALUES(?,?,1) '
+                'ON CONFLICT(article_id,user_id) DO UPDATE SET is_favourite=1',
+                (article_id, g.user['id']),
+            )
+            flash('Added to favourites.')
+        db.commit()
         return redirect(url_for('rss_page'))
 
     @app.post('/rss/feeds')
