@@ -1,0 +1,31 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="panel event-editor">
+  <p class="eyebrow">Household calendar</p>
+  <h1>{{ 'Edit event' if editing else 'Add event' }}</h1>
+  <form method="post" action="{{ url_for('edit_event', event_id=event['id']) if editing else url_for('add_event') }}">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <label>Event title<input name="title" maxlength="128" value="{{ event['title'] }}" required></label>
+    <label>Date<input type="date" name="event_date" value="{{ event['event_date'] }}" required></label>
+    <label>Description<textarea name="description" maxlength="256" rows="3" aria-describedby="event-description-count">{{ event['description'] }}</textarea></label>
+    <small id="event-description-count" class="muted">{{ 256 - event['description']|length }} characters remaining (256 maximum).</small>
+    <label class="event-all-day"><input type="checkbox" name="all_day" value="1" {% if event['all_day'] %}checked{% endif %}> All-day event</label>
+    <div id="event-time-fields" class="event-time-fields" {% if event['all_day'] %}hidden{% endif %}>
+      <label>Starts at<input type="time" name="start_time" value="{{ event['start_time'] or '' }}"></label>
+      <label>Ends at (optional)<input type="time" name="end_time" value="{{ event['end_time'] or '' }}"></label>
+    </div>
+    <div class="actions"><a class="button" href="{{ url_for('index') }}#calendar">Cancel</a><button class="primary">{{ 'Save event' if editing else 'Add event' }}</button></div>
+  </form>
+</section>
+<script>
+const description = document.querySelector('[name="description"]');
+const descriptionCount = document.getElementById('event-description-count');
+const allDay = document.querySelector('[name="all_day"]');
+const timeFields = document.getElementById('event-time-fields');
+function updateDescriptionCount() {
+  descriptionCount.textContent = `${256 - description.value.length} characters remaining (256 maximum).`;
+}
+description.addEventListener('input', updateDescriptionCount);
+allDay.addEventListener('change', () => { timeFields.hidden = allDay.checked; });
+</script>
+{% endblock %}

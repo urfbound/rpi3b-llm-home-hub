@@ -24,7 +24,7 @@ from .backups import (BackupError, backup_filename, create_backup,
                       prune_backups, restore_backup, validate_backup_directory)
 
 PH = PasswordHasher(memory_cost=16384, time_cost=2, parallelism=1)
-SCHEMA_VERSION = 6
+SCHEMA_VERSION = 7
 LOGIN_WINDOW_SECONDS = 15 * 60
 LOGIN_USERNAME_LIMIT = 5
 LOGIN_ADDRESS_LIMIT = 30
@@ -318,8 +318,12 @@ CREATE INDEX IF NOT EXISTS list_access_user ON list_access(user_id,list_id);
 CREATE TABLE IF NOT EXISTS events (
  id INTEGER PRIMARY KEY, title TEXT NOT NULL, event_date TEXT NOT NULL,
  recipe_id INTEGER REFERENCES recipes(id) ON DELETE SET NULL,
- created_by INTEGER NOT NULL REFERENCES users(id)
+ created_by INTEGER NOT NULL REFERENCES users(id),
+ description TEXT NOT NULL DEFAULT '',
+ all_day INTEGER NOT NULL DEFAULT 1 CHECK(all_day IN (0,1)),
+ start_time TEXT, end_time TEXT
 );
+CREATE INDEX IF NOT EXISTS events_date ON events(event_date,id);
 CREATE TABLE IF NOT EXISTS chores (
  id INTEGER PRIMARY KEY,
  weekday INTEGER NOT NULL CHECK(weekday BETWEEN 0 AND 6),
@@ -512,6 +516,15 @@ def initialize_database(db_path):
             ):
                 if column not in recipe_columns:
                     db.execute(f'ALTER TABLE recipes ADD COLUMN {column} {definition}')
+            event_columns = {row[1] for row in db.execute('PRAGMA table_info(events)')}
+            for column, definition in (
+                ('description', "TEXT NOT NULL DEFAULT ''"),
+                ('all_day', 'INTEGER NOT NULL DEFAULT 1'),
+                ('start_time', 'TEXT'),
+                ('end_time', 'TEXT'),
+            ):
+                if column not in event_columns:
+                    db.execute(f'ALTER TABLE events ADD COLUMN {column} {definition}')
             default_list = db.execute(
                 "SELECT id FROM household_lists WHERE kind='shopping' AND is_default=1"
             ).fetchone()
@@ -533,6 +546,41 @@ def initialize_database(db_path):
 
 def safe_ics_text(value):
     return str(value).replace('\\', '\\\\').replace('\n', '\\n').replace(',', '\\,').replace(';', '\\;')
+
+def event_form_values(form):
+    title = form.get('title', '').strip()
+    event_date = form.get('event_date', '').strip()
+    description = form.get('description', '').strip()
+    try:
+        if date.fromisoformat(event_date).isoformat() != event_date:
+            raise ValueError
+    except ValueError:
+        abort(400, description='Enter a valid event date.')
+    if not title or len(title) > 128 or len(description) > 256:
+        abort(400, description='Event titles are limited to 128 characters and descriptions to 256.')
+    all_day = (form.get('all_day') == '1' or
+               (form.get('all_day') is None and form.get('start_time') is None
+                and form.get('end_time') is None))
+    if all_day:
+        start_time = end_time = None
+    else:
+        start_time = form.get('start_time', '').strip()
+        end_time = form.get('end_time', '').strip() or None
+        if not re.fullmatch(r'(?:[01]\d|2[0-3]):[0-5]\d', start_time):
+            abort(400, description='Choose a valid start time for a timed event.')
+        if end_time and not re.fullmatch(r'(?:[01]\d|2[0-3]):[0-5]\d', end_time):
+            abort(400, description='Choose a valid end time.')
+        if end_time and end_time <= start_time:
+            abort(400, description='The end time must be later than the start time.')
+    return {
+        'title': title, 'event_date': event_date, 'description': description,
+        'all_day': int(all_day), 'start_time': start_time, 'end_time': end_time,
+    }
+
+def event_time_label(value):
+    if not value:
+        return ''
+    return datetime.strptime(value, '%H:%M').strftime('%I:%M %p').lstrip('0')
 
 def recipe_form_values(form):
     title = form.get('title', '').strip()
@@ -739,11 +787,14 @@ def create_app(test_config=None):
         calendar_start = date(calendar_year, calendar_month, 1)
         calendar_end = date(calendar_year + (calendar_month == 12),
                             calendar_month % 12 + 1, 1)
-        month_events = db.execute(
-            'SELECT id,title,event_date,recipe_id,created_by FROM events '
+        month_events = [dict(row) for row in db.execute(
+            'SELECT id,title,event_date,recipe_id,created_by,description,all_day,start_time,end_time '
+            'FROM events '
             'WHERE event_date>=? AND event_date<? ORDER BY event_date,title COLLATE NOCASE,id',
             (calendar_start.isoformat(), calendar_end.isoformat())
-        ).fetchall()
+        ).fetchall()]
+        for event in month_events:
+            event['display_start_time'] = event_time_label(event['start_time'])
         events_by_date = {}
         for event in month_events:
             events_by_date.setdefault(event['event_date'], []).append(event)
@@ -1755,16 +1806,77 @@ def create_app(test_config=None):
             db.execute('DELETE FROM recipes WHERE id=?', (recipe_id,))
         return redirect(url_for('index') + '#recipes')
 
+    @app.get('/events/new')
+    @login_required
+    def new_event():
+        if g.user['account_kind'] == 'house':
+            abort(403)
+        event = {'title': '', 'event_date': household_today().isoformat(),
+                 'description': '', 'all_day': 1, 'start_time': '', 'end_time': ''}
+        return render_template('event_form.html', event=event, editing=False)
+
     @app.post('/events')
     @login_required
     def add_event():
-        title=request.form.get('title','').strip()
-        event_date=request.form.get('event_date','')
-        try: date.fromisoformat(event_date)
-        except ValueError: abort(400)
-        if title and len(title)<=160:
-            db=get_db();db.execute('INSERT INTO events(title,event_date,created_by) VALUES(?,?,?)',(title,event_date,g.user['id']));db.commit()
-        return redirect(url_for('index')+'#calendar')
+        if g.user['account_kind'] == 'house':
+            abort(403)
+        values = event_form_values(request.form)
+        db = get_db()
+        with db:
+            cursor = db.execute(
+                'INSERT INTO events(title,event_date,created_by,description,all_day,start_time,end_time) '
+                'VALUES(?,?,?,?,?,?,?)',
+                (values['title'], values['event_date'], g.user['id'], values['description'],
+                 values['all_day'], values['start_time'], values['end_time']),
+            )
+        return redirect(url_for('event_detail', event_id=cursor.lastrowid))
+
+    @app.get('/events/<int:event_id>')
+    @login_required
+    def event_detail(event_id):
+        event = get_db().execute('SELECT * FROM events WHERE id=?', (event_id,)).fetchone()
+        if not event:
+            abort(404)
+        can_edit = (event['created_by'] == g.user['id'] or g.user['role'] == 'admin')
+        return render_template(
+            'event_detail.html', event=event, can_edit=can_edit,
+            start_label=event_time_label(event['start_time']),
+            end_label=event_time_label(event['end_time']),
+        )
+
+    @app.route('/events/<int:event_id>/edit', methods=['GET', 'POST'])
+    @login_required
+    def edit_event(event_id):
+        db = get_db()
+        event = db.execute('SELECT * FROM events WHERE id=?', (event_id,)).fetchone()
+        if not event:
+            abort(404)
+        if event['created_by'] != g.user['id'] and g.user['role'] != 'admin':
+            abort(403)
+        if request.method == 'GET':
+            return render_template('event_form.html', event=event, editing=True)
+        values = event_form_values(request.form)
+        with db:
+            db.execute(
+                'UPDATE events SET title=?,event_date=?,description=?,all_day=?,start_time=?,end_time=? '
+                'WHERE id=?',
+                (values['title'], values['event_date'], values['description'], values['all_day'],
+                 values['start_time'], values['end_time'], event_id),
+            )
+        return redirect(url_for('event_detail', event_id=event_id))
+
+    @app.post('/events/<int:event_id>/delete')
+    @login_required
+    def delete_event(event_id):
+        db = get_db()
+        event = db.execute('SELECT id,created_by FROM events WHERE id=?', (event_id,)).fetchone()
+        if not event:
+            abort(404)
+        if event['created_by'] != g.user['id'] and g.user['role'] != 'admin':
+            abort(403)
+        with db:
+            db.execute('DELETE FROM events WHERE id=?', (event_id,))
+        return redirect(url_for('index') + '#calendar')
 
     @app.get('/calendar.ics')
     @login_required
@@ -1773,8 +1885,19 @@ def create_app(test_config=None):
         lines=['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//HomeHub//Local Calendar//EN','CALSCALE:GREGORIAN']
         stamp=datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
         for ev in events:
-            lines.extend(['BEGIN:VEVENT',f'UID:homehub-{ev["id"]}@local',f'DTSTAMP:{stamp}',
-              f'DTSTART;VALUE=DATE:{ev["event_date"].replace("-","")}',f'SUMMARY:{safe_ics_text(ev["title"])}','END:VEVENT'])
+            lines.extend(['BEGIN:VEVENT', f'UID:homehub-{ev["id"]}@local', f'DTSTAMP:{stamp}'])
+            if ev['all_day']:
+                lines.append(f'DTSTART;VALUE=DATE:{ev["event_date"].replace("-", "")}')
+            else:
+                start_value = f'{ev["event_date"].replace("-", "")}T{ev["start_time"].replace(":", "")}00'
+                lines.append(f'DTSTART:{start_value}')
+                if ev['end_time']:
+                    end_value = f'{ev["event_date"].replace("-", "")}T{ev["end_time"].replace(":", "")}00'
+                    lines.append(f'DTEND:{end_value}')
+            lines.append(f'SUMMARY:{safe_ics_text(ev["title"])}')
+            if ev['description']:
+                lines.append(f'DESCRIPTION:{safe_ics_text(ev["description"])}')
+            lines.append('END:VEVENT')
         lines.append('END:VCALENDAR')
         return Response('\r\n'.join(lines)+'\r\n',mimetype='text/calendar',headers={'Content-Disposition':'attachment; filename="homehub.ics"'})
 
