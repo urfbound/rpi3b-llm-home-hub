@@ -85,8 +85,9 @@ to `main` only after the user approves the completed change.
 
 - Structured recipe creation, editing, deletion, privacy, per-user notes,
   serving scaling, and Add to list snapshots are merged to main, including an
-  upgrade that preserves existing recipe text. Remaining recipe work is Add
-  to calendar with serving count.
+  upgrade that preserves existing recipe text. Add to calendar with serving
+  count and private-title protection are implemented on the current review
+  branch; calendar event detail links back to the recipe with servings.
 - Preserve authorized notes when sharing changes; prompt before removing notes
   belonging to users who lose access.
 
@@ -101,11 +102,11 @@ to `main` only after the user approves the completed change.
 - Daily/weekly/monthly/yearly recurrence, one-year default end date, and
   single-occurrence or whole-series edits/cancellation are merged. Occurrences
   are materialized so they appear in month views and ICS downloads.
-- Event participants, private-event details, Busy placeholders, and ICS
-  visibility filtering are committed on a review branch. Per-user daily and
-  monthly occurrence budgets, including Admin limit settings, are implemented
-  on a dependent feature branch. Recipe/meal-prep links and Home weekend
-  summaries remain.
+- Event participants, private-event details, Busy placeholders, ICS
+  visibility filtering, per-user daily/monthly occurrence budgets, and Admin
+  limit settings are implemented on dependent review branches. Recipe/meal-prep
+  links are implemented on the current review branch. Home weekend summaries
+  and retention settings remain.
 - Add admin timezone and retention settings. Archive excluded years to ICS
   before deletion, report failed exports without deleting events, and keep
   archive metadata. Include the ICS calendar archive template behavior.

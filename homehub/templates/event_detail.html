@@ -10,6 +10,7 @@
     {% if not event['all_day'] %} · {{ start_label }}{% if end_label %}–{{ end_label }}{% endif %}{% endif %}</p>
   {% if can_view_details %}
     {% if event['description'] %}<p class="event-description">{{ event['description'] }}</p>{% else %}<p class="muted">No description.</p>{% endif %}
+    {% if recipe_label %}<p>Recipe: {% if recipe_url %}<a href="{{ recipe_url }}">{{ recipe_label }}</a>{% else %}{{ recipe_label }}{% endif %}{% if event['recipe_servings'] %} · {{ event['recipe_servings'] }} servings{% endif %}{% if event['meal_prep'] %} · Meal prep{% endif %}{% if event['meal_slot'] %} · {{ event['meal_slot']|capitalize }}{% endif %}</p>{% endif %}
     {% if participants %}<p>Invited: {% for person in participants %}{{ person['display_name'] }}{% if not loop.last %}, {% endif %}{% endfor %}</p>{% endif %}
   {% else %}<p class="muted">Private event details are visible to the creator, invitees, and admins.</p>{% endif %}
 </article>

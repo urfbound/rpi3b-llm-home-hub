@@ -24,7 +24,7 @@ from .backups import (BackupError, backup_filename, create_backup,
                       prune_backups, restore_backup, validate_backup_directory)
 
 PH = PasswordHasher(memory_cost=16384, time_cost=2, parallelism=1)
-SCHEMA_VERSION = 9
+SCHEMA_VERSION = 10
 LOGIN_WINDOW_SECONDS = 15 * 60
 LOGIN_USERNAME_LIMIT = 5
 LOGIN_ADDRESS_LIMIT = 30
@@ -323,7 +323,11 @@ CREATE TABLE IF NOT EXISTS events (
  all_day INTEGER NOT NULL DEFAULT 1 CHECK(all_day IN (0,1)),
  start_time TEXT, end_time TEXT,
  series_id INTEGER, recurrence_frequency TEXT, recurrence_until TEXT,
- visibility TEXT NOT NULL DEFAULT 'shared' CHECK(visibility IN ('shared','private'))
+ visibility TEXT NOT NULL DEFAULT 'shared' CHECK(visibility IN ('shared','private')),
+ recipe_servings INTEGER,
+ meal_prep INTEGER NOT NULL DEFAULT 0 CHECK(meal_prep IN (0,1)),
+ meal_slot TEXT CHECK(meal_slot IS NULL OR meal_slot IN ('breakfast','lunch','dinner')),
+ recipe_title_auto INTEGER NOT NULL DEFAULT 0 CHECK(recipe_title_auto IN (0,1))
 );
 CREATE INDEX IF NOT EXISTS events_date ON events(event_date,id);
 CREATE TABLE IF NOT EXISTS event_participants (
@@ -535,6 +539,10 @@ def initialize_database(db_path):
                 ('recurrence_frequency', 'TEXT'),
                 ('recurrence_until', 'TEXT'),
                 ('visibility', "TEXT NOT NULL DEFAULT 'shared'"),
+                ('recipe_servings', 'INTEGER'),
+                ('meal_prep', 'INTEGER NOT NULL DEFAULT 0'),
+                ('meal_slot', 'TEXT'),
+                ('recipe_title_auto', 'INTEGER NOT NULL DEFAULT 0'),
             ):
                 if column not in event_columns:
                     db.execute(f'ALTER TABLE events ADD COLUMN {column} {definition}')
@@ -663,6 +671,62 @@ def set_event_participants(db, event_id, participant_ids):
     db.execute('DELETE FROM event_participants WHERE event_id=?', (event_id,))
     db.executemany('INSERT INTO event_participants(event_id,user_id) VALUES(?,?)',
                    [(event_id, user_id) for user_id in participant_ids])
+
+def can_view_recipe(db, user, recipe):
+    if not recipe:
+        return False
+    if user['role'] == 'admin' or recipe['visibility'] == 'shared' \
+            or recipe['created_by'] == user['id']:
+        return True
+    return db.execute(
+        'SELECT 1 FROM recipe_access WHERE recipe_id=? AND user_id=?',
+        (recipe['id'], user['id']),
+    ).fetchone() is not None
+
+def event_recipe_values(db, user, form, values, existing_recipe_id=None):
+    raw_recipe_id = form.get('recipe_id', '').strip()
+    if not raw_recipe_id and existing_recipe_id:
+        raw_recipe_id = str(existing_recipe_id)
+    recipe = None
+    if raw_recipe_id:
+        try:
+            recipe_id = int(raw_recipe_id)
+        except ValueError:
+            abort(400, description='Choose a valid recipe.')
+        recipe = db.execute('SELECT * FROM recipes WHERE id=?', (recipe_id,)).fetchone()
+        if not recipe:
+            abort(404)
+        if not can_view_recipe(db, user, recipe) and recipe_id != existing_recipe_id:
+            abort(404)
+    meal_prep = form.get('meal_prep') in ('1', 'on')
+    meal_slot = form.get('meal_slot', '').strip() or None
+    if meal_slot not in (None, 'breakfast', 'lunch', 'dinner'):
+        abort(400, description='Choose breakfast, lunch, or dinner.')
+    raw_servings = form.get('recipe_servings', '').strip()
+    auto_title = form.get('recipe_title_auto') == '1'
+    if not recipe:
+        if meal_prep or meal_slot or raw_servings or auto_title:
+            abort(400, description='Meal prep events must link to one visible recipe.')
+        return {'recipe_id': None, 'recipe_servings': None, 'meal_prep': 0,
+                'meal_slot': None, 'recipe_title_auto': 0}
+    if meal_prep and not recipe:
+        abort(400, description='Meal prep events must link to one visible recipe.')
+    try:
+        servings = int(raw_servings) if raw_servings else int(recipe['default_servings'])
+    except ValueError:
+        abort(400, description='Recipe servings must be from 1 to 99.')
+    if not 1 <= servings <= 99:
+        abort(400, description='Recipe servings must be from 1 to 99.')
+    if auto_title:
+        if recipe['visibility'] == 'private':
+            values['title'] = 'Meal prep'
+        elif values['title'] != recipe['title']:
+            auto_title = False
+    return {
+        'recipe_id': recipe['id'], 'recipe_servings': servings,
+        'meal_prep': int(meal_prep), 'meal_slot': meal_slot,
+        'recipe_title_auto': int(auto_title),
+    }
 
 def enforce_event_budget(db, user_id, occurrence_dates, *, exclude_event_id=None,
                          exclude_series_id=None):
@@ -1900,6 +1964,11 @@ def create_app(test_config=None):
             with db:
                 save_recipe_content(db, recipe_id, values)
                 apply_recipe_sharing(db, recipe_id, visibility, allowed_ids, losing_notes)
+                if recipe['visibility'] != 'private' and visibility == 'private':
+                    db.execute(
+                        "UPDATE events SET title='Meal prep' WHERE recipe_id=? AND recipe_title_auto=1",
+                        (recipe_id,),
+                    )
             return redirect(url_for('recipe_detail', recipe_id=recipe_id))
         ingredients = db.execute(
             'SELECT quantity,unit,name,note FROM recipe_ingredients WHERE recipe_id=? ORDER BY position',
@@ -1976,15 +2045,42 @@ def create_app(test_config=None):
     def new_event():
         if g.user['account_kind'] == 'house':
             abort(403)
+        db = get_db()
+        recipes = visible_recipes(db, g.user)
+        recipe = None
+        recipe_id = request.args.get('recipe_id', '').strip()
+        if recipe_id:
+            recipe = visible_recipe(db, g.user, recipe_id)
+        meal_prep = request.args.get('meal_prep') == '1'
+        if meal_prep and not recipe:
+            abort(400, description='Meal prep events must link to one visible recipe.')
+        try:
+            servings = (int(request.args.get('servings', recipe['default_servings']))
+                        if recipe else None)
+        except ValueError:
+            abort(400, description='Recipe servings must be from 1 to 99.')
+        if servings is not None and not 1 <= servings <= 99:
+            abort(400, description='Recipe servings must be from 1 to 99.')
+        meal_slot = request.args.get('meal_slot', '')
+        if meal_slot not in ('', 'breakfast', 'lunch', 'dinner'):
+            abort(400, description='Choose breakfast, lunch, or dinner.')
+        default_title = ('Meal prep' if recipe and recipe['visibility'] == 'private'
+                         else recipe['title'] if recipe else '')
         event = {'title': '', 'event_date': household_today().isoformat(),
                  'description': '', 'all_day': 1, 'start_time': '', 'end_time': '',
-                 'visibility': 'shared', 'recurrence_frequency': '', 'recurrence_until': ''}
-        users = get_db().execute(
+                 'visibility': 'shared', 'recurrence_frequency': '', 'recurrence_until': '',
+                 'recipe_id': recipe['id'] if recipe else None,
+                 'recipe_servings': servings, 'meal_prep': int(meal_prep),
+                 'meal_slot': meal_slot or None,
+                 'recipe_title_auto': int(bool(recipe))}
+        if default_title:
+            event['title'] = default_title
+        users = db.execute(
             'SELECT id,display_name,username,account_kind FROM users '
             'WHERE active=1 ORDER BY account_kind,display_name COLLATE NOCASE,id'
         ).fetchall()
         return render_template('event_form.html', event=event, editing=False,
-                               users=users, selected_participant_ids=[])
+                               users=users, selected_participant_ids=[], recipes=recipes)
 
     @app.post('/events')
     @login_required
@@ -1993,6 +2089,7 @@ def create_app(test_config=None):
             abort(403)
         values = event_form_values(request.form)
         db = get_db()
+        recipe_values = event_recipe_values(db, g.user, request.form, values)
         visibility, participant_ids = event_access_values(db, request.form)
         frequency, until = recurrence_values(request.form, values['event_date'])
         occurrence_dates = (recurrence_dates(values['event_date'], frequency, until)
@@ -2005,11 +2102,13 @@ def create_app(test_config=None):
             for occurrence_date in occurrence_dates:
                 cursor = db.execute(
                     'INSERT INTO events(title,event_date,created_by,description,all_day,start_time,end_time,'
-                    'series_id,recurrence_frequency,recurrence_until,visibility) '
-                    'VALUES(?,?,?,?,?,?,?,?,?,?,?)',
+                    'series_id,recurrence_frequency,recurrence_until,visibility,recipe_servings,meal_prep,meal_slot,'
+                    'recipe_title_auto,recipe_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
                     (values['title'], occurrence_date, g.user['id'], values['description'],
                      values['all_day'], values['start_time'], values['end_time'], None,
-                     frequency, until, visibility),
+                     frequency, until, visibility, recipe_values['recipe_servings'],
+                     recipe_values['meal_prep'], recipe_values['meal_slot'],
+                     recipe_values['recipe_title_auto'], recipe_values['recipe_id']),
                 )
                 occurrence_ids.append(cursor.lastrowid)
                 set_event_participants(db, cursor.lastrowid, participant_ids)
@@ -2040,9 +2139,19 @@ def create_app(test_config=None):
             'WHERE event_participants.event_id=? ORDER BY users.display_name COLLATE NOCASE,users.id',
             (event_id,),
         ).fetchall() if can_view_details else []
+        linked_recipe = db.execute('SELECT * FROM recipes WHERE id=?',
+                                   (event['recipe_id'],)).fetchone() if (
+                                       can_view_details and event['recipe_id']) else None
+        recipe_is_visible = can_view_recipe(db, g.user, linked_recipe)
         return render_template(
             'event_detail.html', event=event, can_edit=can_edit,
             can_view_details=can_view_details, participants=participants,
+            linked_recipe=linked_recipe if recipe_is_visible else None,
+            recipe_label=(linked_recipe['title'] if recipe_is_visible else
+                          'Private recipe' if linked_recipe else None),
+            recipe_url=(url_for('recipe_detail', recipe_id=linked_recipe['id'],
+                                servings=event['recipe_servings'] or linked_recipe['default_servings'])
+                        if recipe_is_visible else None),
             recurring=bool(event['series_id'] and event['recurrence_frequency']),
             start_label=event_time_label(event['start_time']),
             end_label=event_time_label(event['end_time']),
@@ -2065,9 +2174,14 @@ def create_app(test_config=None):
             selected_participant_ids = [row['user_id'] for row in db.execute(
                 'SELECT user_id FROM event_participants WHERE event_id=?', (event_id,)
             ).fetchall()]
+            recipes = visible_recipes(db, g.user)
             return render_template('event_form.html', event=event, editing=True,
-                                   users=users, selected_participant_ids=selected_participant_ids)
+                                   users=users, selected_participant_ids=selected_participant_ids,
+                                   recipes=recipes)
         values = event_form_values(request.form)
+        recipe_values = event_recipe_values(
+            db, g.user, request.form, values, existing_recipe_id=event['recipe_id']
+        )
         visibility, participant_ids = event_access_values(db, request.form)
         edit_scope = request.form.get('edit_scope', 'series' if event['series_id'] else 'occurrence')
         if edit_scope not in ('occurrence', 'series'):
@@ -2088,22 +2202,29 @@ def create_app(test_config=None):
                 for index, occurrence_date in enumerate(occurrence_dates):
                     columns = (values['title'], occurrence_date, values['description'],
                                values['all_day'], values['start_time'], values['end_time'],
-                               group_id if frequency else None, frequency, until, visibility)
+                               group_id if frequency else None, frequency, until, visibility,
+                               recipe_values['recipe_servings'], recipe_values['meal_prep'],
+                               recipe_values['meal_slot'], recipe_values['recipe_title_auto'],
+                               recipe_values['recipe_id'])
                     if index < len(existing):
                         db.execute(
                             'UPDATE events SET title=?,event_date=?,description=?,all_day=?,start_time=?,end_time=?,'
-                            'series_id=?,recurrence_frequency=?,recurrence_until=?,visibility=? WHERE id=?',
+                            'series_id=?,recurrence_frequency=?,recurrence_until=?,visibility=?,'
+                            'recipe_servings=?,meal_prep=?,meal_slot=?,recipe_title_auto=?,recipe_id=? WHERE id=?',
                             (*columns, existing[index]['id']),
                         )
                         set_event_participants(db, existing[index]['id'], participant_ids)
                     else:
                         db.execute(
                             'INSERT INTO events(title,event_date,created_by,description,all_day,start_time,end_time,'
-                            'series_id,recurrence_frequency,recurrence_until,visibility) '
-                            'VALUES(?,?,?,?,?,?,?,?,?,?,?)',
+                            'series_id,recurrence_frequency,recurrence_until,visibility,recipe_servings,meal_prep,'
+                            'meal_slot,recipe_title_auto,recipe_id) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)',
                             (values['title'], occurrence_date, event['created_by'], values['description'],
                              values['all_day'], values['start_time'], values['end_time'],
-                             group_id if frequency else None, frequency, until, visibility),
+                             group_id if frequency else None, frequency, until, visibility,
+                             recipe_values['recipe_servings'], recipe_values['meal_prep'],
+                             recipe_values['meal_slot'], recipe_values['recipe_title_auto'],
+                             recipe_values['recipe_id']),
                         )
                         new_id = db.execute('SELECT last_insert_rowid()').fetchone()[0]
                         set_event_participants(db, new_id, participant_ids)
@@ -2115,9 +2236,13 @@ def create_app(test_config=None):
                                      exclude_event_id=event_id)
                 db.execute(
                     'UPDATE events SET title=?,event_date=?,description=?,all_day=?,start_time=?,end_time=?,'
-                    'series_id=NULL,recurrence_frequency=NULL,recurrence_until=NULL,visibility=? WHERE id=?',
+                    'series_id=NULL,recurrence_frequency=NULL,recurrence_until=NULL,visibility=?,'
+                    'recipe_servings=?,meal_prep=?,meal_slot=?,recipe_title_auto=?,recipe_id=? WHERE id=?',
                     (values['title'], values['event_date'], values['description'], values['all_day'],
-                     values['start_time'], values['end_time'], visibility, event_id),
+                     values['start_time'], values['end_time'], visibility,
+                     recipe_values['recipe_servings'], recipe_values['meal_prep'],
+                     recipe_values['meal_slot'], recipe_values['recipe_title_auto'],
+                     recipe_values['recipe_id'], event_id),
                 )
                 set_event_participants(db, event_id, participant_ids)
                 redirect_id = event_id
