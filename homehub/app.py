@@ -28,7 +28,7 @@ from .system_status import (collect_system_snapshot, cpu_usage_percent,
                             cpu_bar_class, record_metric_sample)
 
 PH = PasswordHasher(memory_cost=16384, time_cost=2, parallelism=1)
-SCHEMA_VERSION = 12
+SCHEMA_VERSION = 13
 LOGIN_WINDOW_SECONDS = 15 * 60
 LOGIN_USERNAME_LIMIT = 5
 LOGIN_ADDRESS_LIMIT = 30
@@ -346,6 +346,20 @@ CREATE TABLE IF NOT EXISTS weather_cache (
  payload TEXT NOT NULL,
  fetched_at TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS rss_feeds (
+ id INTEGER PRIMARY KEY,
+ normalized_url TEXT NOT NULL UNIQUE CHECK(length(normalized_url)<=2048),
+ title TEXT NOT NULL DEFAULT '' CHECK(length(title)<=256),
+ scope TEXT NOT NULL CHECK(scope IN ('household','personal')),
+ owner_user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+ created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ sort_order INTEGER NOT NULL DEFAULT 0,
+ created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+ CHECK((scope='household' AND owner_user_id IS NULL) OR
+       (scope='personal' AND owner_user_id IS NOT NULL))
+);
+CREATE INDEX IF NOT EXISTS rss_feeds_owner_order
+ ON rss_feeds(scope,owner_user_id,sort_order,id);
 CREATE TABLE IF NOT EXISTS system_metrics (
  sampled_at TEXT PRIMARY KEY,
  cpu_percent REAL,
