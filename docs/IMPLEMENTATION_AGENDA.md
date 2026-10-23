@@ -136,6 +136,9 @@ to `main` only after the user approves the completed change.
 - The RSS/Atom parsing and feed URL safety foundation is implemented on the
   current review branch. It normalizes URLs, rejects non-public destinations,
   parses bounded article sets, strips HTML summaries, and resolves safe links.
+- The personal/household feed registry schema is also implemented on the
+  current review branch, with URL uniqueness across scopes and a tested v12
+  upgrade that preserves existing household data.
 - Add personal feeds and admin-managed house-wide feeds, ordering and
   management, duplicate normalization across both scopes, safe fetching,
   refresh settings, and outbound-access behavior.

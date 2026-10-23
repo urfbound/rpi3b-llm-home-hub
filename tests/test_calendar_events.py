@@ -332,7 +332,7 @@ def test_v7_upgrade_adds_recurrence_columns_without_losing_event(tmp_path):
                 'DATABASE': str(path)})
 
     with sqlite3.connect(path) as db:
-        assert db.execute('PRAGMA user_version').fetchone()[0] == 12
+        assert db.execute('PRAGMA user_version').fetchone()[0] == 13
         assert db.execute(
             'SELECT id,title,event_date,series_id,recurrence_frequency,recurrence_until '
             'FROM events'
@@ -448,7 +448,7 @@ def test_v8_upgrade_adds_private_event_access_without_losing_existing_event(tmp_
                 'DATABASE': str(path)})
 
     with sqlite3.connect(path) as db:
-        assert db.execute('PRAGMA user_version').fetchone()[0] == 12
+        assert db.execute('PRAGMA user_version').fetchone()[0] == 13
         assert db.execute(
             'SELECT id,title,event_date,visibility FROM events'
         ).fetchone() == (1, 'Dinner', '2026-10-24', 'shared')
@@ -477,10 +477,10 @@ def test_v6_upgrade_preserves_events_and_adds_all_day_defaults(tmp_path):
                 'DATABASE': str(path)})
 
     with sqlite3.connect(path) as db:
-        assert db.execute('PRAGMA user_version').fetchone()[0] == 12
+        assert db.execute('PRAGMA user_version').fetchone()[0] == 13
         assert db.execute(
             'SELECT id,title,event_date,description,all_day,start_time,end_time FROM events'
         ).fetchone() == (23, 'Dinner', '2026-10-24', '', 1, None, None)
         assert db.execute('PRAGMA foreign_key_check').fetchall() == []
-    backups = list(tmp_path.glob('v6.pre-v12-*.sqlite3'))
+    backups = list(tmp_path.glob('v6.pre-v13-*.sqlite3'))
     assert len(backups) == 1
