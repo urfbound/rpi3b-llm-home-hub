@@ -94,8 +94,9 @@ to `main` only after the user approves the completed change.
 ### Calendar
 
 - Month grid, month/year selectors, previous/next navigation, Today, and the
-  retained-year dropdown are merged to main. The year range currently defaults
-  to three previous years plus ten future years; admin configuration remains.
+  retained-year dropdown are merged to main. The year range defaults to three
+  previous years plus ten future years. Calendar retention and archive controls
+  are implemented on the current review branch.
 - Event details, all-day/timed entry, edit/delete controls, title/description
   validation, and v7-to-v8 migration preserving existing events are merged.
   Timed events export to floating local times in ICS.
@@ -105,11 +106,15 @@ to `main` only after the user approves the completed change.
 - Event participants, private-event details, Busy placeholders, ICS
   visibility filtering, per-user daily/monthly occurrence budgets, and Admin
   limit settings are implemented on dependent review branches. Recipe/meal-prep
-  links are implemented on the current review branch. Home weekend summaries
-  and retention settings remain.
-- Add admin timezone and retention settings. Archive excluded years to ICS
-  before deletion, report failed exports without deleting events, and keep
-  archive metadata. Include the ICS calendar archive template behavior.
+  links and Calendar retention are implemented on their current review
+  branches. Home weekend summaries remain.
+- The current review branch derives the household calendar timezone from the
+  admin-selected weather location (falling back to the Pi's local timezone).
+  It configures zero to ten previous calendar years, archives years to ICS
+  before deleting on a deliberate retention reduction, and automatically
+  archives or deletes years as they age out. Failed exports leave event data
+  intact and appear in Admin. Archive metadata and admin-only ICS downloads are
+  included; files are stored in `calendar-archives` beside the database.
 
 ### Weather and system status
 

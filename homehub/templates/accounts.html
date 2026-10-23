@@ -2,7 +2,7 @@
 {% block content %}
 <div class="crumb">Admin / <strong>Accounts</strong></div>
 <div class="page-heading"><div><p class="eyebrow">Your household</p><h1>People at home</h1><p class="muted">Give each person their own space, and manage access to the shared home.</p></div><button class="primary" type="button" onclick="document.getElementById('create-dialog').showModal()">+ Add account</button></div>
-<nav class="admin-jumps" aria-label="Jump to admin section"><a href="#accounts-section">Accounts</a><a href="#access-section">Access</a><a href="#calendar-limits-section">Calendar limits</a><a href="#weather-settings-section">Weather</a><a href="#rss-settings-section">RSS</a><a href="#system-status-settings-section">System status</a><a href="#backup-restore-section">Backup and restore</a><a href="#house-wide-section">House-wide access</a></nav>
+<nav class="admin-jumps" aria-label="Jump to admin section"><a href="#accounts-section">Accounts</a><a href="#access-section">Access</a><a href="#calendar-limits-section">Calendar limits</a><a href="#calendar-retention-section">Calendar retention</a><a href="#weather-settings-section">Weather</a><a href="#rss-settings-section">RSS</a><a href="#system-status-settings-section">System status</a><a href="#backup-restore-section">Backup and restore</a><a href="#house-wide-section">House-wide access</a></nav>
 <section class="stats" aria-label="Account counts">
   <div class="stat"><strong>{{ counts.users }} <small>/ 32</small></strong><span>Accounts</span></div>
   <div class="stat"><strong>{{ counts.admins }} <small>/ 4</small></strong><span>Admins</span></div>
@@ -33,6 +33,31 @@
     <p class="muted">Monthly limits can be set from 7 to 512. Repeating occurrences count toward both limits.</p>
     <button class="button small">Save limits</button>
   </form>
+</section>
+<section class="panel" id="calendar-retention-section"><p class="eyebrow">Calendar</p><h2>Calendar retention</h2>
+  <p class="muted">Keep the current calendar year and up to ten previous years available for browsing.</p>
+  <form method="post" action="{{ url_for('update_calendar_retention') }}" class="calendar-retention-form">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <label>Previous years to keep <select name="previous_years" aria-label="Previous calendar years to keep">
+      {% for years in range(0, 11) %}<option value="{{ years }}" {% if years == calendar_previous_years %}selected{% endif %}>{{ years }}</option>{% endfor %}
+    </select></label>
+    <p class="callout">Current year plus {{ calendar_previous_years }} previous year{{ '' if calendar_previous_years == 1 else 's' }} retained.</p>
+    <label>When a year leaves the active calendar <select name="expiry_action" aria-label="Expired calendar action">
+      <option value="archive" {% if calendar_expiry_action == 'archive' %}selected{% endif %}>Archive to ICS first</option>
+      <option value="delete" {% if calendar_expiry_action == 'delete' %}selected{% endif %}>Delete without archive</option>
+    </select></label>
+    <p class="muted">Calendar time zone: {{ calendar_timezone }}. This follows the selected household weather location; if no location is set, the server's local time zone is used.</p>
+    <p class="muted">Reducing retention always attempts an ICS export first. If an export fails, its events remain in the database. The selected action is for automatic age cleanup.</p>
+    <p class="archive-path"><strong>Archive folder</strong><code>{{ calendar_archive_folder }}</code></p>
+    <button class="button small">Save retention</button>
+  </form>
+  <h3>Calendar archives</h3>
+  {% if calendar_archive_failures %}<ul class="calendar-archive-failures">
+    {% for failure in calendar_archive_failures %}<li><strong>{{ failure.year }} was not archived.</strong> Events remain in the database. Last error: {{ failure.error }}</li>{% endfor %}
+  </ul>{% endif %}
+  {% if calendar_archives %}<ul class="calendar-archive-list">
+    {% for archive in calendar_archives %}<li><div><strong>{{ archive.year }}</strong><small>{{ archive.event_count }} events · {{ archive.size_bytes|filesizeformat(true) }} · {{ archive.archived_at }}</small></div><a class="button" href="{{ url_for('download_calendar_archive', filename=archive.file_name) }}">Download ICS</a></li>{% endfor %}
+  </ul>{% else %}<p class="muted">No calendar archives yet.</p>{% endif %}
 </section>
 <section class="panel weather-admin" id="weather-settings-section"><p class="eyebrow">Household forecast</p><h2>Weather settings</h2>
   <p class="muted">{% if weather_location_name %}Current location: <strong>{{ weather_location_name }}</strong>{% else %}No household location selected{% endif %}</p>
