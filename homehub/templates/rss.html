@@ -81,5 +81,33 @@
   </ul>
   {% else %}<p class="muted">No house-wide feeds have been added.</p>{% endif %}
 </section>
-<p class="muted">Feed articles will appear here after RSS refresh is implemented.</p>
+{% if not outbound_enabled %}<p class="muted">Outbound RSS access is off. Showing cached articles.</p>{% endif %}
+{% for feed in personal_feeds %}
+<section class="panel rss-feed-section" aria-label="Articles from {{ feed['title'] }}">
+  <h2>{{ feed['title'] }}</h2>
+  {% if feed['last_fetched_at'] %}<p class="muted">Last refreshed {{ feed['last_fetched_at']|replace('T', ' ')|replace('+00:00', ' UTC') }}</p>{% endif %}
+  {% if feed['last_error'] %}<p class="muted">Refresh failed: {{ feed['last_error'] }}. Showing saved articles.</p>{% endif %}
+  {% if feed['articles'] %}<ul class="rss-articles">
+    {% for article in feed['articles'] %}<li>
+      <a href="{{ article['url'] }}" target="_blank" rel="noopener noreferrer">{{ article['title'] or article['url'] }}</a>
+      {% if article['published'] %}<small>{{ article['published'] }}</small>{% endif %}
+      {% if article['summary'] %}<p>{{ article['summary'] }}</p>{% endif %}
+    </li>{% endfor %}
+  </ul>{% else %}<p class="muted">No cached articles yet.</p>{% endif %}
+</section>
+{% endfor %}
+{% for feed in household_feeds %}
+<section class="panel rss-feed-section" aria-label="Articles from {{ feed['title'] }}">
+  <h2>{{ feed['title'] }}</h2>
+  {% if feed['last_fetched_at'] %}<p class="muted">Last refreshed {{ feed['last_fetched_at']|replace('T', ' ')|replace('+00:00', ' UTC') }}</p>{% endif %}
+  {% if feed['last_error'] %}<p class="muted">Refresh failed: {{ feed['last_error'] }}. Showing saved articles.</p>{% endif %}
+  {% if feed['articles'] %}<ul class="rss-articles">
+    {% for article in feed['articles'] %}<li>
+      <a href="{{ article['url'] }}" target="_blank" rel="noopener noreferrer">{{ article['title'] or article['url'] }}</a>
+      {% if article['published'] %}<small>{{ article['published'] }}</small>{% endif %}
+      {% if article['summary'] %}<p>{{ article['summary'] }}</p>{% endif %}
+    </li>{% endfor %}
+  </ul>{% else %}<p class="muted">No cached articles yet.</p>{% endif %}
+</section>
+{% endfor %}
 {% endblock %}

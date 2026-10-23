@@ -133,30 +133,34 @@ to `main` only after the user approves the completed change.
 
 ### RSS
 
-- The RSS/Atom parsing and feed URL safety foundation is implemented on the
-  current review branch. It normalizes URLs, rejects non-public destinations,
-  parses bounded article sets, strips HTML summaries, and resolves safe links.
-- The personal/household feed registry schema is also implemented on the
-  current review branch, with URL uniqueness across scopes and a tested v12
-  upgrade that preserves existing household data.
+- The RSS/Atom parsing and feed URL safety foundation is merged to main. It
+  normalizes URLs, rejects non-public destinations, parses bounded article
+  sets, strips HTML summaries, and resolves safe links.
+- The personal/household feed registry and management flows are merged to
+  main, with URL uniqueness across scopes, admin-only household changes, a
+  three-feed household limit, and tested schema upgrades that preserve feed
+  data.
 - Personal feed add/remove/reordering and admin-managed house-wide feed
-  add/remove/reordering are implemented on the current review branch. The
-  server enforces duplicate checks across scopes, admin-only household changes,
-  and a three-feed household limit. The house-wide list is viewable by all
-  signed-in accounts.
+  add/remove/reordering are merged to main. The house-wide list is viewable by
+  all signed-in accounts.
 - Bounded HTTP fetching now pins connections to DNS-validated public addresses,
   rechecks every redirect, enforces time/size/redirect limits, and supports an
   explicit admin approval for a private household feed host. LAN approval does
-  not permit loopback or redirects to another private host. Fetch scheduling,
-  and refresh execution remain. Admin can now set a 10–240-minute RSS interval
-  (default 30) and turn outbound RSS access off; the fetch path still needs to
-  enforce the toggle and serve cached articles while disabled.
-- Store shared article bodies once with separate per-user read, favourite,
-  and delete state. Implement article-open read tracking, Done reading
-  behavior, prompt preference, favourite confirmation, and the bottom
-  favourites card. Keep house-wide articles for at most three days; track
-  their read state per user when practical, otherwise ignore it. Personal
-  articles retain the 90-day/64 MB per-user cap and eviction order.
+  not permit loopback or redirects to another private host. Admin-configured
+  refresh and outbound-access settings are merged to main.
+- Due feeds are refreshed when a signed-in user visits RSS, using the configured
+  interval; this avoids a continuously running scheduler. This review branch
+  enforces the outbound toggle, stores and displays parsed article caches, keeps
+  cached copies visible when outbound access is off or refresh fails, and
+  expires personal articles after 90 days and household articles after three
+  days. Per-user read state, Done reading behavior, favorites, 64 MB eviction,
+  and article deletion remain.
+- Add separate per-user read, favourite, and delete state for cached articles.
+  Implement article-open read tracking, Done reading behavior, the prompt
+  preference, favourite confirmation and cap, and the bottom favourites card.
+  Keep household read state per-user if practical; otherwise ignore it.
+  Enforce the 64 MB per-user cap with the approved eviction order, exempting
+  favourited articles.
 
 ### Games
 

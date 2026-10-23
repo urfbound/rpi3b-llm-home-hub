@@ -13,6 +13,8 @@ def app(tmp_path):
     app = create_app({'TESTING': True, 'SECRET_KEY': 'rss-management-test',
                       'DATABASE': str(tmp_path / 'rss.sqlite3')})
     with sqlite3.connect(app.config['DATABASE']) as db:
+        db.execute("INSERT OR REPLACE INTO app_settings(key,value) "
+                   "VALUES('rss_outbound_enabled','0')")
         db.executemany(
             'INSERT INTO users(username,display_name,password_hash,role,account_kind) '
             'VALUES(?,?,?,?,?)',

@@ -29,9 +29,11 @@ from .system_status import (collect_system_snapshot, cpu_usage_percent,
                             cpu_bar_class, record_metric_sample)
 from .rss import (DEFAULT_RSS_REFRESH_MINUTES, MAX_RSS_REFRESH_MINUTES,
                   MIN_RSS_REFRESH_MINUTES, RSSFeedError, validate_feed_url)
+from .rss_fetch import fetch_feed
+from .rss_refresh import refresh_due_feeds
 
 PH = PasswordHasher(memory_cost=16384, time_cost=2, parallelism=1)
-SCHEMA_VERSION = 14
+SCHEMA_VERSION = 15
 LOGIN_WINDOW_SECONDS = 15 * 60
 LOGIN_USERNAME_LIMIT = 5
 LOGIN_ADDRESS_LIMIT = 30
@@ -356,6 +358,9 @@ CREATE TABLE IF NOT EXISTS rss_feeds (
  scope TEXT NOT NULL CHECK(scope IN ('household','personal')),
  owner_user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
  allow_lan INTEGER NOT NULL DEFAULT 0 CHECK(allow_lan IN (0,1)),
+ last_attempt_at TEXT,
+ last_fetched_at TEXT,
+ last_error TEXT,
  created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
  sort_order INTEGER NOT NULL DEFAULT 0,
  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -364,6 +369,17 @@ CREATE TABLE IF NOT EXISTS rss_feeds (
 );
 CREATE INDEX IF NOT EXISTS rss_feeds_owner_order
  ON rss_feeds(scope,owner_user_id,sort_order,id);
+CREATE TABLE IF NOT EXISTS rss_articles (
+ id INTEGER PRIMARY KEY,
+ feed_id INTEGER NOT NULL REFERENCES rss_feeds(id) ON DELETE CASCADE,
+ title TEXT NOT NULL DEFAULT '' CHECK(length(title)<=512),
+ url TEXT NOT NULL CHECK(length(url)<=4096),
+ summary TEXT NOT NULL DEFAULT '' CHECK(length(summary)<=4000),
+ published TEXT NOT NULL DEFAULT '' CHECK(length(published)<=128),
+ fetched_at TEXT NOT NULL,
+ UNIQUE(feed_id,url)
+);
+CREATE INDEX IF NOT EXISTS rss_articles_feed_date ON rss_articles(feed_id,fetched_at DESC,id DESC);
 CREATE TABLE IF NOT EXISTS system_metrics (
  sampled_at TEXT PRIMARY KEY,
  cpu_percent REAL,
@@ -672,6 +688,9 @@ def initialize_database(db_path):
             if 'allow_lan' not in rss_columns:
                 db.execute('ALTER TABLE rss_feeds ADD COLUMN allow_lan INTEGER NOT NULL DEFAULT 0 '
                            'CHECK(allow_lan IN (0,1))')
+            for column in ('last_attempt_at', 'last_fetched_at', 'last_error'):
+                if column not in rss_columns:
+                    db.execute(f'ALTER TABLE rss_feeds ADD COLUMN {column} TEXT')
             default_list = db.execute(
                 "SELECT id FROM household_lists WHERE kind='shopping' AND is_default=1"
             ).fetchone()
@@ -1302,8 +1321,36 @@ def create_app(test_config=None):
         household_feeds = db.execute(
             "SELECT * FROM rss_feeds WHERE scope='household' ORDER BY sort_order,id"
         ).fetchall()
+        visible_feeds = [*personal_feeds, *household_feeds]
+        refresh_due_feeds(
+            db, visible_feeds,
+            outbound_enabled=bool(setting(db, 'rss_outbound_enabled', 1)),
+            interval_minutes=setting(db, 'rss_refresh_minutes', DEFAULT_RSS_REFRESH_MINUTES),
+            fetcher=fetch_feed,
+        )
+        if g.user['account_kind'] == 'person':
+            personal_feeds = db.execute(
+                "SELECT * FROM rss_feeds WHERE scope='personal' AND owner_user_id=? "
+                'ORDER BY sort_order,id', (g.user['id'],)
+            ).fetchall()
+        household_feeds = db.execute(
+            "SELECT * FROM rss_feeds WHERE scope='household' ORDER BY sort_order,id"
+        ).fetchall()
+        visible_feeds = [*personal_feeds, *household_feeds]
+        articles_by_feed = {}
+        for feed in visible_feeds:
+            articles_by_feed[feed['id']] = db.execute(
+                'SELECT title,url,summary,published FROM rss_articles '
+                'WHERE feed_id=? ORDER BY published DESC,fetched_at DESC,id DESC',
+                (feed['id'],),
+            ).fetchall()
+        personal_feeds = [dict(feed) | {'articles': articles_by_feed[feed['id']]}
+                          for feed in personal_feeds]
+        household_feeds = [dict(feed) | {'articles': articles_by_feed[feed['id']]}
+                           for feed in household_feeds]
         return render_template('rss.html', personal_feeds=personal_feeds,
-                               household_feeds=household_feeds)
+                               household_feeds=household_feeds,
+                               outbound_enabled=bool(setting(db, 'rss_outbound_enabled', 1)))
 
     @app.post('/rss/feeds')
     @login_required
