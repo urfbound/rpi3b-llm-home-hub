@@ -8,6 +8,8 @@
     <label>Name<input name="title" maxlength="128" value="{{ recipe['title'] }}" required></label>
     <label>Description<input name="description" maxlength="256" value="{{ recipe['description'] }}"></label>
     <label>Default servings<input name="default_servings" type="number" min="1" max="99" value="{{ recipe['default_servings'] }}" required></label>
+    <label>Sharing<select name="visibility"><option value="shared" {% if recipe['visibility'] == 'shared' %}selected{% endif %}>Shared with household</option><option value="private" {% if recipe['visibility'] == 'private' %}selected{% endif %}>Private</option></select></label>
+    <label>Private recipe viewers<select name="allowed_user_ids" multiple size="4">{% for user in sharing_users %}<option value="{{ user['id'] }}" {% if user['id'] in access_ids %}selected{% endif %}>{{ user['display_name'] or user['username'] }}</option>{% endfor %}</select></label>
     <h2>Ingredients</h2>
     <div id="recipe-ingredients">
       {% for ingredient in ingredients %}

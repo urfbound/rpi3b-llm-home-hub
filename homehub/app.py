@@ -20,7 +20,7 @@ from .backups import (BackupError, backup_filename, create_backup,
                       prune_backups, restore_backup, validate_backup_directory)
 
 PH = PasswordHasher(memory_cost=16384, time_cost=2, parallelism=1)
-SCHEMA_VERSION = 5
+SCHEMA_VERSION = 6
 LOGIN_WINDOW_SECONDS = 15 * 60
 LOGIN_USERNAME_LIMIT = 5
 LOGIN_ADDRESS_LIMIT = 30
@@ -47,7 +47,19 @@ CREATE INDEX IF NOT EXISTS login_failures_address_time
  ON login_failures(address_key, attempted_at);
 CREATE TABLE IF NOT EXISTS recipes (
  id INTEGER PRIMARY KEY, title TEXT NOT NULL, ingredients TEXT NOT NULL DEFAULT '',
- instructions TEXT NOT NULL DEFAULT '', created_by INTEGER NOT NULL REFERENCES users(id)
+ instructions TEXT NOT NULL DEFAULT '', created_by INTEGER NOT NULL REFERENCES users(id),
+ visibility TEXT NOT NULL DEFAULT 'shared' CHECK(visibility IN ('shared','private'))
+);
+CREATE TABLE IF NOT EXISTS recipe_access (
+ recipe_id INTEGER NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+ user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ added_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, PRIMARY KEY(recipe_id,user_id)
+);
+CREATE TABLE IF NOT EXISTS recipe_notes (
+ id INTEGER PRIMARY KEY, recipe_id INTEGER NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
+ user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ note TEXT NOT NULL CHECK(length(trim(note)) BETWEEN 1 AND 128),
+ updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(recipe_id,user_id)
 );
 CREATE TABLE IF NOT EXISTS recipe_ingredients (
  id INTEGER PRIMARY KEY, recipe_id INTEGER NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
@@ -196,6 +208,26 @@ def visible_list(db, user, list_id):
         abort(404)
     return row
 
+def visible_recipes(db, user):
+    if user['role'] == 'admin':
+        return db.execute('SELECT * FROM recipes ORDER BY id DESC').fetchall()
+    return db.execute(
+        'SELECT r.* FROM recipes r WHERE r.visibility=\'shared\' OR r.created_by=? OR EXISTS '
+        '(SELECT 1 FROM recipe_access a WHERE a.recipe_id=r.id AND a.user_id=?) '
+        'ORDER BY r.id DESC', (user['id'], user['id'])
+    ).fetchall()
+
+def visible_recipe(db, user, recipe_id):
+    recipe = db.execute('SELECT * FROM recipes WHERE id=?', (recipe_id,)).fetchone()
+    if not recipe:
+        abort(404)
+    if user['role'] != 'admin' and recipe['visibility'] == 'private' and recipe['created_by'] != user['id']:
+        allowed = db.execute('SELECT 1 FROM recipe_access WHERE recipe_id=? AND user_id=?',
+                             (recipe_id, user['id'])).fetchone()
+        if not allowed:
+            abort(404)
+    return recipe
+
 def temporary_password():
     return secrets.token_urlsafe(18)
 
@@ -261,6 +293,7 @@ def initialize_database(db_path):
             for column, definition in (
                 ('description', "TEXT NOT NULL DEFAULT ''"),
                 ('default_servings', 'INTEGER NOT NULL DEFAULT 4'),
+                ('visibility', "TEXT NOT NULL DEFAULT 'shared'"),
             ):
                 if column not in recipe_columns:
                     db.execute(f'ALTER TABLE recipes ADD COLUMN {column} {definition}')
@@ -314,6 +347,46 @@ def recipe_form_values(form):
     if any(not step or len(step) > 256 for step in clean_steps):
         abort(400)
     return title, description, servings, ingredients, clean_steps
+
+def recipe_sharing_values(db, form, owner_id):
+    visibility = form.get('visibility', 'shared')
+    if visibility not in ('shared', 'private'):
+        abort(400)
+    user_ids = set()
+    if visibility == 'private':
+        for raw_id in form.getlist('allowed_user_ids'):
+            try:
+                user_id = int(raw_id)
+            except ValueError:
+                abort(400)
+            user = db.execute(
+                "SELECT id FROM users WHERE id=? AND active=1 AND account_kind='person'",
+                (user_id,)
+            ).fetchone()
+            if not user or user_id == owner_id:
+                abort(400)
+            user_ids.add(user_id)
+    return visibility, sorted(user_ids)
+
+def recipe_notes_losing_access(db, recipe_id, owner_id, visibility, allowed_ids):
+    if visibility == 'shared':
+        return []
+    retained_ids = {owner_id, *allowed_ids}
+    notes = db.execute(
+        'SELECT recipe_notes.user_id,users.display_name,users.username FROM recipe_notes '
+        'JOIN users ON users.id=recipe_notes.user_id WHERE recipe_notes.recipe_id=?',
+        (recipe_id,)
+    ).fetchall()
+    return [note for note in notes if note['user_id'] not in retained_ids]
+
+def apply_recipe_sharing(db, recipe_id, visibility, allowed_ids, losing_note_users=()):
+    db.execute('UPDATE recipes SET visibility=? WHERE id=?', (visibility, recipe_id))
+    db.execute('DELETE FROM recipe_access WHERE recipe_id=?', (recipe_id,))
+    if visibility == 'private':
+        db.executemany('INSERT INTO recipe_access(recipe_id,user_id) VALUES(?,?)',
+                       [(recipe_id, user_id) for user_id in allowed_ids])
+    db.executemany('DELETE FROM recipe_notes WHERE recipe_id=? AND user_id=?',
+                   [(recipe_id, row['user_id']) for row in losing_note_users])
 
 def save_recipe_content(db, recipe_id, values):
     title, description, servings, ingredients, steps = values
@@ -488,7 +561,7 @@ def create_app(test_config=None):
             db, home_users, home_weekday,
             week_start_for(today).isoformat()
         )
-        return render_template('index.html', recipes=db.execute('SELECT * FROM recipes ORDER BY id DESC LIMIT 6').fetchall(),
+        return render_template('index.html', recipes=visible_recipes(db, g.user)[:6],
           events=db.execute('SELECT events.*,recipes.title AS recipe_title FROM events LEFT JOIN recipes ON recipes.id=events.recipe_id ORDER BY event_date LIMIT 12').fetchall(),
           items=items, lists=lists, selected_list=selected_list, list_kind=list_kind,
           list_users=list_users, todo_assignees=todo_assignees,
@@ -1104,25 +1177,28 @@ def create_app(test_config=None):
         values = recipe_form_values(request.form)
         title, description, servings, _, _ = values
         db = get_db()
+        visibility, allowed_ids = recipe_sharing_values(db, request.form, g.user['id'])
         count = db.execute('SELECT COUNT(*) FROM recipes WHERE created_by=?',
                            (g.user['id'],)).fetchone()[0]
         if count >= 128:
             abort(409, description='Your recipe book is full (128 recipes).')
         with db:
             cursor = db.execute(
-                'INSERT INTO recipes(title,description,default_servings,created_by) VALUES(?,?,?,?)',
-                (title, description, servings, g.user['id'])
+                'INSERT INTO recipes(title,description,default_servings,created_by,visibility) '
+                'VALUES(?,?,?,?,?)', (title, description, servings, g.user['id'], visibility)
             )
             recipe_id = cursor.lastrowid
             save_recipe_content(db, recipe_id, values)
+            if visibility == 'private':
+                db.executemany('INSERT INTO recipe_access(recipe_id,user_id) VALUES(?,?)',
+                               [(recipe_id, user_id) for user_id in allowed_ids])
         return redirect(url_for('index')+'#recipes')
 
     @app.get('/recipes/<int:recipe_id>')
     @login_required
     def recipe_detail(recipe_id):
         db = get_db()
-        recipe = db.execute('SELECT * FROM recipes WHERE id=?', (recipe_id,)).fetchone()
-        if not recipe: abort(404)
+        recipe = visible_recipe(db, g.user, recipe_id)
         ingredients = db.execute(
             'SELECT quantity,unit,name,note FROM recipe_ingredients WHERE recipe_id=? ORDER BY position',
             (recipe_id,)
@@ -1132,9 +1208,16 @@ def create_app(test_config=None):
         ).fetchall()
         legacy_ingredients = not ingredients and bool(recipe['ingredients'])
         legacy_steps = not steps and bool(recipe['instructions'])
+        notes = db.execute(
+            'SELECT recipe_notes.*,users.display_name,users.username FROM recipe_notes '
+            'JOIN users ON users.id=recipe_notes.user_id WHERE recipe_notes.recipe_id=? '
+            'ORDER BY users.display_name COLLATE NOCASE,users.username COLLATE NOCASE',
+            (recipe_id,)
+        ).fetchall()
         return render_template('recipe.html', recipe=recipe, ingredients=ingredients,
                                steps=steps, legacy_ingredients=legacy_ingredients,
                                legacy_steps=legacy_steps,
+                               notes=notes,
                                can_edit=recipe['created_by'] == g.user['id'],
                                can_delete=(recipe['created_by'] == g.user['id']
                                            or g.user['role'] == 'admin'))
@@ -1150,8 +1233,16 @@ def create_app(test_config=None):
             abort(403)
         if request.method == 'POST':
             values = recipe_form_values(request.form)
+            visibility, allowed_ids = recipe_sharing_values(db, request.form, g.user['id'])
+            losing_notes = recipe_notes_losing_access(
+                db, recipe_id, g.user['id'], visibility, allowed_ids
+            )
+            if losing_notes and request.form.get('confirm_note_removal') != 'yes':
+                return render_template('confirm_recipe_sharing.html', recipe=recipe,
+                                       fields=request.form, losing_notes=losing_notes)
             with db:
                 save_recipe_content(db, recipe_id, values)
+                apply_recipe_sharing(db, recipe_id, visibility, allowed_ids, losing_notes)
             return redirect(url_for('recipe_detail', recipe_id=recipe_id))
         ingredients = db.execute(
             'SELECT quantity,unit,name,note FROM recipe_ingredients WHERE recipe_id=? ORDER BY position',
@@ -1164,9 +1255,51 @@ def create_app(test_config=None):
                            for line in recipe['ingredients'].splitlines() if line.strip()]
         if not steps and recipe['instructions']:
             steps = [{'text': line} for line in recipe['instructions'].splitlines() if line.strip()]
+        access_ids = {row['user_id'] for row in db.execute(
+            'SELECT user_id FROM recipe_access WHERE recipe_id=?', (recipe_id,)
+        ).fetchall()}
+        sharing_users = db.execute(
+            "SELECT id,display_name,username FROM users WHERE active=1 AND account_kind='person' "
+            'AND id!=? ORDER BY display_name COLLATE NOCASE,username COLLATE NOCASE',
+            (recipe['created_by'],)
+        ).fetchall()
         return render_template('edit_recipe.html', recipe=recipe,
                                ingredients=ingredients or [{'quantity': '', 'unit': '', 'name': '', 'note': ''}],
-                               steps=steps or [{'text': ''}])
+                               steps=steps or [{'text': ''}], access_ids=access_ids,
+                               sharing_users=sharing_users)
+
+    @app.post('/recipes/<int:recipe_id>/notes')
+    @login_required
+    def save_recipe_note(recipe_id):
+        if g.user['account_kind'] == 'house':
+            abort(403)
+        db = get_db()
+        visible_recipe(db, g.user, recipe_id)
+        note = request.form.get('text', '').strip()
+        if not note or len(note) > 128:
+            abort(400)
+        with db:
+            db.execute(
+                'INSERT INTO recipe_notes(recipe_id,user_id,note) VALUES(?,?,?) '
+                'ON CONFLICT(recipe_id,user_id) DO UPDATE SET note=excluded.note,updated_at=CURRENT_TIMESTAMP',
+                (recipe_id, g.user['id'], note)
+            )
+        return redirect(url_for('recipe_detail', recipe_id=recipe_id))
+
+    @app.post('/recipes/<int:recipe_id>/notes/<int:note_id>/delete')
+    @login_required
+    def delete_recipe_note(recipe_id, note_id):
+        db = get_db()
+        visible_recipe(db, g.user, recipe_id)
+        note = db.execute('SELECT user_id FROM recipe_notes WHERE id=? AND recipe_id=?',
+                          (note_id, recipe_id)).fetchone()
+        if not note:
+            abort(404)
+        if note['user_id'] != g.user['id']:
+            abort(403)
+        with db:
+            db.execute('DELETE FROM recipe_notes WHERE id=?', (note_id,))
+        return redirect(url_for('recipe_detail', recipe_id=recipe_id))
 
     @app.post('/recipes/<int:recipe_id>/delete')
     @login_required
