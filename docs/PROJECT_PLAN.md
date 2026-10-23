@@ -288,7 +288,8 @@ initial model-only Raspberry Pi 3B benchmarks support an optional feature.
 - Users manage personal RSS feeds; admins manage feeds for the house-wide
   account. Group articles by feed, with a personal user's own feeds first and
   house-wide feeds below them. A separate Manage feeds view lets users remove
-  and reorder their own feeds; admins do the same for house-wide feeds. Adding
+  and reorder their own feeds; only admins can delete or reorder house-wide
+  feeds. Limit the house-wide feed list to three feeds. Adding
   a feed should be easy. Reject a personal subscription when its feed URL is
   already in the house-wide list, as well as duplicate subscriptions within
   the same list. Normalize URLs for duplicate checks and test this rule again
@@ -303,7 +304,10 @@ initial model-only Raspberry Pi 3B benchmarks support an optional feature.
   after DNS resolution and redirects. Block loopback and other unsafe
   addresses. Only an admin can explicitly approve a LAN destination.
 - Track read/unread, favourites, and article deletion per user, including for
-  house-wide feeds, so one person's actions do not change another's shelf.
+  house-wide feeds when straightforward, so one person's actions do not change
+  another's shelf. If per-user tracking proves too costly, house-wide read
+  state may be ignored. Keep house-wide articles for no more than three days;
+  personal article retention follows the existing 90-day/64 MB per-user cap.
   Provide a deliberate Done reading action that marks an article read and
   prompts whether to keep or delete it. The prompt has a Don't ask me again
   option that repeats the chosen action; users can restore prompting in
@@ -331,6 +335,9 @@ initial model-only Raspberry Pi 3B benchmarks support an optional feature.
 
 ## Games
 
+- Before beginning any Games implementation, stop and ask the user to confirm
+  they are ready to start that work. The user plans to use a heavier model for
+  Games; defer it until the end of the implementation agenda if practical.
 - First release games: an original Wordle-style word game, mini crosswords,
   Hunt the Wumpus, word ladders, mini nonograms, and Sudoku.
 - Word guessing uses five-letter answers and six guesses, with correct

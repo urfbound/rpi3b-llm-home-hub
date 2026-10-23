@@ -139,16 +139,25 @@ to `main` only after the user approves the completed change.
 - The personal/household feed registry schema is also implemented on the
   current review branch, with URL uniqueness across scopes and a tested v12
   upgrade that preserves existing household data.
-- Add personal feeds and admin-managed house-wide feeds, ordering and
-  management, duplicate normalization across both scopes, safe fetching,
-  refresh settings, and outbound-access behavior.
+- Personal feed add/remove/reordering and admin-managed house-wide feed
+  add/remove/reordering are implemented on the current review branch. The
+  server enforces duplicate checks across scopes, admin-only household changes,
+  and a three-feed household limit. The house-wide list is viewable by all
+  signed-in accounts.
+- Implement safe fetching and redirects, refresh settings, and outbound-access
+  behavior.
 - Store shared article bodies once with separate per-user read, favourite,
   and delete state. Implement article-open read tracking, Done reading
-  behavior, prompt preference, favourite confirmation, article retention and
-  quota eviction, and the bottom favourites card.
+  behavior, prompt preference, favourite confirmation, and the bottom
+  favourites card. Keep house-wide articles for at most three days; track
+  their read state per user when practical, otherwise ignore it. Personal
+  articles retain the 90-day/64 MB per-user cap and eviction order.
 
 ### Games
 
+- **Do not begin Games implementation until the user is asked and confirms.**
+  The user intends to use a heavier model for this work; save it for the end
+  of the agenda if practical.
 - Implement all six first-release games: Wordle-style word guessing, mini
   crosswords, Hunt the Wumpus, word ladders, mini nonograms, and Sudoku.
 - Start with a curated offline bank covering at least 30 days. Add daily
