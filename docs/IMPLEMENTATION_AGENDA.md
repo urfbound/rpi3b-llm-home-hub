@@ -123,9 +123,11 @@ to `main` only after the user approves the completed change.
   sunrise/sunset, moon illumination and named full moons, and stale-cache age
   are implemented on the current review branch. Tides remain hidden unless a
   supported station can be determined for the configured location.
-- Add disk, RAM, CPU, one-hour CPU history, temperature, and app RSS to Home;
-  respect the admin visibility setting and use per-core CPU thresholds for
-  history colors.
+- Disk, RAM, normalized CPU, one-hour CPU history, board temperature, and app
+  RSS are implemented on the current review branch. Disk and RAM lead the
+  system card; Admin can hide it from household users while optionally
+  allowing the house-wide account. CPU history bars use the approved yellow
+  60–80% and red above-80% thresholds.
 - Deferred weather work: almanac, on-demand historical data, and alternate
   providers. Historical pulls stay off unless enabled by an admin.
 
