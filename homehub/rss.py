@@ -39,7 +39,7 @@ def normalize_feed_url(value):
     return urlunsplit((scheme, netloc, path, parsed.query, ''))
 
 
-def validate_feed_url(value, *, resolver=socket.getaddrinfo):
+def resolve_feed_destination(value, *, resolver=socket.getaddrinfo, allow_lan=False):
     normalized = normalize_feed_url(value)
     parsed = urlsplit(normalized)
     host = parsed.hostname
@@ -49,28 +49,47 @@ def validate_feed_url(value, *, resolver=socket.getaddrinfo):
         raise RSSFeedError('The feed port is invalid.') from exc
     if port not in (80, 443):
         raise RSSFeedError('Feed URLs must use the standard HTTP or HTTPS port.')
-    if (host == 'localhost' or host.endswith(('.localhost', '.local', '.lan', '.internal', '.home'))):
+    local_suffixes = ('.localhost', '.local', '.lan', '.internal', '.home')
+    if host == 'localhost' or (not allow_lan and host.endswith(local_suffixes)):
         raise RSSFeedError('Feed URLs must point to a public internet host.')
     try:
         literal = ipaddress.ip_address(host)
     except ValueError:
         literal = None
     if literal is not None:
-        if not literal.is_global:
+        if not _is_allowed_destination(literal, allow_lan):
             raise RSSFeedError('Feed URLs must point to a public internet host.')
-        return normalized
+        family = socket.AF_INET6 if literal.version == 6 else socket.AF_INET
+        sockaddr = (str(literal), port, 0, 0) if literal.version == 6 else (str(literal), port)
+        return normalized, [(family, socket.SOCK_STREAM, socket.IPPROTO_TCP, '', sockaddr)]
     try:
         addresses = resolver(host, port, type=socket.SOCK_STREAM)
     except OSError as exc:
         raise RSSFeedError('The feed host could not be resolved.') from exc
-    resolved_ips = []
+    safe_addresses = []
     for result in addresses:
         try:
-            resolved_ips.append(ipaddress.ip_address(result[4][0]))
-        except (ValueError, IndexError, TypeError):
+            resolved_ip = ipaddress.ip_address(result[4][0].split('%', 1)[0])
+        except (ValueError, IndexError, TypeError, AttributeError):
             continue
-    if not resolved_ips or any(not address.is_global for address in resolved_ips):
+        if not _is_allowed_destination(resolved_ip, allow_lan):
+            raise RSSFeedError('Feed URLs must resolve only to public internet addresses.')
+        safe_addresses.append(result)
+    if not safe_addresses:
         raise RSSFeedError('Feed URLs must resolve only to public internet addresses.')
+    return normalized, safe_addresses
+
+
+def _is_allowed_destination(address, allow_lan):
+    if address.is_loopback or address.is_link_local or address.is_multicast or address.is_unspecified:
+        return False
+    return address.is_global or (allow_lan and address.is_private and not address.is_reserved)
+
+
+def validate_feed_url(value, *, resolver=socket.getaddrinfo, allow_lan=False):
+    normalized, _destinations = resolve_feed_destination(
+        value, resolver=resolver, allow_lan=allow_lan
+    )
     return normalized
 
 

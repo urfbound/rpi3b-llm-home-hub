@@ -29,7 +29,7 @@ from .system_status import (collect_system_snapshot, cpu_usage_percent,
 from .rss import RSSFeedError, validate_feed_url
 
 PH = PasswordHasher(memory_cost=16384, time_cost=2, parallelism=1)
-SCHEMA_VERSION = 13
+SCHEMA_VERSION = 14
 LOGIN_WINDOW_SECONDS = 15 * 60
 LOGIN_USERNAME_LIMIT = 5
 LOGIN_ADDRESS_LIMIT = 30
@@ -353,6 +353,7 @@ CREATE TABLE IF NOT EXISTS rss_feeds (
  title TEXT NOT NULL DEFAULT '' CHECK(length(title)<=256),
  scope TEXT NOT NULL CHECK(scope IN ('household','personal')),
  owner_user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+ allow_lan INTEGER NOT NULL DEFAULT 0 CHECK(allow_lan IN (0,1)),
  created_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
  sort_order INTEGER NOT NULL DEFAULT 0,
  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -665,6 +666,10 @@ def initialize_database(db_path):
             ):
                 if column not in event_columns:
                     db.execute(f'ALTER TABLE events ADD COLUMN {column} {definition}')
+            rss_columns = {row[1] for row in db.execute('PRAGMA table_info(rss_feeds)')}
+            if 'allow_lan' not in rss_columns:
+                db.execute('ALTER TABLE rss_feeds ADD COLUMN allow_lan INTEGER NOT NULL DEFAULT 0 '
+                           'CHECK(allow_lan IN (0,1))')
             default_list = db.execute(
                 "SELECT id FROM household_lists WHERE kind='shopping' AND is_default=1"
             ).fetchone()
@@ -1310,8 +1315,12 @@ def create_app(test_config=None):
                 abort(403)
         else:
             abort(400)
+        allow_lan = request.form.get('allow_lan') == '1'
+        if allow_lan and scope != 'household':
+            abort(400)
         try:
-            normalized_url = validate_feed_url(request.form.get('feed_url', ''))
+            normalized_url = validate_feed_url(request.form.get('feed_url', ''),
+                                               allow_lan=allow_lan)
         except RSSFeedError as exc:
             flash(str(exc))
             return redirect(url_for('rss_page'))
@@ -1336,10 +1345,10 @@ def create_app(test_config=None):
         owner = g.user['id'] if scope == 'personal' else None
         try:
             db.execute(
-                'INSERT INTO rss_feeds(normalized_url,title,scope,owner_user_id,created_by,sort_order) '
-                'VALUES(?,?,?,?,?,COALESCE((SELECT MAX(sort_order)+1 FROM rss_feeds '
+                'INSERT INTO rss_feeds(normalized_url,title,scope,owner_user_id,allow_lan,created_by,sort_order) '
+                'VALUES(?,?,?,?,?,?,COALESCE((SELECT MAX(sort_order)+1 FROM rss_feeds '
                 'WHERE scope=? AND owner_user_id IS ?),0))',
-                (normalized_url, title, scope, owner, g.user['id'], scope, owner),
+                (normalized_url, title, scope, owner, int(allow_lan), g.user['id'], scope, owner),
             )
             db.commit()
             flash('Feed added.')

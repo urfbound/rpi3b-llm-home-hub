@@ -44,6 +44,17 @@ def test_feed_url_validation_accepts_public_host_without_resolving_other_hosts()
     )
 
 
+def test_feed_url_validation_allows_private_lan_only_when_explicitly_approved():
+    def private_resolver(host, port, **_kwargs):
+        return [(socket.AF_INET, socket.SOCK_STREAM, 6, '', ('192.168.1.25', port))]
+
+    with pytest.raises(RSSFeedError):
+        validate_feed_url('http://printer.home/feed', resolver=private_resolver)
+
+    assert validate_feed_url('http://printer.home/feed', resolver=private_resolver,
+                             allow_lan=True) == 'http://printer.home/feed'
+
+
 def test_rss_feed_parsing_extracts_articles_as_plain_text_and_resolves_relative_links():
     source = b'''<?xml version="1.0"?><rss version="2.0"><channel>
       <title>House news</title><item><title>First story</title>
