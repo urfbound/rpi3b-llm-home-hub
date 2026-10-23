@@ -1543,6 +1543,8 @@ def create_app(test_config=None):
                                weather_forecast_days=setting(db, 'weather_forecast_days', 5),
                                weather_units=weather_units,
                                weather_outbound_enabled=setting(db, 'weather_outbound_enabled', 1),
+                               rss_refresh_minutes=setting(db, 'rss_refresh_minutes', 30),
+                               rss_outbound_enabled=setting(db, 'rss_outbound_enabled', 1),
                                weather_location_candidates=session.get('weather_location_candidates', []),
                                weather_location_query=session.get('weather_location_query', ''),
                                system_metrics_visible_to_all=setting(
@@ -1586,6 +1588,26 @@ def create_app(test_config=None):
             )
             db.execute('DELETE FROM weather_cache')
         return redirect(url_for('accounts') + '#weather-settings-section')
+
+    @app.post('/admin/rss/settings')
+    @admin_required
+    def update_rss_settings():
+        try:
+            refresh_minutes = int(request.form.get('refresh_minutes', ''))
+        except ValueError:
+            abort(400)
+        if not 10 <= refresh_minutes <= 240:
+            abort(400)
+        outbound_enabled = '1' if request.form.get('outbound_enabled') == '1' else '0'
+        db = get_db()
+        with db:
+            db.executemany(
+                'INSERT INTO app_settings(key,value) VALUES(?,?) '
+                'ON CONFLICT(key) DO UPDATE SET value=excluded.value',
+                (('rss_refresh_minutes', str(refresh_minutes)),
+                 ('rss_outbound_enabled', outbound_enabled)),
+            )
+        return redirect(url_for('accounts') + '#rss-settings-section')
 
     @app.post('/admin/weather/location/search')
     @admin_required

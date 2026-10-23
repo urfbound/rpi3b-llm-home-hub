@@ -2,7 +2,7 @@
 {% block content %}
 <div class="crumb">Admin / <strong>Accounts</strong></div>
 <div class="page-heading"><div><p class="eyebrow">Your household</p><h1>People at home</h1><p class="muted">Give each person their own space, and manage access to the shared home.</p></div><button class="primary" type="button" onclick="document.getElementById('create-dialog').showModal()">+ Add account</button></div>
-<nav class="admin-jumps" aria-label="Jump to admin section"><a href="#accounts-section">Accounts</a><a href="#access-section">Access</a><a href="#calendar-limits-section">Calendar limits</a><a href="#weather-settings-section">Weather</a><a href="#system-status-settings-section">System status</a><a href="#backup-restore-section">Backup and restore</a><a href="#house-wide-section">House-wide access</a></nav>
+<nav class="admin-jumps" aria-label="Jump to admin section"><a href="#accounts-section">Accounts</a><a href="#access-section">Access</a><a href="#calendar-limits-section">Calendar limits</a><a href="#weather-settings-section">Weather</a><a href="#rss-settings-section">RSS</a><a href="#system-status-settings-section">System status</a><a href="#backup-restore-section">Backup and restore</a><a href="#house-wide-section">House-wide access</a></nav>
 <section class="stats" aria-label="Account counts">
   <div class="stat"><strong>{{ counts.users }} <small>/ 32</small></strong><span>Accounts</span></div>
   <div class="stat"><strong>{{ counts.admins }} <small>/ 4</small></strong><span>Admins</span></div>
@@ -60,6 +60,15 @@
     <label class="weather-outbound"><input type="checkbox" name="outbound_enabled" value="1" {% if weather_outbound_enabled %}checked{% endif %}> Allow outbound access for weather</label>
     <p class="muted">Open-Meteo provides the forecast and location search. Weather data is shared and cached locally for up to 30 minutes.</p>
     <button class="primary">Save weather settings</button>
+  </form>
+</section>
+<section class="panel" id="rss-settings-section"><p class="eyebrow">Reading shelf</p><h2>RSS settings</h2>
+  <form method="post" action="{{ url_for('update_rss_settings') }}" class="rss-settings-form">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <label>Refresh interval (minutes)<input type="number" name="refresh_minutes" min="10" max="240" value="{{ rss_refresh_minutes }}" required></label>
+    <label class="system-status-check"><input type="checkbox" name="outbound_enabled" value="1" {% if rss_outbound_enabled %}checked{% endif %}> Allow outbound RSS access</label>
+    <p class="muted">When outbound access is off, the RSS tab shows cached articles and their last refresh time.</p>
+    <button class="primary">Save RSS settings</button>
   </form>
 </section>
 <section class="panel" id="system-status-settings-section"><p class="eyebrow">Dashboard visibility</p><h2>System status</h2>

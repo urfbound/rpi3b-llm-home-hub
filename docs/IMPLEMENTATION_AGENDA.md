@@ -148,7 +148,9 @@ to `main` only after the user approves the completed change.
   rechecks every redirect, enforces time/size/redirect limits, and supports an
   explicit admin approval for a private household feed host. LAN approval does
   not permit loopback or redirects to another private host. Fetch scheduling,
-  refresh settings, and the Admin outbound-access control remain.
+  and refresh execution remain. Admin can now set a 10–240-minute RSS interval
+  (default 30) and turn outbound RSS access off; the fetch path still needs to
+  enforce the toggle and serve cached articles while disabled.
 - Store shared article bodies once with separate per-user read, favourite,
   and delete state. Implement article-open read tracking, Done reading
   behavior, prompt preference, favourite confirmation, and the bottom
