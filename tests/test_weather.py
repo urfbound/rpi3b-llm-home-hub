@@ -5,8 +5,9 @@ from urllib.parse import parse_qs, urlparse
 import pytest
 
 from homehub.weather import (
-    WeatherError, fetch_forecast, forecast_request_url, geocode_location,
-    get_cached_forecast,
+    WeatherError, fetch_forecast, format_weather_time, forecast_request_url, geocode_location,
+    get_cached_forecast, moon_illumination_percent, pressure_trend, weather_code_label,
+    next_named_full_moon,
 )
 from homehub.app import create_app
 
@@ -151,3 +152,38 @@ def test_app_database_initializes_weather_cache_table(tmp_path):
         assert db.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='weather_cache'"
         ).fetchone() == ('weather_cache',)
+
+
+@pytest.mark.parametrize(('phase', 'expected'), [
+    (0, 0), (0.25, 50), (0.5, 100), (0.75, 50), (1, 0),
+])
+def test_moon_illumination_approximates_open_meteo_phase(phase, expected):
+    assert moon_illumination_percent(phase) == expected
+
+
+@pytest.mark.parametrize(('change', 'expected'), [
+    (2.0, 'Rising quickly'), (0.8, 'Rising slowly'), (0.2, 'Steady'),
+    (-0.8, 'Falling slowly'), (-2.0, 'Falling quickly'),
+])
+def test_pressure_trend_labels_hourly_change(change, expected):
+    result = pressure_trend(1012.0, 1012.0 - change)
+
+    assert result['change_hpa'] == change
+    assert result['label'] == expected
+
+
+def test_weather_code_label_has_fallback_for_unknown_provider_code():
+    assert weather_code_label(0) == 'Clear sky'
+    assert weather_code_label(999) == 'Unknown conditions'
+
+
+def test_next_named_full_moon_uses_approximate_open_meteo_phase():
+    result = next_named_full_moon('2026-06-15', 0.25)
+
+    assert result['name'] == 'Strawberry Moon'
+    assert result['date'].isoformat() == '2026-06-22'
+
+
+def test_sunrise_and_sunset_display_as_local_clock_times():
+    assert format_weather_time('2026-10-23T07:21') == '7:21 AM'
+    assert format_weather_time('2026-10-23T18:12-02:30') == '6:12 PM'

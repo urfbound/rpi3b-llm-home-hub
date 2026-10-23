@@ -118,12 +118,11 @@ to `main` only after the user approves the completed change.
   the cache refreshes after 30 minutes and can serve stale data while outbound
   access is disabled or a refresh fails. Admin location search/selection,
   outbound-access control, configurable 1–15-day forecast, and metric/imperial
-  units are implemented on the current dependent review branch. Weather cards
-  and attribution remain.
-- Implement current, daily, and hourly cards, pressure change/trend, wind and
-  precipitation, sunrise/sunset, moon illumination and named full moons, and
-  the nearest supported Canadian tide station. Hide unsupported tide data and
-  show stale-cache age on fetch failure or when outbound access is disabled.
+  units are implemented on dependent review branches. Current conditions,
+  hourly/daily cards, pressure change/trend, wind and precipitation,
+  sunrise/sunset, moon illumination and named full moons, and stale-cache age
+  are implemented on the current review branch. Tides remain hidden unless a
+  supported station can be determined for the configured location.
 - Add disk, RAM, CPU, one-hour CPU history, temperature, and app RSS to Home;
   respect the admin visibility setting and use per-core CPU thresholds for
   history colors.

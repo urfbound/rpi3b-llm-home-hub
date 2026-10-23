@@ -22,7 +22,8 @@ from argon2.exceptions import VerifyMismatchError, VerificationError
 from .backups import (BackupError, backup_filename, create_backup,
                       default_backup_directory, delete_backup, list_backups,
                       prune_backups, restore_backup, validate_backup_directory)
-from .weather import WeatherError, geocode_location, get_cached_forecast
+from .weather import (WeatherError, geocode_location, get_cached_forecast,
+                      present_forecast)
 
 PH = PasswordHasher(memory_cost=16384, time_cost=2, parallelism=1)
 SCHEMA_VERSION = 11
@@ -395,6 +396,45 @@ def setting(db, key, default):
 def setting_text(db, key, default=''):
     row = db.execute('SELECT value FROM app_settings WHERE key=?', (key,)).fetchone()
     return row['value'] if row else default
+
+def household_weather(db):
+    name = setting_text(db, 'weather_location_name')
+    try:
+        location = {
+            'name': name,
+            'latitude': float(setting_text(db, 'weather_latitude')),
+            'longitude': float(setting_text(db, 'weather_longitude')),
+            'timezone': setting_text(db, 'weather_timezone'),
+        }
+    except (TypeError, ValueError):
+        return {'configured': False, 'location_name': name, 'view': None,
+                'stale': False, 'age_label': None, 'error': None}
+    if not name or not location['timezone']:
+        return {'configured': False, 'location_name': name, 'view': None,
+                'stale': False, 'age_label': None, 'error': None}
+    units = setting_text(db, 'weather_units', 'metric')
+    if units not in ('metric', 'imperial'):
+        units = 'metric'
+    result = get_cached_forecast(
+        db, location, setting(db, 'weather_forecast_days', 5), units,
+        bool(setting(db, 'weather_outbound_enabled', 1)), datetime.now(timezone.utc),
+    )
+    age = result['age_seconds']
+    if age is None:
+        age_label = None
+    elif age < 60:
+        age_label = 'less than a minute'
+    elif age < 3600:
+        age_label = f'{age // 60} minutes'
+    elif age < 86400:
+        age_label = f'{age // 3600} hour' + ('s' if age // 3600 != 1 else '')
+    else:
+        age_label = f'{age // 86400} days'
+    return {
+        'configured': True, 'location_name': name, 'view':
+        present_forecast(result['data']) if result['data'] else None,
+        'stale': result['stale'], 'age_label': age_label, 'error': result['error'],
+    }
 
 def household_today():
     """Use the Pi's configured local date until household timezone settings exist."""
@@ -1165,7 +1205,13 @@ def create_app(test_config=None):
           selected_weekday=selected_weekday, chore_filter=chore_filter,
           chore_groups=chore_groups, home_weekday=home_weekday,
           home_chore_groups=home_chore_groups, just_my_chores=just_my_chores,
+          weather=household_weather(db),
           weekend_groups=weekend_groups, just_my_events=just_my_events)
+
+    @app.get('/weather')
+    @login_required
+    def weather_page():
+        return render_template('weather.html', weather=household_weather(get_db()))
 
     @app.get('/offline.html')
     def offline_shell():

@@ -72,6 +72,23 @@
     <a href="{{ url_for('index') }}#calendar">Open calendar</a>
   </section>
 
+  <section class="panel home-weather" id="weather-summary">
+    <h2>Current weather</h2>
+    {% if weather['configured'] and weather['view'] %}
+      <p class="muted">{{ weather['location_name'] }}</p>
+      <div class="home-weather-now"><strong>{{ weather['view']['current']['temperature_2m'] }}{{ weather['view']['current_units'].get('temperature_2m', '°') }}</strong><span>{{ weather['view']['condition'] }}</span></div>
+      <p>Feels like {{ weather['view']['current']['apparent_temperature'] }}{{ weather['view']['current_units'].get('apparent_temperature', '°') }}</p>
+      {% if weather['stale'] %}<p class="muted">Out of date · last updated {{ weather['age_label'] }} ago</p>{% endif %}
+      <a href="{{ url_for('weather_page') }}">Weather details</a>
+    {% elif weather['configured'] %}
+      <p class="muted">Current weather is temporarily unavailable{% if weather['error'] %}: {{ weather['error'] }}{% endif %}.</p>
+      <a href="{{ url_for('weather_page') }}">Weather details</a>
+    {% else %}
+      <p class="muted">A household location is needed for the forecast.</p>
+      {% if current_user['role'] == 'admin' %}<a href="{{ url_for('accounts') }}#weather-settings-section">Set weather location</a>{% else %}<a href="{{ url_for('weather_page') }}">Weather details</a>{% endif %}
+    {% endif %}
+  </section>
+
   <section class="panel" id="calendar">
     <div class="calendar-heading"><h2>{{ calendar_month_name }} {{ calendar_year }}</h2></div>
     <nav class="calendar-controls" aria-label="Calendar month navigation">
