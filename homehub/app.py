@@ -22,9 +22,10 @@ from argon2.exceptions import VerifyMismatchError, VerificationError
 from .backups import (BackupError, backup_filename, create_backup,
                       default_backup_directory, delete_backup, list_backups,
                       prune_backups, restore_backup, validate_backup_directory)
+from .weather import get_cached_forecast
 
 PH = PasswordHasher(memory_cost=16384, time_cost=2, parallelism=1)
-SCHEMA_VERSION = 10
+SCHEMA_VERSION = 11
 LOGIN_WINDOW_SECONDS = 15 * 60
 LOGIN_USERNAME_LIMIT = 5
 LOGIN_ADDRESS_LIMIT = 30
@@ -337,6 +338,11 @@ CREATE TABLE IF NOT EXISTS event_participants (
  PRIMARY KEY(event_id,user_id)
 );
 CREATE INDEX IF NOT EXISTS event_participants_user ON event_participants(user_id,event_id);
+CREATE TABLE IF NOT EXISTS weather_cache (
+ cache_key TEXT PRIMARY KEY,
+ payload TEXT NOT NULL,
+ fetched_at TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS chores (
  id INTEGER PRIMARY KEY,
  weekday INTEGER NOT NULL CHECK(weekday BETWEEN 0 AND 6),

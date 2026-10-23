@@ -206,7 +206,7 @@ def test_v9_upgrade_adds_recipe_event_fields_without_losing_events(tmp_path):
                 'DATABASE': str(path)})
 
     with sqlite3.connect(path) as db:
-        assert db.execute('PRAGMA user_version').fetchone()[0] == 10
+        assert db.execute('PRAGMA user_version').fetchone()[0] == 11
         assert db.execute(
             'SELECT title,recipe_id,recipe_servings,meal_prep,meal_slot,recipe_title_auto FROM events'
         ).fetchone() == ('Dinner', None, None, 0, None, 0)

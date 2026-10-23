@@ -113,9 +113,13 @@ to `main` only after the user approves the completed change.
 
 ### Weather and system status
 
-- Use the selected Open-Meteo source, admin-set household town/postcode,
-  attribution, outbound-access control, configurable 1–15-day forecast,
-  metric/imperial units, and a shared cache no fresher than every 30 minutes.
+- The Open-Meteo client and shared SQLite cache are implemented on the current
+  review branch. The provider request covers current, hourly, and daily fields;
+  the cache refreshes after 30 minutes and can serve stale data while outbound
+  access is disabled or a refresh fails. Location settings, admin controls,
+  attribution, and the weather cards remain.
+- Add admin-set household town/postcode, outbound-access control, configurable
+  1–15-day forecast, and metric/imperial units.
 - Implement current, daily, and hourly cards, pressure change/trend, wind and
   precipitation, sunrise/sunset, moon illumination and named full moons, and
   the nearest supported Canadian tide station. Hide unsupported tide data and
