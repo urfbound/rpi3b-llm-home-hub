@@ -2,6 +2,7 @@
 import hashlib
 import hmac
 import os
+import calendar as pycalendar
 import secrets
 import sqlite3
 import threading
@@ -496,6 +497,57 @@ def create_app(test_config=None):
     def index():
         db = get_db()
         today = household_today()
+        try:
+            calendar_month = int(request.args.get('month', today.month))
+            calendar_year = int(request.args.get('year', today.year))
+        except ValueError:
+            abort(400)
+        retention = db.execute(
+            "SELECT value FROM app_settings WHERE key='calendar_retention_years'"
+        ).fetchone()
+        previous_years = int(retention['value']) if retention else 3
+        minimum_calendar_year = max(1, today.year - previous_years)
+        maximum_calendar_year = today.year + 10
+        if (not 1 <= calendar_month <= 12
+                or not minimum_calendar_year <= calendar_year <= maximum_calendar_year):
+            abort(400)
+        calendar_year_options = range(minimum_calendar_year, maximum_calendar_year + 1)
+        if calendar_month == 1:
+            previous_month, previous_year = 12, calendar_year - 1
+        else:
+            previous_month, previous_year = calendar_month - 1, calendar_year
+        if calendar_month == 12:
+            next_month, next_year = 1, calendar_year + 1
+        else:
+            next_month, next_year = calendar_month + 1, calendar_year
+        calendar_has_previous = previous_year >= minimum_calendar_year
+        calendar_has_next = next_year <= maximum_calendar_year
+        calendar_start = date(calendar_year, calendar_month, 1)
+        calendar_end = date(calendar_year + (calendar_month == 12),
+                            calendar_month % 12 + 1, 1)
+        month_events = db.execute(
+            'SELECT id,title,event_date,recipe_id,created_by FROM events '
+            'WHERE event_date>=? AND event_date<? ORDER BY event_date,title COLLATE NOCASE,id',
+            (calendar_start.isoformat(), calendar_end.isoformat())
+        ).fetchall()
+        events_by_date = {}
+        for event in month_events:
+            events_by_date.setdefault(event['event_date'], []).append(event)
+        calendar_weeks = []
+        for week in pycalendar.Calendar(firstweekday=6).monthdayscalendar(
+                calendar_year, calendar_month):
+            calendar_weeks.append([
+                None if day == 0 else {
+                    'day': day,
+                    'date': date(calendar_year, calendar_month, day).isoformat(),
+                    'is_today': (calendar_year, calendar_month, day)
+                    == (today.year, today.month, today.day),
+                    'events': events_by_date.get(
+                        date(calendar_year, calendar_month, day).isoformat(), []
+                    ),
+                }
+                for day in week
+            ])
         list_kind = request.args.get('kind', 'shopping')
         if list_kind not in ('shopping', 'todo', 'chores'):
             abort(400)
@@ -562,7 +614,18 @@ def create_app(test_config=None):
             week_start_for(today).isoformat()
         )
         return render_template('index.html', recipes=visible_recipes(db, g.user)[:6],
-          events=db.execute('SELECT events.*,recipes.title AS recipe_title FROM events LEFT JOIN recipes ON recipes.id=events.recipe_id ORDER BY event_date LIMIT 12').fetchall(),
+          events=month_events, calendar_weeks=calendar_weeks,
+          calendar_month=calendar_month, calendar_year=calendar_year,
+          calendar_month_name=pycalendar.month_name[calendar_month],
+          months=pycalendar.month_name,
+          calendar_days=('Sunday', 'Monday', 'Tuesday', 'Wednesday',
+                         'Thursday', 'Friday', 'Saturday'),
+          calendar_year_options=calendar_year_options,
+          calendar_has_previous=calendar_has_previous,
+          calendar_has_next=calendar_has_next,
+          calendar_previous_url=url_for('index', month=previous_month, year=previous_year),
+          calendar_next_url=url_for('index', month=next_month, year=next_year),
+          calendar_today_url=url_for('index', month=today.month, year=today.year),
           items=items, lists=lists, selected_list=selected_list, list_kind=list_kind,
           list_users=list_users, todo_assignees=todo_assignees,
           shopping_categories=SHOPPING_CATEGORIES,
