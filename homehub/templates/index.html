@@ -44,17 +44,48 @@
   </section>
 
   <section class="panel" id="calendar">
-    <h2>Calendar</h2>
+    <div class="calendar-heading"><h2>{{ calendar_month_name }} {{ calendar_year }}</h2></div>
+    <nav class="calendar-controls" aria-label="Calendar month navigation">
+      <div class="calendar-month-controls">
+        {% if calendar_has_previous %}<a class="calendar-nav-button" aria-label="Previous month" href="{{ calendar_previous_url }}">←</a>{% else %}<span class="calendar-nav-button is-disabled" aria-label="No earlier retained month">←</span>{% endif %}
+        <form method="get" action="{{ url_for('index') }}">
+          <label class="visually-hidden" for="calendar-month">Choose month</label>
+          <select id="calendar-month" name="month" onchange="this.form.submit()">
+            {% for month_number in range(1,13) %}<option value="{{ month_number }}"{% if month_number == calendar_month %} selected{% endif %}>{{ months[month_number-1] }}</option>{% endfor %}
+          </select>
+          <input type="hidden" name="year" value="{{ calendar_year }}">
+        </form>
+        {% if calendar_has_next %}<a class="calendar-nav-button" aria-label="Next month" href="{{ calendar_next_url }}">→</a>{% else %}<span class="calendar-nav-button is-disabled" aria-label="No later month">→</span>{% endif %}
+      </div>
+      <form method="get" action="{{ url_for('index') }}" class="calendar-year-control">
+        <label class="visually-hidden" for="calendar-year">Choose year</label>
+        <select id="calendar-year" name="year" onchange="this.form.submit()">
+          {% for option_year in calendar_year_options %}<option value="{{ option_year }}"{% if option_year == calendar_year %} selected{% endif %}>{{ option_year }}</option>{% endfor %}
+        </select>
+        <input type="hidden" name="month" value="{{ calendar_month }}">
+      </form>
+      <a class="calendar-today" href="{{ calendar_today_url }}">Today</a>
+    </nav>
+    <table class="calendar-month-grid">
+      <thead><tr>{% for day_name in calendar_days %}<th scope="col">{{ day_name }}</th>{% endfor %}</tr></thead>
+      <tbody>
+        {% for week in calendar_weeks %}<tr>
+          {% for day in week %}
+          <td{% if day and day['is_today'] %} class="calendar-today-cell"{% endif %}>
+            {% if day %}<time datetime="{{ day['date'] }}">{{ day['day'] }}</time>
+              {% for event in day['events'] %}<a class="calendar-event" href="#calendar">{{ event['title'] }}</a>{% endfor %}
+            {% endif %}
+          </td>
+          {% endfor %}
+        </tr>{% endfor %}
+      </tbody>
+    </table>
     <form method="post" action="{{ url_for('add_event') }}">
       <input type="hidden" name="_csrf" value="{{ csrf_token }}">
       <label>Date<input type="date" name="event_date" value="{{ today }}" required></label>
       <label>Event<input name="title" placeholder="An event or dinner plan" required maxlength="160"></label>
       <button class="primary">Add event</button>
     </form>
-    <ul>
-      {% for e in events %}<li><b>{{ e['event_date'] }}</b> · {{ e['title'] }}</li>
-      {% else %}<li>No plans yet.</li>{% endfor %}
-    </ul>
     <a href="{{ url_for('export_calendar') }}">Download calendar (.ics)</a>
   </section>
 

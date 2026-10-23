@@ -22,8 +22,10 @@ to `main` only after the user approves the completed change.
   privacy and personal notes, and away-mode caching and checkmark sync are
   merged to main. Recipe serving scaling is implemented on
   `feature/recipe-serving-scaling` and awaits review. Recipe Add to list is
-  implemented on `feature/recipe-add-to-list`, based on that serving-scaling
-  branch, and awaits review. Weekend, weather, and system status cards remain.
+  implemented on eature/recipe-add-to-list, based on the serving-scaling
+  branch, and awaits review. Calendar month navigation and grid are merged to
+  main. Weekend, weather, and system status cards remain.
+
 - **Current app prototype:** login/admin, a single shopping list, recipe
   create/view, basic event creation and ICS export, and light/dark theme exist.
   The approved full tab designs are not yet implemented as complete features.
@@ -96,8 +98,11 @@ to `main` only after the user approves the completed change.
 
 ### Calendar
 
-- Build month view with month/year selectors, navigation, Today, retained years,
-  event details, all-day and timed events, and daily/weekly/monthly/yearly
+- Month grid, month/year selectors, previous/next navigation, Today, and a
+  year range based on the configured retention value (default three previous
+  years plus ten future years) are implemented on `feature/calendar-month-view`
+  and await review. The admin control for that setting remains.
+- Add event details, all-day and timed events, and daily/weekly/monthly/yearly
   recurrence with single-occurrence or series edits/cancellation.
 - Add event participants and privacy, event title/description limits, per-user
   daily/monthly budgets, ICS visibility filtering, recipe/meal-prep links, and
