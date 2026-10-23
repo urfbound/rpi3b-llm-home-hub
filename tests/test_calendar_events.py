@@ -161,6 +161,185 @@ def test_timed_event_exports_local_floating_ics_datetime(app):
     assert b'DTEND:20261024T194500' in response.data
 
 
+def test_recurring_event_materializes_daily_weekly_monthly_and_yearly_dates(app):
+    bob = signed_in(app, 'bob', 'bob calendar password')
+    cases = [
+        ('daily', '2026-10-26', ['2026-10-24', '2026-10-25', '2026-10-26']),
+        ('weekly', '2026-11-07', ['2026-10-24', '2026-10-31', '2026-11-07']),
+        ('monthly', '2026-12-24', ['2026-10-24', '2026-11-24', '2026-12-24']),
+        ('yearly', '2028-10-24', ['2026-10-24', '2027-10-24', '2028-10-24']),
+    ]
+
+    for frequency, until, expected_dates in cases:
+        response = bob.post('/events', data=event_form(
+            bob, title=f'{frequency} event', recurrence_frequency=frequency,
+            recurrence_until=until,
+        ))
+        assert response.status_code == 302
+        with sqlite3.connect(app.config['DATABASE']) as db:
+            dates = [row[0] for row in db.execute(
+                'SELECT event_date FROM events WHERE title=? ORDER BY event_date',
+                (f'{frequency} event',),
+            )]
+        assert dates == expected_dates
+
+
+def test_recurrence_end_defaults_to_one_year_and_invalid_ranges_are_rejected(app):
+    bob = signed_in(app, 'bob', 'bob calendar password')
+
+    response = bob.post('/events', data=event_form(
+        bob, recurrence_frequency='weekly',
+    ))
+
+    assert response.status_code == 302
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        rows = db.execute(
+            'SELECT event_date,recurrence_frequency,recurrence_until,series_id '
+            'FROM events ORDER BY event_date'
+        ).fetchall()
+    assert len(rows) == 53
+    assert rows[0] == ('2026-10-24', 'weekly', '2027-10-24', rows[0][3])
+    assert rows[-1][0] == '2027-10-23'
+    assert len({row[3] for row in rows}) == 1
+
+    invalid = bob.post('/events', data=event_form(
+        bob, recurrence_frequency='monthly', recurrence_until='2026-10-23',
+    ))
+    assert invalid.status_code == 400
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        assert db.execute('SELECT COUNT(*) FROM events').fetchone()[0] == 53
+
+
+def test_monthly_recurrence_clamps_short_months_without_shifting_later_dates(app):
+    bob = signed_in(app, 'bob', 'bob calendar password')
+
+    bob.post('/events', data=event_form(
+        bob, event_date='2026-01-31', recurrence_frequency='monthly',
+        recurrence_until='2026-04-30',
+    ))
+
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        dates = [row[0] for row in db.execute(
+            'SELECT event_date FROM events ORDER BY event_date'
+        )]
+    assert dates == ['2026-01-31', '2026-02-28', '2026-03-31', '2026-04-30']
+
+
+def test_single_occurrence_edit_and_delete_leave_the_rest_of_series_intact(app):
+    bob = signed_in(app, 'bob', 'bob calendar password')
+    bob.post('/events', data=event_form(
+        bob, recurrence_frequency='weekly', recurrence_until='2026-11-07',
+    ))
+
+    edited = bob.post('/events/2/edit', data=event_form(
+        bob, title='One changed date', event_date='2026-10-31', edit_scope='occurrence',
+    ))
+    assert edited.status_code == 302
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        assert db.execute(
+            'SELECT title,series_id,recurrence_frequency FROM events WHERE id=2'
+        ).fetchone() == ('One changed date', None, None)
+        assert db.execute(
+            'SELECT event_date,title FROM events WHERE series_id=1 ORDER BY event_date'
+        ).fetchall() == [('2026-10-24', 'Pasta night'), ('2026-11-07', 'Pasta night')]
+
+    deleted = bob.post('/events/3/delete', data={
+        '_csrf': csrf(bob), 'delete_scope': 'occurrence',
+    })
+    assert deleted.status_code == 302
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        assert db.execute(
+            'SELECT event_date FROM events WHERE series_id=1 ORDER BY event_date'
+        ).fetchall() == [('2026-10-24',)]
+
+
+def test_series_edit_and_delete_apply_to_all_remaining_occurrences(app):
+    bob = signed_in(app, 'bob', 'bob calendar password')
+    bob.post('/events', data=event_form(
+        bob, recurrence_frequency='weekly', recurrence_until='2026-11-07',
+    ))
+
+    edited = bob.post('/events/1/edit', data=event_form(
+        bob, title='Updated series', recurrence_frequency='weekly',
+        recurrence_until='2026-11-14', edit_scope='series',
+    ))
+    assert edited.status_code == 302
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        assert db.execute(
+            'SELECT event_date,title FROM events WHERE series_id=1 ORDER BY event_date'
+        ).fetchall() == [
+            ('2026-10-24', 'Updated series'), ('2026-10-31', 'Updated series'),
+            ('2026-11-07', 'Updated series'), ('2026-11-14', 'Updated series'),
+        ]
+
+    deleted = bob.post('/events/1/delete', data={
+        '_csrf': csrf(bob), 'delete_scope': 'series',
+    })
+    assert deleted.status_code == 302
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        assert db.execute('SELECT COUNT(*) FROM events').fetchone()[0] == 0
+
+
+def test_recurring_events_appear_on_calendar_and_offer_occurrence_or_series_actions(app):
+    bob = signed_in(app, 'bob', 'bob calendar password')
+    bob.post('/events', data=event_form(
+        bob, recurrence_frequency='weekly', recurrence_until='2026-11-07',
+    ))
+
+    calendar = bob.get('/?month=10&year=2026')
+    detail = bob.get('/events/2')
+    edit = bob.get('/events/2/edit')
+
+    assert calendar.data.count(b'Pasta night') == 2
+    assert b'Only this occurrence' in detail.data
+    assert b'Entire series' in detail.data
+    assert b'name="edit_scope"' in edit.data
+    assert b'name="recurrence_frequency"' in edit.data
+
+
+def test_other_user_cannot_edit_or_cancel_recurring_series(app):
+    bob = signed_in(app, 'bob', 'bob calendar password')
+    carol = signed_in(app, 'carol', 'carol calendar password')
+    bob.post('/events', data=event_form(
+        bob, recurrence_frequency='weekly', recurrence_until='2026-11-07',
+    ))
+
+    edited = carol.post('/events/1/edit', data=event_form(
+        carol, title='Unauthorized', edit_scope='series',
+    ))
+    deleted = carol.post('/events/1/delete', data={
+        '_csrf': csrf(carol), 'delete_scope': 'series',
+    })
+
+    assert edited.status_code == 403
+    assert deleted.status_code == 403
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        assert db.execute('SELECT COUNT(*) FROM events').fetchone()[0] == 3
+
+
+def test_v7_upgrade_adds_recurrence_columns_without_losing_event(tmp_path):
+    path = tmp_path / 'v7.sqlite3'
+    create_app({'TESTING': True, 'SECRET_KEY': 'calendar-migrate-secret',
+                'DATABASE': str(path)})
+    with sqlite3.connect(path) as db:
+        for column in ('recurrence_until', 'recurrence_frequency', 'series_id'):
+            db.execute(f'ALTER TABLE events DROP COLUMN {column}')
+        db.execute("INSERT INTO users(username,password_hash,role) VALUES('bob','hash','user')")
+        db.execute("INSERT INTO events(title,event_date,created_by) VALUES('Dinner','2026-10-24',1)")
+        db.execute('PRAGMA user_version=7')
+
+    create_app({'TESTING': True, 'SECRET_KEY': 'calendar-migrate-secret',
+                'DATABASE': str(path)})
+
+    with sqlite3.connect(path) as db:
+        assert db.execute('PRAGMA user_version').fetchone()[0] == 8
+        assert db.execute(
+            'SELECT id,title,event_date,series_id,recurrence_frequency,recurrence_until '
+            'FROM events'
+        ).fetchone() == (1, 'Dinner', '2026-10-24', None, None, None)
+        assert db.execute('PRAGMA foreign_key_check').fetchall() == []
+
+
 def test_v6_upgrade_preserves_events_and_adds_all_day_defaults(tmp_path):
     path = tmp_path / 'v6.sqlite3'
     with sqlite3.connect(path) as db:
@@ -183,10 +362,10 @@ def test_v6_upgrade_preserves_events_and_adds_all_day_defaults(tmp_path):
                 'DATABASE': str(path)})
 
     with sqlite3.connect(path) as db:
-        assert db.execute('PRAGMA user_version').fetchone()[0] == 7
+        assert db.execute('PRAGMA user_version').fetchone()[0] == 8
         assert db.execute(
             'SELECT id,title,event_date,description,all_day,start_time,end_time FROM events'
         ).fetchone() == (23, 'Dinner', '2026-10-24', '', 1, None, None)
         assert db.execute('PRAGMA foreign_key_check').fetchall() == []
-    backups = list(tmp_path.glob('v6.pre-v7-*.sqlite3'))
+    backups = list(tmp_path.glob('v6.pre-v8-*.sqlite3'))
     assert len(backups) == 1
