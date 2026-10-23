@@ -22,7 +22,7 @@ from argon2.exceptions import VerifyMismatchError, VerificationError
 from .backups import (BackupError, backup_filename, create_backup,
                       default_backup_directory, delete_backup, list_backups,
                       prune_backups, restore_backup, validate_backup_directory)
-from .weather import get_cached_forecast
+from .weather import WeatherError, geocode_location, get_cached_forecast
 
 PH = PasswordHasher(memory_cost=16384, time_cost=2, parallelism=1)
 SCHEMA_VERSION = 11
@@ -391,6 +391,10 @@ def admin_required(fn):
 def setting(db, key, default):
     row = db.execute('SELECT value FROM app_settings WHERE key=?', (key,)).fetchone()
     return int(row['value']) if row else default
+
+def setting_text(db, key, default=''):
+    row = db.execute('SELECT value FROM app_settings WHERE key=?', (key,)).fetchone()
+    return row['value'] if row else default
 
 def household_today():
     """Use the Pi's configured local date until household timezone settings exist."""
@@ -1278,6 +1282,9 @@ def create_app(test_config=None):
         backup_frequency = setting(db, 'backup_interval_days', 1)
         backup_retention = setting(db, 'backup_retention', 14)
         backups = list_backups(backup_folder, backup_retention) if backup_folder_available else []
+        weather_units = setting_text(db, 'weather_units', 'metric')
+        if weather_units not in ('metric', 'imperial'):
+            weather_units = 'metric'
         return render_template('accounts.html', users=users, counts=counts,
                                ownership=ownership,
                                idle_hours=setting(db, 'session_idle_hours', 24),
@@ -1288,7 +1295,104 @@ def create_app(test_config=None):
                                backup_folder_available=backup_folder_available,
                                backup_frequency=backup_frequency,
                                backup_retention=backup_retention,
-                               backups=backups)
+                               backups=backups,
+                               weather_location_name=setting_text(db, 'weather_location_name'),
+                               weather_forecast_days=setting(db, 'weather_forecast_days', 5),
+                               weather_units=weather_units,
+                               weather_outbound_enabled=setting(db, 'weather_outbound_enabled', 1),
+                               weather_location_candidates=session.get('weather_location_candidates', []),
+                               weather_location_query=session.get('weather_location_query', ''))
+
+    @app.post('/admin/weather/settings')
+    @admin_required
+    def update_weather_settings():
+        try:
+            forecast_days = int(request.form.get('forecast_days', ''))
+        except ValueError:
+            abort(400)
+        units = request.form.get('units', '')
+        outbound_enabled = '1' if request.form.get('outbound_enabled') == '1' else '0'
+        if not 1 <= forecast_days <= 15 or units not in ('metric', 'imperial'):
+            abort(400)
+        db = get_db()
+        with db:
+            db.executemany(
+                'INSERT INTO app_settings(key,value) VALUES(?,?) '
+                'ON CONFLICT(key) DO UPDATE SET value=excluded.value',
+                (('weather_forecast_days', str(forecast_days)), ('weather_units', units),
+                 ('weather_outbound_enabled', outbound_enabled)),
+            )
+            db.execute('DELETE FROM weather_cache')
+        return redirect(url_for('accounts') + '#weather-settings-section')
+
+    @app.post('/admin/weather/location/search')
+    @admin_required
+    def search_weather_locations():
+        db = get_db()
+        if not setting(db, 'weather_outbound_enabled', 1):
+            abort(400, description='Enable outbound weather access before searching for a location.')
+        query = request.form.get('location_query', '').strip()
+        try:
+            results = geocode_location(query)
+        except WeatherError as exc:
+            flash(str(exc))
+            return redirect(url_for('accounts') + '#weather-settings-section')
+        candidates = []
+        for result in results[:5]:
+            try:
+                latitude = float(result['latitude'])
+                longitude = float(result['longitude'])
+                timezone_name = str(result['timezone']).strip()
+                name = str(result['name']).strip()
+            except (KeyError, TypeError, ValueError):
+                continue
+            if not name or not timezone_name or not -90 <= latitude <= 90 \
+                    or not -180 <= longitude <= 180:
+                continue
+            label = ', '.join(part for part in (
+                name, str(result.get('admin1') or '').strip(),
+                str(result.get('country') or '').strip(),
+            ) if part)
+            candidates.append({
+                'name': name, 'label': label, 'latitude': latitude,
+                'longitude': longitude, 'timezone': timezone_name,
+            })
+        if not candidates:
+            flash('No matching locations were found. Try a town or postcode with a region.')
+            session.pop('weather_location_candidates', None)
+            session.pop('weather_location_query', None)
+        else:
+            session['weather_location_candidates'] = candidates
+            session['weather_location_query'] = query
+        return redirect(url_for('accounts') + '#weather-settings-section')
+
+    @app.post('/admin/weather/location/select')
+    @admin_required
+    def select_weather_location():
+        db = get_db()
+        if not setting(db, 'weather_outbound_enabled', 1):
+            abort(400, description='Enable outbound weather access before selecting a location.')
+        candidates = session.get('weather_location_candidates', [])
+        try:
+            candidate_index = int(request.form.get('candidate_index', ''))
+        except ValueError:
+            abort(400)
+        if not 0 <= candidate_index < len(candidates):
+            abort(400)
+        location = candidates[candidate_index]
+        with db:
+            db.executemany(
+                'INSERT INTO app_settings(key,value) VALUES(?,?) '
+                'ON CONFLICT(key) DO UPDATE SET value=excluded.value',
+                (('weather_location_name', location['label']),
+                 ('weather_latitude', str(location['latitude'])),
+                 ('weather_longitude', str(location['longitude'])),
+                 ('weather_timezone', location['timezone'])),
+            )
+            db.execute('DELETE FROM weather_cache')
+        session.pop('weather_location_candidates', None)
+        session.pop('weather_location_query', None)
+        return redirect(url_for('accounts') + '#weather-settings-section')
 
     @app.post('/admin/calendar/limits')
     @admin_required
