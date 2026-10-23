@@ -3,6 +3,7 @@
 <section class="page-heading">
   <div><p class="eyebrow">Your reading shelf</p><h1>RSS</h1>
   <p class="muted">Follow the feeds your household cares about.</p></div>
+  {% if current_user['account_kind'] == 'person' %}<div class="page-actions"><a class="button secondary" href="#manage-feeds">Manage feeds</a></div>{% endif %}
 </section>
 
 {% if current_user['account_kind'] == 'person' or current_user['role'] == 'admin' %}
@@ -31,7 +32,7 @@
 {% endif %}
 
 {% if current_user['account_kind'] == 'person' %}
-<section class="panel rss-feed-section" aria-labelledby="personal-feeds-heading">
+<section class="panel rss-feed-section" id="manage-feeds" aria-labelledby="personal-feeds-heading">
   <h2 id="personal-feeds-heading">My feeds</h2>
   {% if personal_feeds %}
   <ul class="rss-feed-list">
@@ -54,6 +55,14 @@
     {% endfor %}
   </ul>
   {% else %}<p class="muted">You have not added any personal feeds yet.</p>{% endif %}
+  <form method="post" action="{{ url_for('update_rss_preferences') }}" class="rss-preference-form">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <input type="hidden" name="prompt_after_done" value="0">
+    <label><input type="checkbox" name="prompt_after_done" value="1" {% if prompt_after_done %}checked{% endif %}>
+      Ask whether to keep or delete after Done reading</label>
+    {% if not prompt_after_done and done_without_prompt %}<p class="muted">Articles are automatically {% if done_without_prompt == 'delete' %}deleted{% else %}kept{% endif %} when marked Done reading.</p>{% endif %}
+    <button>Save reading preference</button>
+  </form>
 </section>
 {% endif %}
 
@@ -88,10 +97,20 @@
   {% if feed['last_fetched_at'] %}<p class="muted">Last refreshed {{ feed['last_fetched_at']|replace('T', ' ')|replace('+00:00', ' UTC') }}</p>{% endif %}
   {% if feed['last_error'] %}<p class="muted">Refresh failed: {{ feed['last_error'] }}. Showing saved articles.</p>{% endif %}
   {% if feed['articles'] %}<ul class="rss-articles">
-    {% for article in feed['articles'] %}<li>
-      <a href="{{ article['url'] }}" target="_blank" rel="noopener noreferrer">{{ article['title'] or article['url'] }}</a>
+    {% for article in feed['articles'] %}<li class="rss-article-row {% if article['read_at'] %}read{% else %}unread{% endif %}">
+      <a href="{{ url_for('open_rss_article', article_id=article['id']) }}" target="_blank" rel="noopener noreferrer">{{ article['title'] or article['url'] }}</a>
       {% if article['published'] %}<small>{{ article['published'] }}</small>{% endif %}
       {% if article['summary'] %}<p>{{ article['summary'] }}</p>{% endif %}
+      <div class="rss-article-actions">
+        {% if not article['read_at'] %}<form method="post" action="{{ url_for('done_rss_article', article_id=article['id']) }}" class="rss-done-form">
+          <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+          {% if prompt_after_done %}<button type="button" onclick="openDonePrompt(this.form)">Done reading</button>
+          {% else %}<button type="submit">Done reading</button>{% endif %}
+        </form>{% endif %}
+        <form method="post" action="{{ url_for('delete_rss_article', article_id=article['id']) }}">
+          <input type="hidden" name="_csrf" value="{{ csrf_token }}"><button type="submit">Delete</button>
+        </form>
+      </div>
     </li>{% endfor %}
   </ul>{% else %}<p class="muted">No cached articles yet.</p>{% endif %}
 </section>
@@ -102,12 +121,42 @@
   {% if feed['last_fetched_at'] %}<p class="muted">Last refreshed {{ feed['last_fetched_at']|replace('T', ' ')|replace('+00:00', ' UTC') }}</p>{% endif %}
   {% if feed['last_error'] %}<p class="muted">Refresh failed: {{ feed['last_error'] }}. Showing saved articles.</p>{% endif %}
   {% if feed['articles'] %}<ul class="rss-articles">
-    {% for article in feed['articles'] %}<li>
-      <a href="{{ article['url'] }}" target="_blank" rel="noopener noreferrer">{{ article['title'] or article['url'] }}</a>
+    {% for article in feed['articles'] %}<li class="rss-article-row {% if article['read_at'] %}read{% else %}unread{% endif %}">
+      <a href="{{ url_for('open_rss_article', article_id=article['id']) }}" target="_blank" rel="noopener noreferrer">{{ article['title'] or article['url'] }}</a>
       {% if article['published'] %}<small>{{ article['published'] }}</small>{% endif %}
       {% if article['summary'] %}<p>{{ article['summary'] }}</p>{% endif %}
+      <div class="rss-article-actions">
+        {% if not article['read_at'] %}<form method="post" action="{{ url_for('done_rss_article', article_id=article['id']) }}" class="rss-done-form">
+          <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+          {% if prompt_after_done %}<button type="button" onclick="openDonePrompt(this.form)">Done reading</button>
+          {% else %}<button type="submit">Done reading</button>{% endif %}
+        </form>{% endif %}
+        <form method="post" action="{{ url_for('delete_rss_article', article_id=article['id']) }}">
+          <input type="hidden" name="_csrf" value="{{ csrf_token }}"><button type="submit">Delete</button>
+        </form>
+      </div>
     </li>{% endfor %}
   </ul>{% else %}<p class="muted">No cached articles yet.</p>{% endif %}
 </section>
 {% endfor %}
+<dialog id="done-reading-dialog" aria-labelledby="done-reading-heading">
+  <h2 id="done-reading-heading">Done reading?</h2>
+  <p>Would you like to keep this article or delete it?</p>
+  <form id="done-reading-form" method="post">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <label class="rss-dialog-setting"><input type="checkbox" name="dont_ask_again" value="1"> Don't ask me again</label>
+    <div class="rss-dialog-actions">
+      <button type="submit" name="choice" value="keep">Keep article</button>
+      <button type="submit" name="choice" value="delete">Delete article</button>
+      <button type="button" onclick="document.getElementById('done-reading-dialog').close()">Cancel</button>
+    </div>
+  </form>
+</dialog>
+<script>
+function openDonePrompt(form) {
+  const dialog = document.getElementById('done-reading-dialog');
+  document.getElementById('done-reading-form').action = form.action;
+  dialog.showModal();
+}
+</script>
 {% endblock %}

@@ -153,14 +153,13 @@ to `main` only after the user approves the completed change.
   enforces the outbound toggle, stores and displays parsed article caches, keeps
   cached copies visible when outbound access is off or refresh fails, and
   expires personal articles after 90 days and household articles after three
-  days. Per-user read state, Done reading behavior, favorites, 64 MB eviction,
-  and article deletion remain.
-- Add separate per-user read, favourite, and delete state for cached articles.
-  Implement article-open read tracking, Done reading behavior, the prompt
-  preference, favourite confirmation and cap, and the bottom favourites card.
-  Keep household read state per-user if practical; otherwise ignore it.
-  Enforce the 64 MB per-user cap with the approved eviction order, exempting
-  favourited articles.
+  days. Per-user open/read tracking, Done reading choices, manual deletion, and
+  the saved prompt preference are implemented on this review branch. Per-user
+  favorites, favorite confirmation/cap, and the bottom favorites card remain.
+- Enforce the 64 MB per-user cap with the approved eviction order, exempting
+  favorited articles; retain up to 30 ordinary articles per feed. If favorites
+  alone fill the quota, stop saving new articles for that user until they free
+  space.
 
 ### Games
 

@@ -33,7 +33,7 @@ from .rss_fetch import fetch_feed
 from .rss_refresh import refresh_due_feeds
 
 PH = PasswordHasher(memory_cost=16384, time_cost=2, parallelism=1)
-SCHEMA_VERSION = 15
+SCHEMA_VERSION = 16
 LOGIN_WINDOW_SECONDS = 15 * 60
 LOGIN_USERNAME_LIMIT = 5
 LOGIN_ADDRESS_LIMIT = 30
@@ -380,6 +380,20 @@ CREATE TABLE IF NOT EXISTS rss_articles (
  UNIQUE(feed_id,url)
 );
 CREATE INDEX IF NOT EXISTS rss_articles_feed_date ON rss_articles(feed_id,fetched_at DESC,id DESC);
+CREATE TABLE IF NOT EXISTS rss_article_states (
+ article_id INTEGER NOT NULL REFERENCES rss_articles(id) ON DELETE CASCADE,
+ user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ read_at TEXT,
+ is_favourite INTEGER NOT NULL DEFAULT 0 CHECK(is_favourite IN (0,1)),
+ deleted_at TEXT,
+ PRIMARY KEY(article_id,user_id)
+);
+CREATE INDEX IF NOT EXISTS rss_article_states_user ON rss_article_states(user_id,article_id);
+CREATE TABLE IF NOT EXISTS rss_user_preferences (
+ user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+ prompt_after_done INTEGER NOT NULL DEFAULT 1 CHECK(prompt_after_done IN (0,1)),
+ done_without_prompt TEXT CHECK(done_without_prompt IS NULL OR done_without_prompt IN ('keep','delete'))
+);
 CREATE TABLE IF NOT EXISTS system_metrics (
  sampled_at TEXT PRIMARY KEY,
  cpu_percent REAL,
@@ -441,6 +455,30 @@ def setting(db, key, default):
 def setting_text(db, key, default=''):
     row = db.execute('SELECT value FROM app_settings WHERE key=?', (key,)).fetchone()
     return row['value'] if row else default
+
+def visible_rss_article(db, user, article_id):
+    article = db.execute(
+        'SELECT a.*,f.scope,f.owner_user_id FROM rss_articles a '
+        'JOIN rss_feeds f ON f.id=a.feed_id WHERE a.id=?', (article_id,)
+    ).fetchone()
+    if (not article or (article['scope'] == 'personal'
+                        and article['owner_user_id'] != user['id'])):
+        abort(HTTPStatus.NOT_FOUND)
+    state = db.execute(
+        'SELECT read_at,is_favourite,deleted_at FROM rss_article_states '
+        'WHERE article_id=? AND user_id=?', (article_id, user['id'])
+    ).fetchone()
+    if state and state['deleted_at']:
+        abort(HTTPStatus.NOT_FOUND)
+    return article, state
+
+def mark_rss_article_read(db, article_id, user_id):
+    now = datetime.now(timezone.utc).isoformat()
+    db.execute(
+        'INSERT INTO rss_article_states(article_id,user_id,read_at) VALUES(?,?,?) '
+        'ON CONFLICT(article_id,user_id) DO UPDATE SET read_at=COALESCE(read_at,excluded.read_at)',
+        (article_id, user_id, now),
+    )
 
 def household_weather(db):
     name = setting_text(db, 'weather_location_name')
@@ -1340,17 +1378,97 @@ def create_app(test_config=None):
         articles_by_feed = {}
         for feed in visible_feeds:
             articles_by_feed[feed['id']] = db.execute(
-                'SELECT title,url,summary,published FROM rss_articles '
-                'WHERE feed_id=? ORDER BY published DESC,fetched_at DESC,id DESC',
-                (feed['id'],),
+                'SELECT a.id,a.title,a.url,a.summary,a.published,s.read_at,'
+                'COALESCE(s.is_favourite,0) AS is_favourite FROM rss_articles a '
+                'LEFT JOIN rss_article_states s ON s.article_id=a.id AND s.user_id=? '
+                'WHERE a.feed_id=? AND (s.deleted_at IS NULL OR s.article_id IS NULL) '
+                'ORDER BY a.published DESC,a.fetched_at DESC,a.id DESC',
+                (g.user['id'], feed['id']),
             ).fetchall()
         personal_feeds = [dict(feed) | {'articles': articles_by_feed[feed['id']]}
                           for feed in personal_feeds]
         household_feeds = [dict(feed) | {'articles': articles_by_feed[feed['id']]}
                            for feed in household_feeds]
+        preference = db.execute(
+            'SELECT prompt_after_done,done_without_prompt FROM rss_user_preferences '
+            'WHERE user_id=?', (g.user['id'],)
+        ).fetchone()
+        prompt_after_done = bool(preference['prompt_after_done']) if preference else True
+        done_without_prompt = preference['done_without_prompt'] if preference else None
         return render_template('rss.html', personal_feeds=personal_feeds,
                                household_feeds=household_feeds,
-                               outbound_enabled=bool(setting(db, 'rss_outbound_enabled', 1)))
+                               outbound_enabled=bool(setting(db, 'rss_outbound_enabled', 1)),
+                               prompt_after_done=prompt_after_done,
+                               done_without_prompt=done_without_prompt)
+
+    @app.get('/rss/articles/<int:article_id>/open')
+    @login_required
+    def open_rss_article(article_id):
+        db = get_db()
+        article, _state = visible_rss_article(db, g.user, article_id)
+        mark_rss_article_read(db, article_id, g.user['id'])
+        db.commit()
+        return redirect(article['url'])
+
+    @app.post('/rss/articles/<int:article_id>/done')
+    @login_required
+    def done_rss_article(article_id):
+        db = get_db()
+        _article, state = visible_rss_article(db, g.user, article_id)
+        preference = db.execute(
+            'SELECT prompt_after_done,done_without_prompt FROM rss_user_preferences '
+            'WHERE user_id=?', (g.user['id'],)
+        ).fetchone()
+        prompt_enabled = preference is None or bool(preference['prompt_after_done'])
+        if prompt_enabled:
+            choice = request.form.get('choice', '')
+        else:
+            choice = preference['done_without_prompt'] or 'keep'
+        if choice not in ('keep', 'delete'):
+            abort(HTTPStatus.BAD_REQUEST)
+        mark_rss_article_read(db, article_id, g.user['id'])
+        if choice == 'delete':
+            db.execute('UPDATE rss_article_states SET deleted_at=? '
+                       'WHERE article_id=? AND user_id=?',
+                       (datetime.now(timezone.utc).isoformat(), article_id, g.user['id']))
+        if prompt_enabled and request.form.get('dont_ask_again') == '1':
+            db.execute(
+                'INSERT INTO rss_user_preferences(user_id,prompt_after_done,done_without_prompt) '
+                'VALUES(?,0,?) ON CONFLICT(user_id) DO UPDATE SET '
+                'prompt_after_done=0,done_without_prompt=excluded.done_without_prompt',
+                (g.user['id'], choice),
+            )
+        db.commit()
+        flash('Article deleted.' if choice == 'delete' else 'Marked as read.')
+        return redirect(url_for('rss_page'))
+
+    @app.post('/rss/preferences')
+    @login_required
+    def update_rss_preferences():
+        prompt_after_done = int(request.form.get('prompt_after_done') == '1')
+        db = get_db()
+        db.execute(
+            'INSERT INTO rss_user_preferences(user_id,prompt_after_done) VALUES(?,?) '
+            'ON CONFLICT(user_id) DO UPDATE SET prompt_after_done=excluded.prompt_after_done',
+            (g.user['id'], prompt_after_done),
+        )
+        db.commit()
+        flash('RSS reading preferences saved.')
+        return redirect(url_for('rss_page') + '#manage-feeds')
+
+    @app.post('/rss/articles/<int:article_id>/delete')
+    @login_required
+    def delete_rss_article(article_id):
+        db = get_db()
+        _article, _state = visible_rss_article(db, g.user, article_id)
+        db.execute(
+            'INSERT INTO rss_article_states(article_id,user_id,deleted_at) VALUES(?,?,?) '
+            'ON CONFLICT(article_id,user_id) DO UPDATE SET deleted_at=excluded.deleted_at',
+            (article_id, g.user['id'], datetime.now(timezone.utc).isoformat()),
+        )
+        db.commit()
+        flash('Article deleted.')
+        return redirect(url_for('rss_page'))
 
     @app.post('/rss/feeds')
     @login_required
