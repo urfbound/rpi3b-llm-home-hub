@@ -20,7 +20,9 @@ to `main` only after the user approves the completed change.
   are merged to main. Copy/Paste is implemented on `feature/list-copy-paste`
   and awaits review. Recipe editing and deletion are merged to main. Recipe
   privacy and personal notes, and away-mode caching and checkmark sync are
-  merged to main. Weekend, weather, and system status cards remain.
+  merged to main. Recipe serving scaling is implemented on
+  `feature/recipe-serving-scaling` and awaits review. Weekend, weather, and
+  system status cards remain.
 - **Current app prototype:** login/admin, a single shopping list, recipe
   create/view, basic event creation and ICS export, and light/dark theme exist.
   The approved full tab designs are not yet implemented as complete features.
@@ -80,10 +82,10 @@ to `main` only after the user approves the completed change.
 
 ### Recipes
 
-- Structured recipe creation, editing, deletion, privacy, and per-user notes
-  are merged to main, including an upgrade that preserves existing recipe
-  text. Remaining work includes serving scaling, Add to list, and Add to
-  calendar.
+- Structured recipe creation, editing, deletion, privacy, per-user notes, and
+  serving scaling are implemented on feature branches and merged or awaiting
+  review, including an upgrade that preserves existing recipe text. Remaining
+  work includes Add to list and Add to calendar.
 - Add create, edit, view, and delete flows; structured ingredients and ordered
   steps; serving scaling; limits and validation; per-user notes and sharing
   privacy; Add to list snapshots; and Add to calendar with serving count.

@@ -153,6 +153,96 @@ def test_recipe_detail_and_library_show_owner_controls(users):
     assert b'Delete this recipe?' in detail.data
 
 
+def test_recipe_detail_scales_structured_amounts_to_selected_servings(users):
+    recipe_id = add_recipe(users, owner_id=2)
+    with sqlite3.connect(users.config['DATABASE']) as db:
+        db.executemany(
+            'INSERT INTO recipe_ingredients(recipe_id,position,quantity,unit,name) '
+            'VALUES(?,?,?,?,?)',
+            [(recipe_id, 1, '1/2', 'tsp', 'salt'),
+             (recipe_id, 2, 'a pinch', '', 'pepper')],
+        )
+    bob = signed_in(users, 'bob', 'bob recipe password')
+
+    response = bob.get(f'/recipes/{recipe_id}?servings=8')
+
+    assert response.status_code == 200
+    assert b'value="8"' in response.data
+    assert b'for 8 servings' in response.data
+    assert b'<strong>2 cup</strong>' in response.data
+    assert b'<strong>1 tsp</strong>' in response.data
+    assert b'a pinch' in response.data
+
+
+def test_recipe_detail_uses_default_servings_and_scales_down_to_fraction(users):
+    recipe_id = add_recipe(users, owner_id=2)
+    bob = signed_in(users, 'bob', 'bob recipe password')
+
+    default = bob.get(f'/recipes/{recipe_id}')
+    half = bob.get(f'/recipes/{recipe_id}?servings=2')
+
+    assert b'for 4 servings' in default.data
+    assert b'<strong>1 cup</strong>' in default.data
+    assert b'for 2 servings' in half.data
+    assert b'<strong>1/2 cup</strong>' in half.data
+
+
+@pytest.mark.parametrize(('quantity', 'expected'), [
+    ('1 1/2', '3'),
+    ('1½', '3'),
+    ('1-2', '2-4'),
+    ('1,000', '2000'),
+])
+def test_recipe_detail_scales_mixed_fraction_and_range_amounts(users, quantity, expected):
+    recipe_id = add_recipe(users, owner_id=2)
+    with sqlite3.connect(users.config['DATABASE']) as db:
+        db.execute('UPDATE recipe_ingredients SET quantity=? WHERE recipe_id=?',
+                   (quantity, recipe_id))
+    bob = signed_in(users, 'bob', 'bob recipe password')
+
+    response = bob.get(f'/recipes/{recipe_id}?servings=8')
+
+    assert response.status_code == 200
+    assert f'<strong>{expected} cup</strong>'.encode() in response.data
+
+
+def test_recipe_detail_keeps_legacy_freeform_amounts_and_explains_scaling_limit(users):
+    recipe_id = add_recipe(users, owner_id=2)
+    with sqlite3.connect(users.config['DATABASE']) as db:
+        db.execute('DELETE FROM recipe_ingredients WHERE recipe_id=?', (recipe_id,))
+        db.execute('UPDATE recipes SET ingredients=? WHERE id=?',
+                   ('1 cup beans\nsalt', recipe_id))
+    bob = signed_in(users, 'bob', 'bob recipe password')
+
+    response = bob.get(f'/recipes/{recipe_id}?servings=8')
+
+    assert response.status_code == 200
+    assert b'1 cup beans' in response.data
+    assert b'cannot be scaled automatically' in response.data
+
+
+def test_recipe_detail_never_rounds_a_positive_amount_down_to_zero(users):
+    recipe_id = add_recipe(users, owner_id=2)
+    with sqlite3.connect(users.config['DATABASE']) as db:
+        db.execute('UPDATE recipes SET default_servings=99 WHERE id=?', (recipe_id,))
+        db.execute("UPDATE recipe_ingredients SET quantity='1/16' WHERE recipe_id=?", (recipe_id,))
+    bob = signed_in(users, 'bob', 'bob recipe password')
+
+    response = bob.get(f'/recipes/{recipe_id}?servings=1')
+
+    assert b'&lt;0.01 cup' in response.data
+
+
+@pytest.mark.parametrize('servings', ['0', '100', 'abc', '2.5'])
+def test_recipe_detail_rejects_invalid_serving_counts(users, servings):
+    recipe_id = add_recipe(users, owner_id=2)
+    bob = signed_in(users, 'bob', 'bob recipe password')
+
+    response = bob.get(f'/recipes/{recipe_id}?servings={servings}')
+
+    assert response.status_code == 400
+
+
 def test_house_wide_read_only_account_cannot_edit_or_delete_recipe(users):
     recipe_id = add_recipe(users, owner_id=1)
     with sqlite3.connect(users.config['DATABASE']) as db:

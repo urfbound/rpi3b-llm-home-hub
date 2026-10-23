@@ -2,12 +2,15 @@
 import hashlib
 import hmac
 import os
+import re
 import secrets
 import sqlite3
 import threading
 import time
 from contextlib import closing
 from datetime import date, datetime, timedelta, timezone
+from decimal import Decimal, ROUND_HALF_UP
+from fractions import Fraction
 from functools import wraps
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -28,6 +31,90 @@ SHOPPING_CATEGORIES = (
     'Groceries', 'Gifts', 'Household', 'Health & Personal Care', 'Pets',
     'Home & Garden', 'School & Activities', 'Other',
 )
+RECIPE_SERVING_MIN = 1
+RECIPE_SERVING_MAX = 99
+VULGAR_FRACTIONS = {
+    '¼': Fraction(1, 4), '½': Fraction(1, 2), '¾': Fraction(3, 4),
+    '⅐': Fraction(1, 7), '⅑': Fraction(1, 9), '⅒': Fraction(1, 10),
+    '⅓': Fraction(1, 3), '⅔': Fraction(2, 3), '⅕': Fraction(1, 5),
+    '⅖': Fraction(2, 5), '⅗': Fraction(3, 5), '⅘': Fraction(4, 5),
+    '⅙': Fraction(1, 6), '⅚': Fraction(5, 6), '⅛': Fraction(1, 8),
+    '⅜': Fraction(3, 8), '⅝': Fraction(5, 8), '⅞': Fraction(7, 8),
+}
+QUANTITY_NUMBER = re.compile(
+    r'(?P<mixed_vulgar>\d+\s*[¼½¾⅐⅑⅒⅓⅔⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞])|'
+    r'(?P<mixed>\d+\s+\d+/\d+)|(?P<fraction>\d+/\d+)|'
+    r'(?P<number>\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?)|'
+    r'(?P<vulgar>[¼½¾⅐⅑⅒⅓⅔⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞])'
+)
+
+
+def format_recipe_amount(amount):
+    """Format a scaled fraction as a common cooking fraction or short decimal."""
+    sign = '-' if amount < 0 else ''
+    amount = abs(amount)
+    whole = amount.numerator // amount.denominator
+    remainder = amount - whole
+    if not remainder:
+        return f'{sign}{whole}'
+    common_denominators = (2, 3, 4, 5, 6, 8, 10, 12, 16)
+    candidates = []
+    for denominator in common_denominators:
+        numerator = round(float(remainder * denominator))
+        if numerator:
+            candidate = Fraction(numerator, denominator)
+            candidates.append((abs(candidate - remainder), candidate))
+    if candidates:
+        error, approximation = min(candidates, key=lambda value: value[0])
+        if error <= Fraction(1, 100):
+            if approximation >= 1:
+                whole += 1
+                approximation -= 1
+            if not approximation:
+                return f'{sign}{whole}'
+            fraction_text = f'{approximation.numerator}/{approximation.denominator}'
+            return f'{sign}{whole} {fraction_text}' if whole else f'{sign}{fraction_text}'
+    decimal_value = (Decimal(amount.numerator) / Decimal(amount.denominator)).quantize(
+        Decimal('0.01'), rounding=ROUND_HALF_UP
+    )
+    if decimal_value == 0:
+        return f'{sign}<0.01'
+    return f'{sign}{format(decimal_value, "f").rstrip("0").rstrip(".")}'
+
+
+def scale_recipe_quantity(quantity, default_servings, selected_servings):
+    """Scale numeric parts of a quantity; leave descriptive amounts intact."""
+    if not quantity or selected_servings == default_servings:
+        return quantity, bool(QUANTITY_NUMBER.search(quantity or ''))
+    ratio = Fraction(selected_servings, default_servings)
+    scaled_any = False
+
+    def replace(match):
+        nonlocal scaled_any
+        token = match.group(0)
+        try:
+            if match.group('vulgar'):
+                amount = VULGAR_FRACTIONS[token]
+            elif match.group('mixed_vulgar'):
+                integer = re.match(r'\d+', token).group(0)
+                fraction = token[len(integer):].strip()
+                amount = Fraction(int(integer), 1) + VULGAR_FRACTIONS[fraction]
+            elif match.group('mixed'):
+                integer, fraction = token.split()
+                numerator, denominator = fraction.split('/')
+                amount = Fraction(int(integer), 1) + Fraction(int(numerator), int(denominator))
+            elif match.group('fraction'):
+                numerator, denominator = token.split('/')
+                amount = Fraction(int(numerator), int(denominator))
+            else:
+                amount = Fraction(token.replace(',', ''))
+        except (ValueError, ZeroDivisionError):
+            return token
+        scaled_any = True
+        return format_recipe_amount(amount * ratio)
+
+    scaled = QUANTITY_NUMBER.sub(replace, quantity)
+    return scaled, scaled_any
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
  id INTEGER PRIMARY KEY, username TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -1301,10 +1388,30 @@ def create_app(test_config=None):
     def recipe_detail(recipe_id):
         db = get_db()
         recipe = visible_recipe(db, g.user, recipe_id)
-        ingredients = db.execute(
+        raw_servings = request.args.get('servings')
+        if raw_servings is None:
+            selected_servings = recipe['default_servings']
+        elif not re.fullmatch(r'[0-9]+', raw_servings):
+            abort(400, description='Servings must be a whole number from 1 to 99.')
+        else:
+            selected_servings = int(raw_servings)
+            if not RECIPE_SERVING_MIN <= selected_servings <= RECIPE_SERVING_MAX:
+                abort(400, description='Servings must be a whole number from 1 to 99.')
+        ingredient_rows = db.execute(
             'SELECT quantity,unit,name,note FROM recipe_ingredients WHERE recipe_id=? ORDER BY position',
             (recipe_id,)
         ).fetchall()
+        ingredients = []
+        has_unscaled_quantities = False
+        for row in ingredient_rows:
+            ingredient = dict(row)
+            ingredient['scaled_quantity'], scalable = scale_recipe_quantity(
+                row['quantity'], recipe['default_servings'], selected_servings
+            )
+            if (selected_servings != recipe['default_servings'] and row['quantity']
+                    and not scalable):
+                has_unscaled_quantities = True
+            ingredients.append(ingredient)
         steps = db.execute(
             'SELECT text FROM recipe_steps WHERE recipe_id=? ORDER BY position', (recipe_id,)
         ).fetchall()
@@ -1317,6 +1424,8 @@ def create_app(test_config=None):
             (recipe_id,)
         ).fetchall()
         return render_template('recipe.html', recipe=recipe, ingredients=ingredients,
+                               selected_servings=selected_servings,
+                               has_unscaled_quantities=has_unscaled_quantities,
                                steps=steps, legacy_ingredients=legacy_ingredients,
                                legacy_steps=legacy_steps,
                                notes=notes,
