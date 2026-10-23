@@ -73,19 +73,14 @@
           {% for day in week %}
           <td{% if day and day['is_today'] %} class="calendar-today-cell"{% endif %}>
             {% if day %}<time datetime="{{ day['date'] }}">{{ day['day'] }}</time>
-              {% for event in day['events'] %}<a class="calendar-event" href="#calendar">{{ event['title'] }}</a>{% endfor %}
+              {% for event in day['events'] %}<a class="calendar-event" href="{{ url_for('event_detail', event_id=event['id']) }}">{{ event['title'] }}{% if not event['all_day'] and event['display_start_time'] %}<small>{{ event['display_start_time'] }}</small>{% endif %}</a>{% endfor %}
             {% endif %}
           </td>
           {% endfor %}
         </tr>{% endfor %}
       </tbody>
     </table>
-    <form method="post" action="{{ url_for('add_event') }}">
-      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
-      <label>Date<input type="date" name="event_date" value="{{ today }}" required></label>
-      <label>Event<input name="title" placeholder="An event or dinner plan" required maxlength="160"></label>
-      <button class="primary">Add event</button>
-    </form>
+    {% if current_user['account_kind'] != 'house' %}<p><a class="button primary" href="{{ url_for('new_event') }}">Add event</a></p>{% endif %}
     <a href="{{ url_for('export_calendar') }}">Download calendar (.ics)</a>
   </section>
 
