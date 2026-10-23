@@ -41,6 +41,50 @@ VULGAR_FRACTIONS = {
     '⅙': Fraction(1, 6), '⅚': Fraction(5, 6), '⅛': Fraction(1, 8),
     '⅜': Fraction(3, 8), '⅝': Fraction(5, 8), '⅞': Fraction(7, 8),
 }
+RECIPE_UNIT_FACTORS = {
+    # Values are expressed in teaspoons for volume, grams for weight, and
+    # individual items for count. A group can only combine within one family.
+    'tsp': ('volume', Fraction(1), 'tsp'),
+    'teaspoon': ('volume', Fraction(1), 'tsp'),
+    'teaspoons': ('volume', Fraction(1), 'tsp'),
+    'tbsp': ('volume', Fraction(3), 'tbsp'),
+    'tablespoon': ('volume', Fraction(3), 'tbsp'),
+    'tablespoons': ('volume', Fraction(3), 'tbsp'),
+    'cup': ('volume', Fraction(48), 'cup'),
+    'cups': ('volume', Fraction(48), 'cup'),
+    'fl oz': ('volume', Fraction(6), 'fl oz'),
+    'fluid ounce': ('volume', Fraction(6), 'fl oz'),
+    'fluid ounces': ('volume', Fraction(6), 'fl oz'),
+    'pint': ('volume', Fraction(96), 'pint'),
+    'pints': ('volume', Fraction(96), 'pint'),
+    'quart': ('volume', Fraction(192), 'quart'),
+    'quarts': ('volume', Fraction(192), 'quart'),
+    'gallon': ('volume', Fraction(768), 'gallon'),
+    'gallons': ('volume', Fraction(768), 'gallon'),
+    'ml': ('volume', Fraction(50721, 250), 'ml'),
+    'milliliter': ('volume', Fraction(50721, 250), 'ml'),
+    'milliliters': ('volume', Fraction(50721, 250), 'ml'),
+    'l': ('volume', Fraction(202884, 250), 'l'),
+    'liter': ('volume', Fraction(202884, 250), 'l'),
+    'liters': ('volume', Fraction(202884, 250), 'l'),
+    'g': ('weight', Fraction(1), 'g'),
+    'gram': ('weight', Fraction(1), 'g'),
+    'grams': ('weight', Fraction(1), 'g'),
+    'kg': ('weight', Fraction(1000), 'kg'),
+    'kilogram': ('weight', Fraction(1000), 'kg'),
+    'kilograms': ('weight', Fraction(1000), 'kg'),
+    'oz': ('weight', Fraction(56699, 2000), 'oz'),
+    'ounce': ('weight', Fraction(56699, 2000), 'oz'),
+    'ounces': ('weight', Fraction(56699, 2000), 'oz'),
+    'lb': ('weight', Fraction(45359237, 100000), 'lb'),
+    'lbs': ('weight', Fraction(45359237, 100000), 'lb'),
+    'pound': ('weight', Fraction(45359237, 100000), 'lb'),
+    'pounds': ('weight', Fraction(45359237, 100000), 'lb'),
+    'each': ('count', Fraction(1), 'each'),
+    'ea': ('count', Fraction(1), 'each'),
+    'item': ('count', Fraction(1), 'each'),
+    'items': ('count', Fraction(1), 'each'),
+}
 QUANTITY_NUMBER = re.compile(
     r'(?P<mixed_vulgar>\d+\s*[¼½¾⅐⅑⅒⅓⅔⅕⅖⅗⅘⅙⅚⅛⅜⅝⅞])|'
     r'(?P<mixed>\d+\s+\d+/\d+)|(?P<fraction>\d+/\d+)|'
@@ -115,6 +159,89 @@ def scale_recipe_quantity(quantity, default_servings, selected_servings):
 
     scaled = QUANTITY_NUMBER.sub(replace, quantity)
     return scaled, scaled_any
+
+
+def parse_recipe_amount(quantity):
+    """Return a precise numeric amount when the full field is numeric."""
+    token = (quantity or '').strip()
+    match = QUANTITY_NUMBER.fullmatch(token)
+    if not match:
+        return None
+    try:
+        if match.group('vulgar'):
+            return VULGAR_FRACTIONS[token]
+        if match.group('mixed_vulgar'):
+            integer = re.match(r'\d+', token).group(0)
+            fraction = token[len(integer):].strip()
+            return Fraction(int(integer), 1) + VULGAR_FRACTIONS[fraction]
+        if match.group('mixed'):
+            integer, fraction = token.split()
+            numerator, denominator = fraction.split('/')
+            return Fraction(int(integer), 1) + Fraction(int(numerator), int(denominator))
+        if match.group('fraction'):
+            numerator, denominator = token.split('/')
+            return Fraction(int(numerator), int(denominator))
+        return Fraction(token.replace(',', ''))
+    except (ValueError, ZeroDivisionError):
+        return None
+
+
+def recipe_item_snapshots(ingredients, default_servings, selected_servings):
+    """Build immutable list-item text, combining only compatible measures."""
+    rows = []
+    for ingredient in ingredients:
+        quantity, _ = scale_recipe_quantity(
+            ingredient['quantity'], default_servings, selected_servings
+        )
+        rows.append({**dict(ingredient), 'quantity': quantity})
+
+    consumed = set()
+    snapshots = []
+    for index, first in enumerate(rows):
+        if index in consumed:
+            continue
+        amount = parse_recipe_amount(first['quantity'])
+        unit_key = first['unit'].strip().casefold()
+        unit_info = RECIPE_UNIT_FACTORS.get(unit_key)
+        if amount is not None:
+            total = amount * (unit_info[1] if unit_info else 1)
+            for other_index in range(index + 1, len(rows)):
+                other = rows[other_index]
+                other_amount = parse_recipe_amount(other['quantity'])
+                other_unit_key = other['unit'].strip().casefold()
+                other_info = RECIPE_UNIT_FACTORS.get(other_unit_key)
+                same_ingredient = (other['name'].strip().casefold()
+                                   == first['name'].strip().casefold())
+                same_note = other['note'].strip() == first['note'].strip()
+                if not same_ingredient or not same_note or other_amount is None:
+                    continue
+                if unit_info:
+                    if not other_info or other_info[0] != unit_info[0]:
+                        continue
+                    total += other_amount * other_info[1]
+                    consumed.add(other_index)
+                elif other_unit_key == unit_key:
+                    total += other_amount
+                    consumed.add(other_index)
+            if unit_info:
+                total /= unit_info[1]
+                output_unit = unit_info[2]
+            else:
+                output_unit = first['unit'].strip()
+            output_quantity = format_recipe_amount(total)
+        else:
+            output_quantity = first['quantity'].strip()
+            output_unit = first['unit'].strip()
+
+        text = ' '.join(part for part in (
+            output_quantity,
+            output_unit,
+            first['name'].strip(),
+        ) if part)
+        if first['note'].strip():
+            text += f" ({first['note'].strip()})"
+        snapshots.append(text)
+    return snapshots
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS users (
  id INTEGER PRIMARY KEY, username TEXT NOT NULL UNIQUE COLLATE NOCASE,
@@ -1423,8 +1550,10 @@ def create_app(test_config=None):
             'ORDER BY users.display_name COLLATE NOCASE,users.username COLLATE NOCASE',
             (recipe_id,)
         ).fetchall()
+        shopping_lists = visible_lists(db, g.user, 'shopping')
         return render_template('recipe.html', recipe=recipe, ingredients=ingredients,
                                selected_servings=selected_servings,
+                               shopping_lists=shopping_lists,
                                has_unscaled_quantities=has_unscaled_quantities,
                                steps=steps, legacy_ingredients=legacy_ingredients,
                                legacy_steps=legacy_steps,
@@ -1432,6 +1561,44 @@ def create_app(test_config=None):
                                can_edit=recipe['created_by'] == g.user['id'],
                                can_delete=(recipe['created_by'] == g.user['id']
                                            or g.user['role'] == 'admin'))
+
+    @app.post('/recipes/<int:recipe_id>/shopping')
+    @login_required
+    def add_recipe_to_shopping(recipe_id):
+        if g.user['account_kind'] == 'house':
+            abort(403)
+        db = get_db()
+        recipe = visible_recipe(db, g.user, recipe_id)
+        raw_servings = request.form.get('servings', str(recipe['default_servings']))
+        if not re.fullmatch(r'[0-9]+', raw_servings):
+            abort(400, description='Servings must be a whole number from 1 to 99.')
+        servings = int(raw_servings)
+        if not RECIPE_SERVING_MIN <= servings <= RECIPE_SERVING_MAX:
+            abort(400, description='Servings must be a whole number from 1 to 99.')
+        target = visible_list(db, g.user, request.form.get('list_id'))
+        if target['kind'] != 'shopping':
+            abort(404)
+        ingredients = db.execute(
+            'SELECT quantity,unit,name,note FROM recipe_ingredients '
+            'WHERE recipe_id=? ORDER BY position', (recipe_id,)
+        ).fetchall()
+        if ingredients:
+            snapshots = recipe_item_snapshots(
+                ingredients, recipe['default_servings'], servings
+            )
+        else:
+            snapshots = [line.strip() for line in recipe['ingredients'].splitlines()
+                         if line.strip()]
+        if not snapshots or any(len(text) > 240 for text in snapshots):
+            abort(400, description='Recipe ingredients must each fit within 240 characters to copy.')
+        with db:
+            db.executemany(
+                'INSERT INTO shopping_items(text,created_by,list_id,updated_at) '
+                'VALUES(?,?,?,CURRENT_TIMESTAMP)',
+                ((text, g.user['id'], target['id']) for text in snapshots),
+            )
+        flash(f'{len(snapshots)} ingredient items copied to {target["title"]}.')
+        return redirect(url_for('recipe_detail', recipe_id=recipe_id, servings=servings))
 
     @app.route('/recipes/<int:recipe_id>/edit', methods=['GET', 'POST'])
     @login_required
