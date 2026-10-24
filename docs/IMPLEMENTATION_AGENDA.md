@@ -205,8 +205,9 @@ to `main` only after the user approves the completed change.
   Read-only list and calendar tools are implemented behind an admin toggle
   that defaults off. They enforce requester visibility, a 31-day calendar
   window, three tool calls per request, and 100-row/16-KiB result caps. The
-  remaining Chat work is app-plus-model profiling, answer-quality review, and
-  manual browser review of the approved design.
+  Pi resource-budget measurement remains; keep database tools disabled until
+  that measurement passes. App-plus-model profiling, answer-quality review,
+  and manual browser review of the approved design also remain.
   Before enabling Chat for household use, profile Home Hub and the selected
   model together, then verify answer quality.
 - Add a provider interface for possible remote models, off by default. If

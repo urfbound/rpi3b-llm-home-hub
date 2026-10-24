@@ -78,6 +78,7 @@ def test_chat_is_hidden_by_default_and_admin_can_configure_installed_model(app):
     assert f'value="{CHAT_PAIRS_PER_CHAT_DEFAULT}"'.encode() in page.data
     assert b'name="chat_data_tools_enabled" value="1"' in page.data
     assert b'name="chat_data_tools_enabled" value="1" checked' not in page.data
+    assert b'Keep this off until its resource budget is verified on a Raspberry Pi.' in page.data
     response = post(admin, chat_enabled='1', model='qwen2.5:0.5b',
                     max_queue_depth='12', pairs_per_chat='24',
                     chat_data_tools_enabled='1')

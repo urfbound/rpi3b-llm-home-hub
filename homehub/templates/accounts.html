@@ -108,7 +108,7 @@
     {% if chat_models_error %}<p class="muted">{{ chat_models_error }} Ollama must be available on this device to enable Chat.</p>{% endif %}
     <label>Maximum waiting requests<input type="number" name="max_queue_depth" min="{{ limits.CHAT_MAX_QUEUE_DEPTH_MINIMUM }}" max="{{ limits.CHAT_MAX_QUEUE_DEPTH_MAXIMUM }}" value="{{ chat_max_queue_depth }}" required></label>
     <label>Prompt-and-response pairs per chat<input type="number" name="pairs_per_chat" min="{{ limits.CHAT_PAIRS_PER_CHAT_MINIMUM }}" max="{{ limits.CHAT_PAIRS_PER_CHAT_MAXIMUM }}" value="{{ chat_pairs_per_chat }}" required></label>
-    <p class="muted">Chat stays hidden until enabled. Read-only data access is off by default; when enabled, Chat can read only lists and events visible to the requesting user. Each request is limited to 3 tool calls, 100 rows and 16 KiB per result. No data can be changed through Chat. Only local Ollama models are selectable; the model service remains on loopback. Remote providers are not enabled.</p>
+    <p class="muted">Chat stays hidden until enabled. Read-only data access is off by default; when enabled, Chat can read only lists and events visible to the requesting user. Each request is limited to 3 tool calls, 100 rows and 16 KiB per result. Keep this off until its resource budget is verified on a Raspberry Pi. No data can be changed through Chat. Only local Ollama models are selectable; the model service remains on loopback. Remote providers are not enabled.</p>
     <p><a href="{{ url_for('admin_chat_history') }}">View and manage all chat histories</a></p>
     <button class="primary">Save Chat settings</button>
   </form>
