@@ -3,6 +3,7 @@ import sqlite3
 
 import pytest
 
+from homehub.constants import WEATHER_FORECAST_DAYS_DEFAULT, WEATHER_FORECAST_DAYS_MAXIMUM
 import homehub.app as app_module
 from homehub.app import PH, create_app
 
@@ -77,7 +78,7 @@ def test_weather_settings_reject_invalid_units_and_forecast_range(app):
         '_csrf': token, 'forecast_days': '0', 'units': 'metric', 'outbound_enabled': '1',
     }).status_code == HTTPStatus.BAD_REQUEST
     assert admin.post('/admin/weather/settings', data={
-        '_csrf': token, 'forecast_days': '16', 'units': 'metric', 'outbound_enabled': '1',
+        '_csrf': token, 'forecast_days': str(WEATHER_FORECAST_DAYS_MAXIMUM + 1), 'units': 'metric', 'outbound_enabled': '1',
     }).status_code == HTTPStatus.BAD_REQUEST
     assert admin.post('/admin/weather/settings', data={
         '_csrf': token, 'forecast_days': '5', 'units': 'kelvin', 'outbound_enabled': '1',
@@ -89,12 +90,12 @@ def test_admin_can_save_units_forecast_length_and_disable_outbound(app):
     admin = sign_in(app, 'admin', 'admin weather password')
 
     response = admin.post('/admin/weather/settings', data={
-        '_csrf': csrf(admin), 'forecast_days': '15', 'units': 'imperial',
+        '_csrf': csrf(admin), 'forecast_days': str(WEATHER_FORECAST_DAYS_MAXIMUM), 'units': 'imperial',
     })
 
     assert response.status_code == HTTPStatus.FOUND
     assert settings(app) == {
-        'weather_forecast_days': '15', 'weather_units': 'imperial',
+        'weather_forecast_days': str(WEATHER_FORECAST_DAYS_MAXIMUM), 'weather_units': 'imperial',
         'weather_outbound_enabled': '0',
     }
 

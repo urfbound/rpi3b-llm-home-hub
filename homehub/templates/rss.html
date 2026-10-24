@@ -14,7 +14,7 @@
   <form method="post" action="{{ url_for('add_rss_feed') }}" class="rss-add-form">
     <input type="hidden" name="_csrf" value="{{ csrf_token }}">
     <input type="hidden" name="scope" value="personal">
-    <label>Feed URL<input type="url" name="feed_url" maxlength="2048" required placeholder="https://example.com/feed.xml"></label>
+    <label>Feed URL<input type="url" name="feed_url" maxlength="{{ limits.RSS_FEED_URL_MAXIMUM }}" required placeholder="https://example.com/feed.xml"></label>
     <button class="primary">Add to my feeds</button>
   </form>
   {% endif %}
@@ -22,11 +22,11 @@
   <form method="post" action="{{ url_for('add_rss_feed') }}" class="rss-add-form">
     <input type="hidden" name="_csrf" value="{{ csrf_token }}">
     <input type="hidden" name="scope" value="household">
-    <label>House-wide feed URL<input type="url" name="feed_url" maxlength="2048" required placeholder="https://example.com/feed.xml"></label>
+    <label>House-wide feed URL<input type="url" name="feed_url" maxlength="{{ limits.RSS_FEED_URL_MAXIMUM }}" required placeholder="https://example.com/feed.xml"></label>
     <label class="rss-lan-approval"><input type="checkbox" name="allow_lan" value="1"> Allow trusted household LAN destination</label>
     <button>Share with household</button>
   </form>
-  <p class="muted">Up to three house-wide feeds. Only admins can remove or reorder them. Allow LAN only for a feed you trust.</p>
+  <p class="muted">Up to {{ limits.HOUSEHOLD_FEEDS_MAXIMUM }} house-wide feeds. Only admins can remove or reorder them. Allow LAN only for a feed you trust.</p>
   {% endif %}
 </section>
 {% endif %}

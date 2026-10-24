@@ -21,6 +21,7 @@ from flask import (Flask, Response, abort, flash, g, has_app_context, jsonify, m
                    render_template, request, send_file, send_from_directory, session, url_for)
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError, VerificationError
+from . import constants as limits
 from .backups import (BackupError, backup_filename, create_backup,
                       default_backup_directory, delete_backup, list_backups,
                       prune_backups, restore_backup, validate_backup_directory)
@@ -35,7 +36,7 @@ from .rss_refresh import (MAX_RSS_STORAGE_BYTES, enforce_rss_user_storage,
                           refresh_due_feeds)
 
 PH = PasswordHasher(memory_cost=16384, time_cost=2, parallelism=1)
-SCHEMA_VERSION = 17
+SCHEMA_VERSION = limits.LATEST_SCHEMA_VERSION
 LOGIN_WINDOW_SECONDS = 15 * 60
 LOGIN_USERNAME_LIMIT = 5
 LOGIN_ADDRESS_LIMIT = 30
@@ -1226,7 +1227,7 @@ def create_app(test_config=None):
     def inject_globals():
         if 'csrf_token' not in session:
             session['csrf_token'] = secrets.token_urlsafe(24)
-        return dict(current_user=g.get('user'), csrf_token=session['csrf_token'])
+        return dict(current_user=g.get('user'), csrf_token=session['csrf_token'], limits=limits)
 
     @app.teardown_appcontext
     def close_db(_err):

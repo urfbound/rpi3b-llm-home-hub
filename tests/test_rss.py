@@ -2,6 +2,7 @@ import socket
 
 import pytest
 
+from homehub.constants import RSS_ARTICLES_MAXIMUM
 from homehub.rss import (
     RSSFeedError, normalize_feed_url, parse_feed, validate_feed_url,
 )
@@ -94,7 +95,7 @@ def test_feed_parser_rejects_invalid_xml_and_caps_article_count():
     with pytest.raises(RSSFeedError):
         parse_feed(b'<not-closed>', 'https://feed.example/rss')
     xml = '<rss><channel><title>Lots</title>' + ''.join(
-        f'<item><title>Story {i}</title></item>' for i in range(150)
+        f'<item><title>Story {i}</title></item>' for i in range(RSS_ARTICLES_MAXIMUM + 50)
     ) + '</channel></rss>'
 
-    assert len(parse_feed(xml.encode(), 'https://feed.example/rss')['articles']) == 100
+    assert len(parse_feed(xml.encode(), 'https://feed.example/rss')['articles']) == RSS_ARTICLES_MAXIMUM

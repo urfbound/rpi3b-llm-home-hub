@@ -4,6 +4,7 @@ import re
 
 import pytest
 
+from homehub.constants import RECIPE_USER_NOTE_MAXIMUM
 from homehub.app import PH, create_app
 
 
@@ -163,13 +164,13 @@ def test_recipe_note_accepts_exactly_128_characters(app):
     bob = sign_in(app, 'bob')
 
     response = bob.post(f'/recipes/{recipe_id}/notes', data={
-        'text': 'x' * 128, '_csrf': csrf(bob),
+        'text': 'x' * RECIPE_USER_NOTE_MAXIMUM, '_csrf': csrf(bob),
     })
 
     assert response.status_code == HTTPStatus.FOUND
     with sqlite3.connect(app.config['DATABASE']) as db:
         assert db.execute('SELECT length(note) FROM recipe_notes WHERE recipe_id=?',
-                          (recipe_id,)).fetchone()[0] == 128
+                          (recipe_id,)).fetchone()[0] == RECIPE_USER_NOTE_MAXIMUM
 
 
 def test_recipe_owner_must_confirm_before_removing_notes_of_revoked_users(app):
