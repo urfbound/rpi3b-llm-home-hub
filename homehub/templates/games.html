@@ -1,0 +1,40 @@
+{% extends 'base.html' %}
+{% block content %}
+<style>
+.games-heading{display:flex;justify-content:space-between;align-items:end;gap:1rem;flex-wrap:wrap}
+.games-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.8rem;margin:1.2rem 0}
+.games-card{padding:1rem;border:1px solid var(--line);border-radius:1rem;background:var(--panel)}
+.games-card h2{margin:.2rem 0}.games-card p{margin:.25rem 0}
+.games-layout{display:grid;grid-template-columns:minmax(0,2fr) minmax(240px,1fr);gap:1rem}
+.games-board{display:grid;grid-template-columns:repeat(5,2.6rem);gap:.35rem;margin:1rem 0}
+.games-tile{display:grid;place-items:center;height:2.6rem;border:1px solid currentColor;border-radius:.3rem;font-weight:bold}
+.games-tile.correct{background:#39734f;color:#fff}.games-tile.present{background:#9b7020;color:#fff}.games-tile.absent{background:#606b64;color:#fff}
+.games-form{display:flex;gap:.5rem;flex-wrap:wrap}.games-form input{width:9rem;text-transform:uppercase;letter-spacing:.14em}
+@media(max-width:750px){.games-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.games-layout{grid-template-columns:1fr}}
+</style>
+<div class="games-heading"><div><p class="eyebrow">Daily puzzles</p><h1>Games</h1><p class="muted">{{ day.isoformat() }} · A little brain break</p></div><span>Six daily puzzles</span></div>
+<section class="games-grid" aria-label="Games">
+{% for id, name, status in games %}<article class="games-card"><h2>{{ name }}</h2><p>{{ status }} · {{ statuses.get(id, 'not started') }}</p><p>{{ name }} streak: {{ streaks[id] }} day{{ '' if streaks[id] == 1 else 's' }}</p>{% if id == 'ladder' %}<a href="{{ url_for('games.ladder_page') }}">Play {{ name }}</a>{% elif id == 'wumpus' %}<a href="{{ url_for('games.wumpus_page') }}">Play {{ name }}</a>{% elif id == 'word' %}<a href="#word-title">Play {{ name }}</a>{% else %}<a href="{{ url_for('games.grid_page', game=id) }}">Play {{ name }}</a>{% endif %}</article>{% endfor %}
+</section>
+<section class="panel"><h2>Yesterday's solutions</h2><p>Past daily answers are available to everyone in the household.</p><ul><li><a href="{{ url_for('games.archive', game='word', day_text=yesterday.isoformat()) }}">Word Garden</a></li><li><a href="{{ url_for('games.archive', game='crossword', day_text=yesterday.isoformat()) }}">Mini Crossword</a></li><li><a href="{{ url_for('games.archive', game='wumpus', day_text=yesterday.isoformat()) }}">Hunt the Wumpus</a></li><li><a href="{{ url_for('games.archive', game='ladder', day_text=yesterday.isoformat()) }}">Word Ladder</a></li><li><a href="{{ url_for('games.archive', game='nonogram', day_text=yesterday.isoformat()) }}">Mini Nonogram</a></li><li><a href="{{ url_for('games.archive', game='sudoku', day_text=yesterday.isoformat()) }}">Mini Sudoku</a></li></ul></section>
+<div class="games-layout"><section class="panel" aria-labelledby="word-title">
+<p class="eyebrow">Daily challenge</p><h2 id="word-title">Word Garden</h2>
+<p>Find the five-letter word in six guesses. Each letter is marked correct, present elsewhere, or absent.</p>
+<p>Your current Word Garden streak: {{ streak }}-day streak.</p>
+{% if attempt and attempt['row']['mode'] == 'practice' %}<p>Practice · unscored</p>{% endif %}
+{% if attempt %}<div class="games-board" aria-label="Your guesses">
+{% for guess, marks in attempt['guesses'] %}{% for letter in guess %}<span class="games-tile {{ marks[loop.index0] }}" aria-label="{{ letter }}: {{ marks[loop.index0] }}">{{ letter }}</span>{% endfor %}{% endfor %}
+</div>{% endif %}
+{% if attempt and attempt['row']['status'] != 'playing' %}
+<p role="status">{% if attempt['row']['status'] == 'won' %}Solved! {{ attempt['row']['points'] }} points{% elif attempt['row']['status'] == 'lost' %}No guesses left{% else %}Attempt expired{% endif %}. Answer: {{ attempt['row']['answer'] }}.</p>
+{% else %}
+<form class="games-form" method="post" action="{% if attempt and attempt['row']['mode'] == 'practice' %}{{ url_for('games.practice_guess', attempt_id=attempt['row']['id']) }}{% else %}{{ url_for('games.daily_guess') }}{% endif %}">
+<input type="hidden" name="_csrf" value="{{ csrf_token }}"><label for="word-guess">Your guess</label><input id="word-guess" name="guess" maxlength="5" minlength="5" pattern="[A-Za-z]{5}" autocomplete="off" required><button class="button primary">Guess</button></form>
+{% endif %}
+<form method="post" action="{{ url_for('games.practice_start') }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><button class="button">Start practice</button></form>
+</section><aside class="panel"><h2>Household scoreboard</h2><p>Today's scores across all six games. The house-wide account can play without ranking.</p>
+{% if scores %}<ol>{% for score in scores %}<li>{{ score['display_name'] }} · {{ score['points'] }} points</li>{% endfor %}</ol>{% else %}<p>No scored wins yet.</p>{% endif %}
+<h3>All-time</h3>{% if all_scores %}<ol>{% for score in all_scores %}<li>{{ score['display_name'] }} · {{ score['points'] }} points</li>{% endfor %}</ol>{% else %}<p>No scored wins yet.</p>{% endif %}
+<p>Daily attempts start with your first guess and expire at household midnight. Practice never affects scores.</p>
+</aside></div>
+{% endblock %}
