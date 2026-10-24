@@ -153,22 +153,20 @@ to `main` only after the user approves the completed change.
   explicit admin approval for a private household feed host. LAN approval does
   not permit loopback or redirects to another private host. Admin-configured
   refresh and outbound-access settings are merged to main.
-- Due feeds are refreshed when a signed-in user visits RSS, using the configured
-  interval; this avoids a continuously running scheduler. This review branch
-  enforces the outbound toggle, stores and displays parsed article caches, keeps
-  cached copies visible when outbound access is off or refresh fails, and
-    cached copies visible when outbound access is off or refresh fails, and
-    expires personal articles after 90 days and household articles after three
-    days (favorites are exempt). Per-user open/read tracking, Done reading choices,
-    manual deletion, the saved prompt preference, up to 32 favorites,
-    favorite-delete confirmation, and the bottom favorites card are implemented
-    on this review branch.
-  - The review branch also enforces a 64 MB per-user article budget, evicting
-    oldest unread articles before oldest read articles while protecting favorites.
-    If favorites alone exceed the budget, ordinary articles are hidden until the
-    user frees space. It retains up to 30 ordinary articles per feed and preserves
-    their source ordering. RSS schema v17 adds this ordering without dropping
-    cached articles or per-user state.
+- Due feeds refresh when a signed-in user visits RSS, using the configured
+  interval and avoiding a continuously running scheduler. The pushed review
+  branch `feature/rss-refresh-execution` enforces the outbound toggle, caches
+  parsed articles, and keeps cached copies visible when outbound access is off
+  or refresh fails. Personal articles expire after 90 days and household
+  articles after three days; favorites are exempt. Per-user open/read tracking,
+  Done reading choices, manual deletion, the saved prompt preference, up to 32
+  favorites, favorite-delete confirmation, and the bottom favorites card are
+  implemented on that branch.
+- The same branch enforces a 64 MB per-user article budget, evicting oldest
+  unread articles before oldest read articles while protecting favorites. It
+  retains up to 30 ordinary articles per feed and preserves source ordering.
+  RSS schema v17 adds this ordering without dropping cached articles or
+  per-user state. The branch is pushed for review and awaits the user's merge.
 
 ### Games
 
