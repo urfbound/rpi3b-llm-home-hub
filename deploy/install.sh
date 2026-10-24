@@ -20,6 +20,7 @@ fi
 readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 for required in "$REPO_ROOT/homehub" "$REPO_ROOT/pyproject.toml" \
+                "$SCRIPT_DIR/venv_permissions.sh" \
                 "$SCRIPT_DIR/homehub.service.example" \
                 "$SCRIPT_DIR/homehub-backup.service.example" \
                 "$SCRIPT_DIR/homehub-backup.timer.example"; do
@@ -28,6 +29,7 @@ for required in "$REPO_ROOT/homehub" "$REPO_ROOT/pyproject.toml" \
     exit 1
   fi
 done
+source "$SCRIPT_DIR/venv_permissions.sh"
 
 python_ok=0
 if command -v python3 >/dev/null 2>&1 \
@@ -70,14 +72,16 @@ if ! sudo test -f "$ENV_FILE"; then
   secret_key="$(python3 -c 'import secrets; print(secrets.token_hex(32))')"
   env_tmp="$(mktemp)"
   trap 'rm -f -- "$env_tmp"' EXIT
-  umask 077
-  cat >"$env_tmp" <<EOF
+  (
+    umask 077
+    cat >"$env_tmp" <<EOF
 HOMEHUB_SECRET_KEY=$secret_key
 HOMEHUB_DB=$DATA_ROOT/homehub.sqlite3
 HOMEHUB_BIND=127.0.0.1
 HOMEHUB_PORT=8080
 HOMEHUB_COOKIE_SECURE=0
 EOF
+  )
   sudo install -o root -g "$SERVICE_USER" -m 0640 "$env_tmp" "$ENV_FILE"
   rm -f -- "$env_tmp"
   trap - EXIT
@@ -115,6 +119,7 @@ if [[ ! -x $INSTALL_ROOT/.venv/bin/python ]]; then
   sudo python3 -m venv "$INSTALL_ROOT/.venv"
 fi
 sudo chown -R root:root "$INSTALL_ROOT/.venv"
+homehub_make_venv_service_accessible "$INSTALL_ROOT/.venv" sudo
 sudo "$INSTALL_ROOT/.venv/bin/python" -m pip install \
   --disable-pip-version-check "$INSTALL_ROOT"
 
