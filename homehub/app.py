@@ -262,6 +262,28 @@ CREATE TABLE IF NOT EXISTS users (
 CREATE TABLE IF NOT EXISTS app_settings (
  key TEXT PRIMARY KEY, value TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS chat_conversations (
+ id INTEGER PRIMARY KEY,
+ owner_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ title TEXT NOT NULL DEFAULT 'New chat' CHECK(length(title)<={limits.LIST_TITLE_MAXIMUM}),
+ is_pinned INTEGER NOT NULL DEFAULT 0 CHECK(is_pinned IN (0,1)),
+ created_at TEXT NOT NULL,
+ updated_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS chat_conversations_owner_recent
+ ON chat_conversations(owner_user_id,updated_at DESC,id DESC);
+CREATE TABLE IF NOT EXISTS chat_pairs (
+ id INTEGER PRIMARY KEY,
+ conversation_id INTEGER NOT NULL REFERENCES chat_conversations(id) ON DELETE CASCADE,
+ position INTEGER NOT NULL CHECK(position>=0),
+ prompt TEXT NOT NULL CHECK(length(prompt)<={limits.CHAT_PROMPT_MAXIMUM}),
+ response TEXT NOT NULL,
+ model TEXT NOT NULL CHECK(length(model)<=128),
+ created_at TEXT NOT NULL,
+ UNIQUE(conversation_id,position)
+);
+CREATE INDEX IF NOT EXISTS chat_pairs_conversation_order
+ ON chat_pairs(conversation_id,position,id);
 CREATE TABLE IF NOT EXISTS login_failures (
  id INTEGER PRIMARY KEY, username_key TEXT NOT NULL, address_key TEXT NOT NULL,
  attempted_at INTEGER NOT NULL
@@ -1170,7 +1192,12 @@ def create_app(test_config=None):
     def inject_globals():
         if 'csrf_token' not in session:
             session['csrf_token'] = secrets.token_urlsafe(24)
-        return dict(current_user=g.get('user'), csrf_token=session['csrf_token'], limits=limits)
+        user = g.get('user')
+        chat_nav_enabled = bool(
+            user and user['account_kind'] != 'house'
+            and setting(get_db(), 'chat_enabled', limits.CHAT_ENABLED_DEFAULT))
+        return dict(current_user=user, csrf_token=session['csrf_token'], limits=limits,
+                    chat_nav_enabled=chat_nav_enabled)
 
     @app.teardown_appcontext
     def close_db(_err):
@@ -1762,6 +1789,128 @@ def create_app(test_config=None):
                  ('chat_pairs_per_chat', str(pairs_per_chat))),
             )
         return redirect(url_for('accounts') + '#chat-settings-section')
+
+    def require_chat_user():
+        if g.user['account_kind'] == 'house':
+            abort(HTTPStatus.FORBIDDEN)
+        if not setting(get_db(), 'chat_enabled', limits.CHAT_ENABLED_DEFAULT):
+            abort(HTTPStatus.NOT_FOUND)
+
+    def load_chat(conversation_id, *, owner_only=False):
+        db = get_db()
+        query = ('SELECT c.*,u.username,u.display_name FROM chat_conversations c '
+                 'JOIN users u ON u.id=c.owner_user_id WHERE c.id=?')
+        params = [conversation_id]
+        if owner_only or g.user['role'] != 'admin':
+            query += ' AND c.owner_user_id=?'
+            params.append(g.user['id'])
+        conversation = db.execute(query, params).fetchone()
+        if conversation is None:
+            abort(HTTPStatus.NOT_FOUND)
+        return conversation
+
+    @app.get('/chat')
+    @login_required
+    def chat_page():
+        require_chat_user()
+        db = get_db()
+        conversations = db.execute(
+            'SELECT id,title,is_pinned,created_at,updated_at FROM chat_conversations '
+            'WHERE owner_user_id=? ORDER BY is_pinned DESC,updated_at DESC,id DESC',
+            (g.user['id'],),
+        ).fetchall()
+        return render_template('chat.html', conversations=conversations,
+                               chat_history_maximum=limits.CHAT_HISTORY_MAXIMUM,
+                               pinned_maximum=limits.CHAT_PINNED_MAXIMUM)
+
+    @app.post('/chat/new')
+    @login_required
+    def create_chat_conversation():
+        require_chat_user()
+        db = get_db()
+        now = datetime.now(timezone.utc).isoformat()
+        with db:
+            conversations = db.execute(
+                'SELECT id,is_pinned FROM chat_conversations WHERE owner_user_id=? '
+                'ORDER BY created_at,id', (g.user['id'],),
+            ).fetchall()
+            if len(conversations) >= limits.CHAT_HISTORY_MAXIMUM:
+                oldest_unpinned = next((chat for chat in conversations if not chat['is_pinned']), None)
+                if oldest_unpinned is None:
+                    abort(HTTPStatus.CONFLICT,
+                          description='Unpin or delete a chat before creating another.')
+                db.execute('DELETE FROM chat_conversations WHERE id=?', (oldest_unpinned['id'],))
+            cursor = db.execute(
+                'INSERT INTO chat_conversations(owner_user_id,title,created_at,updated_at) '
+                "VALUES(?,'New chat',?,?)", (g.user['id'], now, now),
+            )
+            conversation_id = cursor.lastrowid
+        return redirect(url_for('view_chat', conversation_id=conversation_id))
+
+    @app.get('/chat/<int:conversation_id>')
+    @login_required
+    def view_chat(conversation_id):
+        if g.user['account_kind'] == 'house':
+            abort(HTTPStatus.FORBIDDEN)
+        if not setting(get_db(), 'chat_enabled', limits.CHAT_ENABLED_DEFAULT) \
+                and g.user['role'] != 'admin':
+            abort(HTTPStatus.NOT_FOUND)
+        conversation = load_chat(conversation_id)
+        pairs = get_db().execute(
+            'SELECT prompt,response,model,created_at FROM chat_pairs '
+            'WHERE conversation_id=? ORDER BY position,id', (conversation_id,),
+        ).fetchall()
+        return render_template('chat_conversation.html', conversation=conversation,
+                               pairs=pairs)
+
+    @app.post('/chat/<int:conversation_id>/pin')
+    @login_required
+    def toggle_chat_pin(conversation_id):
+        require_chat_user()
+        conversation = load_chat(conversation_id, owner_only=True)
+        db = get_db()
+        with db:
+            pinned = bool(conversation['is_pinned'])
+            if not pinned:
+                count = db.execute(
+                    'SELECT COUNT(*) FROM chat_conversations '
+                    'WHERE owner_user_id=? AND is_pinned=1', (g.user['id'],),
+                ).fetchone()[0]
+                if count >= limits.CHAT_PINNED_MAXIMUM:
+                    abort(HTTPStatus.CONFLICT,
+                          description='Unpin a chat before pinning another.')
+            db.execute('UPDATE chat_conversations SET is_pinned=? WHERE id=?',
+                       (0 if pinned else 1, conversation_id))
+        return redirect(url_for('chat_page'))
+
+    @app.post('/chat/<int:conversation_id>/delete')
+    @login_required
+    def delete_own_chat(conversation_id):
+        require_chat_user()
+        conversation = load_chat(conversation_id, owner_only=True)
+        with get_db():
+            get_db().execute('DELETE FROM chat_conversations WHERE id=?', (conversation['id'],))
+        return redirect(url_for('chat_page'))
+
+    @app.get('/admin/chat/history')
+    @admin_required
+    def admin_chat_history():
+        conversations = get_db().execute(
+            'SELECT c.*,u.username,u.display_name FROM chat_conversations c '
+            'JOIN users u ON u.id=c.owner_user_id '
+            'ORDER BY u.username COLLATE NOCASE,c.updated_at DESC,c.id DESC'
+        ).fetchall()
+        return render_template('admin_chat_history.html', conversations=conversations)
+
+    @app.post('/admin/chat/<int:conversation_id>/delete')
+    @admin_required
+    def admin_delete_chat(conversation_id):
+        with get_db():
+            cursor = get_db().execute(
+                'DELETE FROM chat_conversations WHERE id=?', (conversation_id,))
+        if cursor.rowcount == 0:
+            abort(HTTPStatus.NOT_FOUND)
+        return redirect(url_for('admin_chat_history'))
 
     @app.post('/admin/system-status')
     @admin_required

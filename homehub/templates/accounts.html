@@ -108,6 +108,7 @@
     <label>Maximum waiting requests<input type="number" name="max_queue_depth" min="{{ limits.CHAT_MAX_QUEUE_DEPTH_MINIMUM }}" max="{{ limits.CHAT_MAX_QUEUE_DEPTH_MAXIMUM }}" value="{{ chat_max_queue_depth }}" required></label>
     <label>Prompt-and-response pairs per chat<input type="number" name="pairs_per_chat" min="{{ limits.CHAT_PAIRS_PER_CHAT_MINIMUM }}" max="{{ limits.CHAT_PAIRS_PER_CHAT_MAXIMUM }}" value="{{ chat_pairs_per_chat }}" required></label>
     <p class="muted">Chat stays hidden until enabled. Only local Ollama models are selectable; the model service remains on loopback. Remote providers are not enabled.</p>
+    <p><a href="{{ url_for('admin_chat_history') }}">View and manage all chat histories</a></p>
     <button class="primary">Save Chat settings</button>
   </form>
 </section>

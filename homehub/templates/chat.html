@@ -1,0 +1,17 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="crumb">Home / <strong>Chat</strong></div>
+<div class="page-heading"><div><p class="eyebrow">Private local assistant</p><h1>Your chats</h1><p class="muted">Your conversations are private to you. Admins can view and delete chat histories.</p></div></div>
+<section class="panel chat-history-panel">
+  <div class="section-heading"><div><h2>Conversation history</h2><p class="muted">{{ conversations|length }} of {{ chat_history_maximum }} chats · up to {{ pinned_maximum }} pinned</p></div>
+    <form method="post" action="{{ url_for('create_chat_conversation') }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><button class="primary">New chat</button></form>
+  </div>
+  {% if conversations %}<ul class="chat-list">
+    {% for conversation in conversations %}<li>
+      <a class="chat-list-title" href="{{ url_for('view_chat', conversation_id=conversation.id) }}">{{ conversation.title }}{% if conversation.is_pinned %}<span class="chip amber">Pinned</span>{% endif %}</a>
+      <small>Updated {{ conversation.updated_at }}</small>
+      <div class="chat-list-actions"><form method="post" action="{{ url_for('toggle_chat_pin', conversation_id=conversation.id) }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><button class="quiet">{{ 'Unpin' if conversation.is_pinned else 'Pin' }}</button></form><form method="post" action="{{ url_for('delete_own_chat', conversation_id=conversation.id) }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><button class="quiet">Delete</button></form></div>
+    </li>{% endfor %}
+  </ul>{% else %}<p class="empty-state">Start a private conversation with a new chat.</p>{% endif %}
+</section>
+{% endblock %}

@@ -1,0 +1,9 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="crumb"><a href="{{ url_for('chat_page') }}">Chat</a> / <strong>{{ conversation.title }}</strong></div>
+<div class="page-heading"><div><p class="eyebrow">{% if current_user['id'] == conversation.owner_user_id %}Private conversation{% else %}Admin view · {{ conversation.display_name }}{% endif %}</p><h1>{{ conversation.title }}</h1></div><a class="button" href="{{ url_for('chat_page') }}">Back to chats</a></div>
+<section class="panel chat-conversation-panel" aria-live="polite">
+  {% if pairs %}{% for pair in pairs %}<article class="chat-pair"><p class="chat-prompt">{{ pair.prompt }}</p><p>{{ pair.response }}</p><small>Local model · {{ pair.model }} · {{ pair.created_at }}</small></article>{% endfor %}
+  {% else %}<p class="empty-state">This chat is ready. Message sending will be added in the next Chat implementation slice.</p>{% endif %}
+</section>
+{% endblock %}
