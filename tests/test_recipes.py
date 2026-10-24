@@ -3,6 +3,13 @@ import sqlite3
 
 import pytest
 
+from homehub.constants import (
+    RECIPE_DESCRIPTION_MAXIMUM, RECIPE_INGREDIENT_NAME_MAXIMUM,
+    RECIPE_INGREDIENT_NOTE_MAXIMUM, RECIPE_INGREDIENT_QUANTITY_MAXIMUM,
+    RECIPE_INGREDIENTS_MAXIMUM, RECIPE_INGREDIENT_UNIT_MAXIMUM,
+    RECIPE_MAXIMUM, RECIPE_STEP_TEXT_MAXIMUM, RECIPE_STEPS_MAXIMUM,
+    RECIPE_TITLE_MAXIMUM,
+)
 from homehub.app import PH, create_app
 
 
@@ -108,14 +115,14 @@ def test_recipe_book_limit_is_per_user_and_rejects_129th(client):
     db_path = client.application.config['DATABASE']
     with sqlite3.connect(db_path) as db:
         db.executemany('INSERT INTO recipes(title,created_by) VALUES(?,1)',
-                       [(f'Recipe {n}',) for n in range(128)])
+                       [(f'Recipe {n}',) for n in range(RECIPE_MAXIMUM)])
         db.commit()
 
     response = client.post('/recipes', data=recipe_form(client))
 
     assert response.status_code == HTTPStatus.CONFLICT
     with sqlite3.connect(db_path) as db:
-        assert db.execute('SELECT COUNT(*) FROM recipes WHERE created_by=1').fetchone()[0] == 128
+        assert db.execute('SELECT COUNT(*) FROM recipes WHERE created_by=1').fetchone()[0] == RECIPE_MAXIMUM
 
 
 def test_recipe_create_rejects_missing_or_blank_structured_rows(client):
@@ -133,17 +140,17 @@ def test_recipe_create_rejects_missing_or_blank_structured_rows(client):
 def test_recipe_accepts_all_documented_unicode_field_limits(client):
     sign_in(client)
     data = recipe_form(
-        client, title='🍲' * 32, description='🍲' * 64,
-        ingredient_quantity=['🍲' * 8] * 64,
-        ingredient_unit=['🍲' * 4] * 64,
-        ingredient_name=['🍲' * 32] * 64,
-        ingredient_note=['🍲' * 32] * 64,
-        step=['🍲' * 64] * 64,
+        client, title='🍲' * RECIPE_TITLE_MAXIMUM, description='🍲' * RECIPE_DESCRIPTION_MAXIMUM,
+        ingredient_quantity=['🍲' * RECIPE_INGREDIENT_QUANTITY_MAXIMUM] * RECIPE_INGREDIENTS_MAXIMUM,
+        ingredient_unit=['🍲' * RECIPE_INGREDIENT_UNIT_MAXIMUM] * RECIPE_INGREDIENTS_MAXIMUM,
+        ingredient_name=['🍲' * RECIPE_INGREDIENT_NAME_MAXIMUM] * RECIPE_INGREDIENTS_MAXIMUM,
+        ingredient_note=['🍲' * RECIPE_INGREDIENT_NOTE_MAXIMUM] * RECIPE_INGREDIENTS_MAXIMUM,
+        step=['🍲' * RECIPE_STEP_TEXT_MAXIMUM] * RECIPE_STEPS_MAXIMUM,
     )
 
     response = client.post('/recipes', data=data)
 
     assert response.status_code == HTTPStatus.FOUND
     with sqlite3.connect(client.application.config['DATABASE']) as db:
-        assert db.execute('SELECT COUNT(*) FROM recipe_ingredients').fetchone()[0] == 64
-        assert db.execute('SELECT COUNT(*) FROM recipe_steps').fetchone()[0] == 64
+        assert db.execute('SELECT COUNT(*) FROM recipe_ingredients').fetchone()[0] == RECIPE_INGREDIENTS_MAXIMUM
+        assert db.execute('SELECT COUNT(*) FROM recipe_steps').fetchone()[0] == RECIPE_STEPS_MAXIMUM

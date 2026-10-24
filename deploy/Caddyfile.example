@@ -1,4 +1,5 @@
 homehub.home.arpa {
 	tls internal
+	# Keep this port in sync with homehub.constants.APP_DEFAULT_PORT.
 	reverse_proxy 127.0.0.1:8080
 }

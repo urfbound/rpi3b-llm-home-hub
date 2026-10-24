@@ -4,6 +4,7 @@ import sqlite3
 import time
 from contextlib import closing
 
+from homehub.constants import BACKUP_INTERVAL_DAYS_MAXIMUM, BACKUP_RETENTION_DEFAULT
 from homehub.backup_scheduler import main as backup_main, run_backup_cycle
 from homehub.app import PH, create_app
 
@@ -109,11 +110,12 @@ def test_backup_settings_validate_and_allow_turning_automatic_backups_off(tmp_pa
         settings = dict(db.execute('SELECT key,value FROM app_settings'))
     assert settings['backup_folder'] == str(folder)
     assert settings['backup_interval_days'] == '0'
-    assert settings['backup_retention'] == '14'
+    assert settings['backup_retention'] == str(BACKUP_RETENTION_DEFAULT)
 
     response = client.post('/admin/backups/settings', data={
         '_csrf': token(client), 'backup_folder': str(folder),
-        'backup_frequency': '32', 'backup_retention': '14',
+        'backup_frequency': str(BACKUP_INTERVAL_DAYS_MAXIMUM + 1),
+        'backup_retention': str(BACKUP_RETENTION_DEFAULT),
     })
     assert response.status_code == HTTPStatus.FOUND
     with closing(sqlite3.connect(database)) as db:

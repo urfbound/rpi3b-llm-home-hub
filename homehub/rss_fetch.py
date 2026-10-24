@@ -5,6 +5,7 @@ import http.client
 import socket
 import ssl
 from urllib.parse import urljoin, urlsplit, urlunsplit
+from . import constants as limits
 
 from .rss import (MAX_FEED_BYTES, RSSFeedError, normalize_feed_url,
                   resolve_feed_destination)
@@ -13,8 +14,8 @@ from .rss import (MAX_FEED_BYTES, RSSFeedError, normalize_feed_url,
 REDIRECT_CODES = {HTTPStatus.MOVED_PERMANENTLY, HTTPStatus.FOUND,
                   HTTPStatus.SEE_OTHER, HTTPStatus.TEMPORARY_REDIRECT,
                   HTTPStatus.PERMANENT_REDIRECT}
-MAX_REDIRECTS = 5
-REQUEST_TIMEOUT_SECONDS = 8
+MAX_REDIRECTS = limits.RSS_REDIRECTS_MAXIMUM
+REQUEST_TIMEOUT_SECONDS = limits.RSS_REQUEST_TIMEOUT_SECONDS
 
 
 class _PinnedHTTPConnection(http.client.HTTPConnection):
@@ -53,7 +54,7 @@ class _PinnedHTTPSConnection(http.client.HTTPSConnection):
 
 def _http_request(url, destination, timeout, max_bytes):
     parsed = urlsplit(url)
-    port = parsed.port or (443 if parsed.scheme == 'https' else 80)
+    port = parsed.port or (limits.HTTPS_DEFAULT_PORT if parsed.scheme == 'https' else limits.HTTP_DEFAULT_PORT)
     connection_type = _PinnedHTTPSConnection if parsed.scheme == 'https' else _PinnedHTTPConnection
     connection = connection_type(parsed.hostname, port, destination, timeout)
     path = urlunsplit(('', '', parsed.path or '/', parsed.query, ''))
@@ -91,7 +92,8 @@ def fetch_feed(url, *, resolver=socket.getaddrinfo, requester=_http_request,
     Redirect targets are resolved and checked independently. ``allow_lan`` is
     reserved for feeds explicitly approved by an administrator.
     """
-    if not 0 < timeout <= 30 or not 0 <= max_redirects <= 10:
+    if (not 0 < timeout <= limits.RSS_REQUEST_TIMEOUT_MAXIMUM_SECONDS
+            or not 0 <= max_redirects <= limits.RSS_REDIRECTS_MAXIMUM_ALLOWED):
         raise ValueError('Invalid feed fetch limits.')
     if not 1 <= max_bytes <= MAX_FEED_BYTES:
         raise ValueError('Invalid maximum feed size.')

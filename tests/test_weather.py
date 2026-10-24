@@ -4,6 +4,7 @@ from urllib.parse import parse_qs, urlparse
 
 import pytest
 
+from homehub.constants import WEATHER_FORECAST_DAYS_DEFAULT, WEATHER_FORECAST_DAYS_MAXIMUM
 from homehub.weather import (
     WeatherError, fetch_forecast, format_weather_time, forecast_request_url, geocode_location,
     get_cached_forecast, moon_illumination_percent, pressure_trend, weather_code_label,
@@ -40,7 +41,7 @@ def test_forecast_request_includes_approved_current_hourly_daily_data_and_units(
     assert params['latitude'] == ['47.533']
     assert params['longitude'] == ['-53.55']
     assert params['timezone'] == ['America/St_Johns']
-    assert params['forecast_days'] == ['5']
+    assert params['forecast_days'] == [str(WEATHER_FORECAST_DAYS_DEFAULT)]
     assert params['temperature_unit'] == ['fahrenheit']
     assert params['wind_speed_unit'] == ['mph']
     assert 'pressure_msl' in params['current'][0].split(',')
@@ -48,7 +49,10 @@ def test_forecast_request_includes_approved_current_hourly_daily_data_and_units(
     assert {'moon_phase', 'sunrise', 'sunset', 'precipitation_sum'} <= set(params['daily'][0].split(','))
 
 
-@pytest.mark.parametrize('days,units', [(0, 'metric'), (16, 'metric'), (5, 'kelvin')])
+@pytest.mark.parametrize('days,units', [
+    (0, 'metric'), (WEATHER_FORECAST_DAYS_MAXIMUM + 1, 'metric'),
+    (WEATHER_FORECAST_DAYS_DEFAULT, 'kelvin'),
+])
 def test_forecast_request_rejects_invalid_settings(days, units):
     with pytest.raises(WeatherError):
         forecast_request_url(LOCATION, days, units)

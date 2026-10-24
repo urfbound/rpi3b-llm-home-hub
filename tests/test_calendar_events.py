@@ -3,6 +3,7 @@ import sqlite3
 
 import pytest
 
+from homehub.constants import EVENT_DESCRIPTION_MAXIMUM, LATEST_SCHEMA_VERSION
 from homehub.app import PH, create_app
 
 
@@ -72,7 +73,7 @@ def test_create_all_day_event_and_detail_page_has_description_budget(app):
     assert detail.status_code == HTTPStatus.OK
     assert b'Dinner together' in detail.data
     assert b'Edit event' in detail.data
-    assert b'characters remaining (256 maximum)' in bob.get('/events/1/edit').data
+    assert f'characters remaining ({EVENT_DESCRIPTION_MAXIMUM} maximum)'.encode() in bob.get('/events/1/edit').data
 
 
 def test_create_timed_event_requires_start_and_accepts_optional_later_end(app):
@@ -333,7 +334,7 @@ def test_v7_upgrade_adds_recurrence_columns_without_losing_event(tmp_path):
                 'DATABASE': str(path)})
 
     with sqlite3.connect(path) as db:
-        assert db.execute('PRAGMA user_version').fetchone()[0] == 15
+        assert db.execute('PRAGMA user_version').fetchone()[0] == LATEST_SCHEMA_VERSION
         assert db.execute(
             'SELECT id,title,event_date,series_id,recurrence_frequency,recurrence_until '
             'FROM events'
@@ -449,7 +450,7 @@ def test_v8_upgrade_adds_private_event_access_without_losing_existing_event(tmp_
                 'DATABASE': str(path)})
 
     with sqlite3.connect(path) as db:
-        assert db.execute('PRAGMA user_version').fetchone()[0] == 15
+        assert db.execute('PRAGMA user_version').fetchone()[0] == LATEST_SCHEMA_VERSION
         assert db.execute(
             'SELECT id,title,event_date,visibility FROM events'
         ).fetchone() == (1, 'Dinner', '2026-10-24', 'shared')
@@ -478,10 +479,10 @@ def test_v6_upgrade_preserves_events_and_adds_all_day_defaults(tmp_path):
                 'DATABASE': str(path)})
 
     with sqlite3.connect(path) as db:
-        assert db.execute('PRAGMA user_version').fetchone()[0] == 15
+        assert db.execute('PRAGMA user_version').fetchone()[0] == LATEST_SCHEMA_VERSION
         assert db.execute(
             'SELECT id,title,event_date,description,all_day,start_time,end_time FROM events'
         ).fetchone() == (23, 'Dinner', '2026-10-24', '', 1, None, None)
         assert db.execute('PRAGMA foreign_key_check').fetchall() == []
-    backups = list(tmp_path.glob('v6.pre-v15-*.sqlite3'))
+    backups = list(tmp_path.glob(f'v6.pre-v{str(LATEST_SCHEMA_VERSION)}-*.sqlite3'))
     assert len(backups) == 1
