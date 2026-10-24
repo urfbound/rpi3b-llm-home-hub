@@ -5,13 +5,14 @@ import ipaddress
 import socket
 from urllib.parse import urljoin, urlsplit, urlunsplit
 import xml.etree.ElementTree as ET
+from . import constants as limits
 
 
-MAX_FEED_BYTES = 2 * 1024 * 1024
-MAX_ARTICLES = 100
-DEFAULT_RSS_REFRESH_MINUTES = 30
-MIN_RSS_REFRESH_MINUTES = 10
-MAX_RSS_REFRESH_MINUTES = 240
+MAX_FEED_BYTES = limits.RSS_FEED_BYTES_MAXIMUM
+MAX_ARTICLES = limits.RSS_ARTICLES_MAXIMUM
+DEFAULT_RSS_REFRESH_MINUTES = limits.RSS_REFRESH_DEFAULT_MINUTES
+MIN_RSS_REFRESH_MINUTES = limits.RSS_REFRESH_MINIMUM_MINUTES
+MAX_RSS_REFRESH_MINUTES = limits.RSS_REFRESH_MAXIMUM_MINUTES
 
 
 class RSSFeedError(Exception):
@@ -19,8 +20,8 @@ class RSSFeedError(Exception):
 
 
 def normalize_feed_url(value):
-    if not isinstance(value, str) or len(value) > 2048:
-        raise RSSFeedError('Enter a feed URL no longer than 2048 characters.')
+    if not isinstance(value, str) or len(value) > limits.RSS_FEED_URL_MAXIMUM:
+        raise RSSFeedError(f'Enter a feed URL no longer than {limits.RSS_FEED_URL_MAXIMUM} characters.')
     try:
         parsed = urlsplit(value.strip())
         scheme = parsed.scheme.lower()
@@ -36,7 +37,7 @@ def normalize_feed_url(value):
         raise RSSFeedError('The feed host name is invalid.') from exc
     if ':' in host and not host.startswith('['):
         host = f'[{host}]'
-    default_port = 80 if scheme == 'http' else 443
+    default_port = limits.HTTP_DEFAULT_PORT if scheme == 'http' else limits.HTTPS_DEFAULT_PORT
     netloc = host if port in (None, default_port) else f'{host}:{port}'
     path = parsed.path.rstrip('/')
     return urlunsplit((scheme, netloc, path, parsed.query, ''))
@@ -47,10 +48,10 @@ def resolve_feed_destination(value, *, resolver=socket.getaddrinfo, allow_lan=Fa
     parsed = urlsplit(normalized)
     host = parsed.hostname
     try:
-        port = parsed.port or (443 if parsed.scheme == 'https' else 80)
+        port = parsed.port or (limits.HTTPS_DEFAULT_PORT if parsed.scheme == 'https' else limits.HTTP_DEFAULT_PORT)
     except ValueError as exc:
         raise RSSFeedError('The feed port is invalid.') from exc
-    if port not in (80, 443):
+    if port not in (limits.HTTP_DEFAULT_PORT, limits.HTTPS_DEFAULT_PORT):
         raise RSSFeedError('Feed URLs must use the standard HTTP or HTTPS port.')
     local_suffixes = ('.localhost', '.local', '.lan', '.internal', '.home')
     if host == 'localhost' or (not allow_lan and host.endswith(local_suffixes)):
@@ -191,9 +192,9 @@ def parse_feed(document, feed_url):
         summary = _child_text(entry, {'summary', 'description', 'encoded', 'content'})
         published = _child_text(entry, {'pubdate', 'published', 'updated', 'date'})
         articles.append({
-            'title': _plain_text(article_title)[:512],
+            'title': _plain_text(article_title)[:limits.RSS_ARTICLE_TITLE_MAXIMUM],
             'url': _article_url(entry, feed_url, atom),
-            'summary': _plain_text(summary)[:4000],
-            'published': _plain_text(published)[:128],
+            'summary': _plain_text(summary)[:limits.RSS_ARTICLE_BODY_MAXIMUM],
+            'published': _plain_text(published)[:limits.RSS_ARTICLE_DATE_MAXIMUM],
         })
-    return {'title': _plain_text(title)[:256], 'articles': articles}
+    return {'title': _plain_text(title)[:limits.RSS_FEED_TITLE_MAXIMUM], 'articles': articles}

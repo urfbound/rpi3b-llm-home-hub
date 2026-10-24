@@ -6,6 +6,7 @@ from math import cos, pi
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
+from . import constants as limits
 
 
 GEOCODING_URL = 'https://geocoding-api.open-meteo.com/v1/search'
@@ -243,7 +244,7 @@ def request_json(url, timeout=8):
 
 def geocode_location(query, *, transport=request_json):
     query = str(query or '').strip()
-    if len(query) < 2 or len(query) > 100:
+    if len(query) < 2 or len(query) > limits.LOCATION_QUERY_MAXIMUM:
         raise WeatherError('Enter a town or postcode between 2 and 100 characters.')
     url = GEOCODING_URL + '?' + urlencode({
         'name': query, 'count': 5, 'language': 'en', 'format': 'json',
@@ -258,7 +259,8 @@ def geocode_location(query, *, transport=request_json):
 
 
 def forecast_request_url(location, forecast_days, units):
-    if not isinstance(forecast_days, int) or not 1 <= forecast_days <= 15:
+    if (not isinstance(forecast_days, int)
+            or not limits.WEATHER_FORECAST_DAYS_MINIMUM <= forecast_days <= limits.WEATHER_FORECAST_DAYS_MAXIMUM):
         raise WeatherError('Forecast length must be from 1 to 15 days.')
     unit_settings = {
         'metric': ('celsius', 'kmh', 'mm'),

@@ -21,6 +21,7 @@ from flask import (Flask, Response, abort, flash, g, has_app_context, jsonify, m
                    render_template, request, send_file, send_from_directory, session, url_for)
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError, VerificationError
+from . import constants as limits
 from .backups import (BackupError, backup_filename, create_backup,
                       default_backup_directory, delete_backup, list_backups,
                       prune_backups, restore_backup, validate_backup_directory)
@@ -32,7 +33,7 @@ from .rss import (DEFAULT_RSS_REFRESH_MINUTES, MAX_RSS_REFRESH_MINUTES,
                   MIN_RSS_REFRESH_MINUTES, RSSFeedError, validate_feed_url)
 
 PH = PasswordHasher(memory_cost=16384, time_cost=2, parallelism=1)
-SCHEMA_VERSION = 15
+SCHEMA_VERSION = limits.LATEST_SCHEMA_VERSION
 LOGIN_WINDOW_SECONDS = 15 * 60
 LOGIN_USERNAME_LIMIT = 5
 LOGIN_ADDRESS_LIMIT = 30
@@ -40,8 +41,8 @@ SHOPPING_CATEGORIES = (
     'Groceries', 'Gifts', 'Household', 'Health & Personal Care', 'Pets',
     'Home & Garden', 'School & Activities', 'Other',
 )
-RECIPE_SERVING_MIN = 1
-RECIPE_SERVING_MAX = 99
+RECIPE_SERVING_MIN = limits.RECIPE_SERVING_MINIMUM
+RECIPE_SERVING_MAX = limits.RECIPE_SERVING_MAXIMUM
 VULGAR_FRACTIONS = {
     '¼': Fraction(1, 4), '½': Fraction(1, 2), '¾': Fraction(3, 4),
     '⅐': Fraction(1, 7), '⅑': Fraction(1, 9), '⅒': Fraction(1, 10),
@@ -251,7 +252,7 @@ def recipe_item_snapshots(ingredients, default_servings, selected_servings):
             text += f" ({first['note'].strip()})"
         snapshots.append(text)
     return snapshots
-SCHEMA = """
+SCHEMA = f"""
 CREATE TABLE IF NOT EXISTS users (
  id INTEGER PRIMARY KEY, username TEXT NOT NULL UNIQUE COLLATE NOCASE,
  password_hash TEXT NOT NULL, role TEXT NOT NULL CHECK(role IN ('user','admin')),
@@ -281,19 +282,19 @@ CREATE TABLE IF NOT EXISTS recipe_access (
 CREATE TABLE IF NOT EXISTS recipe_notes (
  id INTEGER PRIMARY KEY, recipe_id INTEGER NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
- note TEXT NOT NULL CHECK(length(trim(note)) BETWEEN 1 AND 128),
+ note TEXT NOT NULL CHECK(length(trim(note)) BETWEEN 1 AND {limits.RECIPE_USER_NOTE_MAXIMUM}),
  updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP, UNIQUE(recipe_id,user_id)
 );
 CREATE TABLE IF NOT EXISTS recipe_ingredients (
  id INTEGER PRIMARY KEY, recipe_id INTEGER NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
- position INTEGER NOT NULL, quantity TEXT NOT NULL DEFAULT '' CHECK(length(quantity)<=32),
- unit TEXT NOT NULL DEFAULT '' CHECK(length(unit)<=16),
- name TEXT NOT NULL CHECK(length(trim(name)) BETWEEN 1 AND 128),
- note TEXT NOT NULL DEFAULT '' CHECK(length(note)<=128), UNIQUE(recipe_id,position)
+ position INTEGER NOT NULL, quantity TEXT NOT NULL DEFAULT '' CHECK(length(quantity)<={limits.RECIPE_INGREDIENT_QUANTITY_MAXIMUM}),
+ unit TEXT NOT NULL DEFAULT '' CHECK(length(unit)<={limits.RECIPE_INGREDIENT_UNIT_MAXIMUM}),
+ name TEXT NOT NULL CHECK(length(trim(name)) BETWEEN 1 AND {limits.RECIPE_INGREDIENT_NAME_MAXIMUM}),
+ note TEXT NOT NULL DEFAULT '' CHECK(length(note)<={limits.RECIPE_INGREDIENT_NOTE_MAXIMUM}), UNIQUE(recipe_id,position)
 );
 CREATE TABLE IF NOT EXISTS recipe_steps (
  id INTEGER PRIMARY KEY, recipe_id INTEGER NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
- position INTEGER NOT NULL, text TEXT NOT NULL CHECK(length(trim(text)) BETWEEN 1 AND 256),
+ position INTEGER NOT NULL, text TEXT NOT NULL CHECK(length(trim(text)) BETWEEN 1 AND {limits.RECIPE_STEP_TEXT_MAXIMUM}),
  UNIQUE(recipe_id,position)
 );
 CREATE INDEX IF NOT EXISTS recipes_owner ON recipes(created_by);
@@ -307,7 +308,7 @@ CREATE TABLE IF NOT EXISTS shopping_items (
 CREATE TABLE IF NOT EXISTS household_lists (
  id INTEGER PRIMARY KEY,
  kind TEXT NOT NULL CHECK(kind IN ('shopping','todo')),
- title TEXT NOT NULL CHECK(length(trim(title)) BETWEEN 1 AND 80),
+ title TEXT NOT NULL CHECK(length(trim(title)) BETWEEN 1 AND {limits.LIST_TITLE_MAXIMUM}),
  category TEXT NOT NULL DEFAULT 'Other',
  visibility TEXT NOT NULL DEFAULT 'shared' CHECK(visibility IN ('shared','private')),
  created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
@@ -355,7 +356,7 @@ CREATE TABLE IF NOT EXISTS calendar_archives (
 CREATE TABLE IF NOT EXISTS calendar_archive_failures (
  year INTEGER PRIMARY KEY,
  attempted_at TEXT NOT NULL,
- error TEXT NOT NULL CHECK(length(error)<=256)
+ error TEXT NOT NULL CHECK(length(error)<={limits.ERROR_TEXT_MAXIMUM})
 );
 CREATE TABLE IF NOT EXISTS weather_cache (
  cache_key TEXT PRIMARY KEY,
@@ -364,8 +365,8 @@ CREATE TABLE IF NOT EXISTS weather_cache (
 );
 CREATE TABLE IF NOT EXISTS rss_feeds (
  id INTEGER PRIMARY KEY,
- normalized_url TEXT NOT NULL UNIQUE CHECK(length(normalized_url)<=2048),
- title TEXT NOT NULL DEFAULT '' CHECK(length(title)<=256),
+ normalized_url TEXT NOT NULL UNIQUE CHECK(length(normalized_url)<={limits.RSS_FEED_URL_MAXIMUM}),
+ title TEXT NOT NULL DEFAULT '' CHECK(length(title)<={limits.RSS_FEED_TITLE_MAXIMUM}),
  scope TEXT NOT NULL CHECK(scope IN ('household','personal')),
  owner_user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
  allow_lan INTEGER NOT NULL DEFAULT 0 CHECK(allow_lan IN (0,1)),
@@ -458,7 +459,7 @@ def household_weather(db):
     if units not in ('metric', 'imperial'):
         units = 'metric'
     result = get_cached_forecast(
-        db, location, setting(db, 'weather_forecast_days', 5), units,
+        db, location, setting(db, 'weather_forecast_days', limits.WEATHER_FORECAST_DAYS_DEFAULT), units,
         bool(setting(db, 'weather_outbound_enabled', 1)), datetime.now(timezone.utc),
     )
     age = result['age_seconds']
@@ -801,7 +802,7 @@ def event_form_values(form):
             raise ValueError
     except ValueError:
         abort(HTTPStatus.BAD_REQUEST, description='Enter a valid event date.')
-    if not title or len(title) > 128 or len(description) > 256:
+    if not title or len(title) > limits.EVENT_TITLE_MAXIMUM or len(description) > limits.EVENT_DESCRIPTION_MAXIMUM:
         abort(HTTPStatus.BAD_REQUEST, description='Event titles are limited to 128 characters and descriptions to 256.')
     all_day = (form.get('all_day') == '1' or
                (form.get('all_day') is None and form.get('start_time') is None
@@ -871,7 +872,7 @@ def recurrence_dates(start_text, frequency, until_text):
         result.append(occurrence.isoformat())
         index += 1
         if index > 3660:
-            abort(HTTPStatus.BAD_REQUEST, description='A recurring series cannot exceed 3,660 occurrences.')
+            abort(HTTPStatus.BAD_REQUEST, description=f'A recurring series cannot exceed {limits.RECURRING_EVENT_OCCURRENCES_MAXIMUM:,} occurrences.')
     return result
 
 def event_access_values(db, form):
@@ -938,9 +939,9 @@ def event_recipe_values(db, user, form, values, existing_recipe_id=None):
     try:
         servings = int(raw_servings) if raw_servings else int(recipe['default_servings'])
     except ValueError:
-        abort(HTTPStatus.BAD_REQUEST, description='Recipe servings must be from 1 to 99.')
-    if not 1 <= servings <= 99:
-        abort(HTTPStatus.BAD_REQUEST, description='Recipe servings must be from 1 to 99.')
+        abort(HTTPStatus.BAD_REQUEST, description=f'Recipe servings must be from {limits.RECIPE_SERVING_MINIMUM} to {limits.RECIPE_SERVING_MAXIMUM}.')
+    if not limits.RECIPE_SERVING_MINIMUM <= servings <= limits.RECIPE_SERVING_MAXIMUM:
+        abort(HTTPStatus.BAD_REQUEST, description=f'Recipe servings must be from {limits.RECIPE_SERVING_MINIMUM} to {limits.RECIPE_SERVING_MAXIMUM}.')
     if auto_title:
         if recipe['visibility'] == 'private':
             values['title'] = 'Meal prep'
@@ -959,8 +960,8 @@ def enforce_event_budget(db, user_id, occurrence_dates, *, exclude_event_id=None
 
     if not occurrence_dates:
         return
-    daily_limit = setting(db, 'calendar_events_per_day', 8)
-    monthly_limit = setting(db, 'calendar_events_per_month', 128)
+    daily_limit = setting(db, 'calendar_events_per_day', limits.EVENTS_PER_DAY_DEFAULT)
+    monthly_limit = setting(db, 'calendar_events_per_month', limits.EVENTS_PER_MONTH_DEFAULT)
     required_days = Counter(occurrence_dates)
     required_months = Counter(day[:7] for day in occurrence_dates)
     first_day, last_day = min(occurrence_dates), max(occurrence_dates)
@@ -1014,20 +1015,23 @@ def recipe_form_values(form):
     names = form.getlist('ingredient_name')
     notes = form.getlist('ingredient_note')
     steps = form.getlist('step')
-    if (not title or len(title) > 128 or len(description) > 256
-            or not 1 <= servings <= 99 or not 1 <= len(names) <= 64
+    if (not title or len(title) > limits.RECIPE_TITLE_MAXIMUM or len(description) > limits.RECIPE_DESCRIPTION_MAXIMUM
+            or not limits.RECIPE_SERVING_MINIMUM <= servings <= limits.RECIPE_SERVING_MAXIMUM
+            or not 1 <= len(names) <= limits.RECIPE_INGREDIENTS_MAXIMUM
             or len(quantities) != len(names) or len(units) != len(names)
-            or len(notes) != len(names) or not 1 <= len(steps) <= 64):
+            or len(notes) != len(names) or not 1 <= len(steps) <= limits.RECIPE_STEPS_MAXIMUM):
         abort(HTTPStatus.BAD_REQUEST)
     ingredients = []
     for quantity, unit, name, note in zip(quantities, units, names, notes):
         ingredient = (quantity.strip(), unit.strip(), name.strip(), note.strip())
-        if (not ingredient[2] or len(ingredient[0]) > 32 or len(ingredient[1]) > 16
-                or len(ingredient[2]) > 128 or len(ingredient[3]) > 128):
+        if (not ingredient[2] or len(ingredient[0]) > limits.RECIPE_INGREDIENT_QUANTITY_MAXIMUM
+                or len(ingredient[1]) > limits.RECIPE_INGREDIENT_UNIT_MAXIMUM
+                or len(ingredient[2]) > limits.RECIPE_INGREDIENT_NAME_MAXIMUM
+                or len(ingredient[3]) > limits.RECIPE_INGREDIENT_NOTE_MAXIMUM):
             abort(HTTPStatus.BAD_REQUEST)
         ingredients.append(ingredient)
     clean_steps = [step.strip() for step in steps]
-    if any(not step or len(step) > 256 for step in clean_steps):
+    if any(not step or len(step) > limits.RECIPE_STEP_TEXT_MAXIMUM for step in clean_steps):
         abort(HTTPStatus.BAD_REQUEST)
     return title, description, servings, ingredients, clean_steps
 
@@ -1095,7 +1099,7 @@ def create_app(test_config=None):
         SESSION_COOKIE_SAMESITE='Lax',
         SESSION_COOKIE_SECURE=os.environ.get('HOMEHUB_COOKIE_SECURE', '').strip().lower()
             in {'1', 'true', 'yes', 'on'},
-        MAX_CONTENT_LENGTH=1024*1024,
+        MAX_CONTENT_LENGTH=limits.REQUEST_BODY_MAXIMUM_BYTES,
     )
     if test_config:
         app.config.update(test_config)
@@ -1138,8 +1142,8 @@ def create_app(test_config=None):
         if uid is not None:
             user = get_db().execute('SELECT * FROM users WHERE id=? AND active=1', (uid,)).fetchone()
             now = int(time.time())
-            idle = setting(get_db(), 'session_idle_hours', 24) * 3600
-            absolute = setting(get_db(), 'session_absolute_days', 7) * 86400
+            idle = setting(get_db(), 'session_idle_hours', limits.SESSION_IDLE_HOURS_DEFAULT) * 3600
+            absolute = setting(get_db(), 'session_absolute_days', limits.SESSION_ABSOLUTE_DAYS_DEFAULT) * 86400
             valid = (user and user['session_version'] == session.get('sv')
                      and now - session.get('last_seen', 0) <= idle
                      and now - session.get('signed_in', 0) <= absolute)
@@ -1164,7 +1168,7 @@ def create_app(test_config=None):
     def inject_globals():
         if 'csrf_token' not in session:
             session['csrf_token'] = secrets.token_urlsafe(24)
-        return dict(current_user=g.get('user'), csrf_token=session['csrf_token'])
+        return dict(current_user=g.get('user'), csrf_token=session['csrf_token'], limits=limits)
 
     @app.teardown_appcontext
     def close_db(_err):
@@ -1189,7 +1193,7 @@ def create_app(test_config=None):
         retention = db.execute(
             "SELECT value FROM app_settings WHERE key='calendar_retention_years'"
         ).fetchone()
-        previous_years = int(retention['value']) if retention else 3
+        previous_years = int(retention['value']) if retention else limits.CALENDAR_RETENTION_YEARS_DEFAULT
         minimum_calendar_year = max(1, today.year - previous_years)
         maximum_calendar_year = today.year + 10
         if (not 1 <= calendar_month <= 12
@@ -1220,7 +1224,7 @@ def create_app(test_config=None):
                         'INSERT INTO calendar_archive_failures(year,attempted_at,error) '
                         'VALUES(?,?,?) ON CONFLICT(year) DO UPDATE SET '
                         'attempted_at=excluded.attempted_at,error=excluded.error',
-                        (expired_year, datetime.now(timezone.utc).isoformat(), str(exc)[:256]),
+                        (expired_year, datetime.now(timezone.utc).isoformat(), str(exc)[:limits.ERROR_TEXT_MAXIMUM]),
                     )
                 flash(f'Calendar year {expired_year} could not be archived; its events remain in the database.')
         calendar_year_options = range(minimum_calendar_year, maximum_calendar_year + 1)
@@ -1465,8 +1469,8 @@ def create_app(test_config=None):
             return redirect(url_for('rss_page'))
         if scope == 'household' and db.execute(
             "SELECT COUNT(*) FROM rss_feeds WHERE scope='household'"
-        ).fetchone()[0] >= 3:
-            flash('You can have up to three house-wide feeds.')
+        ).fetchone()[0] >= limits.HOUSEHOLD_FEEDS_MAXIMUM:
+            flash(f'You can have up to {limits.HOUSEHOLD_FEEDS_MAXIMUM} house-wide feeds.')
             return redirect(url_for('rss_page'))
         from urllib.parse import urlsplit
         title = urlsplit(normalized_url).hostname or normalized_url
@@ -1612,8 +1616,8 @@ def create_app(test_config=None):
             new = request.form.get('new_password', '')
             if not verified:
                 flash('Current password is incorrect.')
-            elif len(new) < 12 or len(new) > 256:
-                flash('Choose a password between 12 and 256 characters.')
+            elif len(new) < limits.PASSWORD_MINIMUM or len(new) > limits.PASSWORD_MAXIMUM:
+                flash(f'Choose a password between {limits.PASSWORD_MINIMUM} and {limits.PASSWORD_MAXIMUM} characters.')
             elif new != request.form.get('confirm_password', ''):
                 flash('The new passwords do not match.')
             else:
@@ -1650,8 +1654,8 @@ def create_app(test_config=None):
         except BackupError:
             backup_folder = configured_folder
             backup_folder_available = False
-        backup_frequency = setting(db, 'backup_interval_days', 1)
-        backup_retention = setting(db, 'backup_retention', 14)
+        backup_frequency = setting(db, 'backup_interval_days', limits.BACKUP_INTERVAL_DAYS_MINIMUM)
+        backup_retention = setting(db, 'backup_retention', limits.BACKUP_RETENTION_DEFAULT)
         backups = list_backups(backup_folder, backup_retention) if backup_folder_available else []
         archive_folder = calendar_archive_directory(db_path)
         calendar_archives = db.execute(
@@ -1666,11 +1670,11 @@ def create_app(test_config=None):
             weather_units = 'metric'
         return render_template('accounts.html', users=users, counts=counts,
                                ownership=ownership,
-                               idle_hours=setting(db, 'session_idle_hours', 24),
-                               absolute_days=setting(db, 'session_absolute_days', 7),
-                               events_per_day=setting(db, 'calendar_events_per_day', 8),
-                               events_per_month=setting(db, 'calendar_events_per_month', 128),
-                               calendar_previous_years=setting(db, 'calendar_retention_years', 3),
+                               idle_hours=setting(db, 'session_idle_hours', limits.SESSION_IDLE_HOURS_DEFAULT),
+                               absolute_days=setting(db, 'session_absolute_days', limits.SESSION_ABSOLUTE_DAYS_DEFAULT),
+                               events_per_day=setting(db, 'calendar_events_per_day', limits.EVENTS_PER_DAY_DEFAULT),
+                               events_per_month=setting(db, 'calendar_events_per_month', limits.EVENTS_PER_MONTH_DEFAULT),
+                               calendar_previous_years=setting(db, 'calendar_retention_years', limits.CALENDAR_RETENTION_YEARS_DEFAULT),
                                calendar_expiry_action=setting_text(
                                    db, 'calendar_expiry_action', 'archive'),
                                calendar_archive_folder=str(archive_folder),
@@ -1683,7 +1687,7 @@ def create_app(test_config=None):
                                backup_retention=backup_retention,
                                backups=backups,
                                weather_location_name=setting_text(db, 'weather_location_name'),
-                               weather_forecast_days=setting(db, 'weather_forecast_days', 5),
+                               weather_forecast_days=setting(db, 'weather_forecast_days', limits.WEATHER_FORECAST_DAYS_DEFAULT),
                                weather_units=weather_units,
                                weather_outbound_enabled=setting(db, 'weather_outbound_enabled', 1),
                                rss_refresh_minutes=setting(
@@ -1722,7 +1726,7 @@ def create_app(test_config=None):
             abort(HTTPStatus.BAD_REQUEST)
         units = request.form.get('units', '')
         outbound_enabled = '1' if request.form.get('outbound_enabled') == '1' else '0'
-        if not 1 <= forecast_days <= 15 or units not in ('metric', 'imperial'):
+        if not limits.WEATHER_FORECAST_DAYS_MINIMUM <= forecast_days <= limits.WEATHER_FORECAST_DAYS_MAXIMUM or units not in ('metric', 'imperial'):
             abort(HTTPStatus.BAD_REQUEST)
         db = get_db()
         with db:
@@ -1833,8 +1837,8 @@ def create_app(test_config=None):
             events_per_month = int(request.form.get('events_per_month', ''))
         except ValueError:
             abort(HTTPStatus.BAD_REQUEST, description='Enter valid daily and monthly event limits.')
-        if events_per_day < 1 or not 7 <= events_per_month <= 512:
-            abort(HTTPStatus.BAD_REQUEST, description='Daily event limit must be at least 1; monthly limit must be from 7 to 512.')
+        if events_per_day < limits.EVENTS_PER_DAY_MINIMUM or not limits.EVENTS_PER_MONTH_MINIMUM <= events_per_month <= limits.EVENTS_PER_MONTH_MAXIMUM:
+            abort(HTTPStatus.BAD_REQUEST, description=f'Daily event limit must be at least 1; monthly limit must be from {limits.EVENTS_PER_MONTH_MINIMUM} to {limits.EVENTS_PER_MONTH_MAXIMUM}.')
         with db:
             db.executemany('INSERT INTO app_settings(key,value) VALUES(?,?) '
                            'ON CONFLICT(key) DO UPDATE SET value=excluded.value',
@@ -1852,9 +1856,9 @@ def create_app(test_config=None):
         except ValueError:
             abort(HTTPStatus.BAD_REQUEST, description='Choose between zero and ten previous years.')
         expiry_action = request.form.get('expiry_action', '')
-        if not 0 <= previous_years <= 10 or expiry_action not in ('archive', 'delete'):
+        if not 0 <= previous_years <= limits.CALENDAR_RETENTION_YEARS_MAXIMUM or expiry_action not in ('archive', 'delete'):
             abort(HTTPStatus.BAD_REQUEST, description='Choose between zero and ten previous years and a valid expiry action.')
-        old_previous_years = setting(db, 'calendar_retention_years', 3)
+        old_previous_years = setting(db, 'calendar_retention_years', limits.CALENDAR_RETENTION_YEARS_DEFAULT)
         today = household_today()
         excluded_start = today.year - old_previous_years
         excluded_end = today.year - previous_years
@@ -1875,7 +1879,7 @@ def create_app(test_config=None):
                             'INSERT INTO calendar_archive_failures(year,attempted_at,error) '
                             'VALUES(?,?,?) ON CONFLICT(year) DO UPDATE SET '
                             'attempted_at=excluded.attempted_at,error=excluded.error',
-                            (year, datetime.now(timezone.utc).isoformat(), str(exc)[:256]),
+                            (year, datetime.now(timezone.utc).isoformat(), str(exc)[:limits.ERROR_TEXT_MAXIMUM]),
                         )
         with db:
             db.executemany(
@@ -1918,14 +1922,14 @@ def create_app(test_config=None):
             frequency = 0 if backups_off else int(
                 request.form.get('backup_frequency', ''))
             retention = int(request.form.get('backup_retention') or
-                            setting(db, 'backup_retention', 14))
+                            setting(db, 'backup_retention', limits.BACKUP_RETENTION_DEFAULT))
             folder = validate_backup_directory(request.form.get('backup_folder', ''))
         except (ValueError, BackupError):
             flash('Enter a writable absolute backup folder, an interval from 1 to 31 days, '
                   'and a retention count from 1 to 365, or turn automatic backups off.')
             return redirect(url_for('accounts'))
-        if ((not backups_off and not 1 <= frequency <= 31)
-                or not 1 <= retention <= 365):
+        if ((not backups_off and not limits.BACKUP_INTERVAL_DAYS_MINIMUM <= frequency <= limits.BACKUP_INTERVAL_DAYS_MAXIMUM)
+                or not limits.BACKUP_RETENTION_MINIMUM <= retention <= limits.BACKUP_RETENTION_MAXIMUM):
             flash('Enter a backup interval from 1 to 31 days and a retention count from 1 to 365.')
             return redirect(url_for('accounts'))
         with db:
@@ -1944,7 +1948,7 @@ def create_app(test_config=None):
         try:
             folder = configured_backup_directory(db)
             path = create_backup(db_path, folder)
-            prune_backups(folder, setting(db, 'backup_retention', 14))
+            prune_backups(folder, setting(db, 'backup_retention', limits.BACKUP_RETENTION_DEFAULT))
         except BackupError as exc:
             flash(str(exc))
         else:
@@ -2005,13 +2009,13 @@ def create_app(test_config=None):
         display_name = request.form.get('display_name', '').strip()
         role = request.form.get('role', 'user')
         kind = request.form.get('account_kind', 'person')
-        if (not 3 <= len(username) <= 32 or not username.replace('_', '').isalnum()
-                or not 1 <= len(display_name) <= 80 or role not in ('user', 'admin')
+        if (not limits.USERNAME_MINIMUM <= len(username) <= limits.USERNAME_MAXIMUM or not username.replace('_', '').isalnum()
+                or not 1 <= len(display_name) <= limits.DISPLAY_NAME_MAXIMUM or role not in ('user', 'admin')
                 or kind not in ('person', 'house') or (kind == 'house' and role != 'user')):
             abort(HTTPStatus.BAD_REQUEST)
-        if db.execute('SELECT COUNT(*) FROM users').fetchone()[0] >= 32:
+        if db.execute('SELECT COUNT(*) FROM users').fetchone()[0] >= limits.USER_MAXIMUM:
             abort(HTTPStatus.CONFLICT, description='The household account limit has been reached.')
-        if role == 'admin' and db.execute("SELECT COUNT(*) FROM users WHERE role='admin'").fetchone()[0] >= 4:
+        if role == 'admin' and db.execute("SELECT COUNT(*) FROM users WHERE role='admin'").fetchone()[0] >= limits.ADMIN_MAXIMUM:
             abort(HTTPStatus.CONFLICT, description='The admin account limit has been reached.')
         if kind == 'house' and db.execute("SELECT COUNT(*) FROM users WHERE account_kind='house'").fetchone()[0]:
             abort(HTTPStatus.CONFLICT, description='A house-wide account already exists.')
@@ -2088,7 +2092,8 @@ def create_app(test_config=None):
             absolute = int(request.form.get('absolute_days', ''))
         except ValueError:
             abort(HTTPStatus.BAD_REQUEST)
-        if not 1 <= idle <= 168 or not 1 <= absolute <= 30:
+        if (not limits.SESSION_IDLE_HOURS_MINIMUM <= idle <= limits.SESSION_IDLE_HOURS_MAXIMUM
+                or not limits.SESSION_ABSOLUTE_DAYS_MINIMUM <= absolute <= limits.SESSION_ABSOLUTE_DAYS_MAXIMUM):
             abort(HTTPStatus.BAD_REQUEST)
         db = get_db()
         with db:
@@ -2108,7 +2113,7 @@ def create_app(test_config=None):
         category = request.form.get('category', 'Other').strip()
         if kind not in ('shopping', 'todo') or visibility not in ('shared', 'private'):
             abort(HTTPStatus.BAD_REQUEST)
-        if not title or len(title) > 80:
+        if not title or len(title) > limits.LIST_TITLE_MAXIMUM:
             abort(HTTPStatus.BAD_REQUEST)
         if kind == 'shopping' and category not in SHOPPING_CATEGORIES:
             abort(HTTPStatus.BAD_REQUEST)
@@ -2153,7 +2158,7 @@ def create_app(test_config=None):
             weekday = int(request.form.get('weekday', ''))
         except ValueError:
             abort(HTTPStatus.BAD_REQUEST)
-        if not 0 <= weekday <= 6 or not text or len(text) > 240:
+        if not 0 <= weekday <= 6 or not text or len(text) > limits.CHORE_TEXT_MAXIMUM:
             abort(HTTPStatus.BAD_REQUEST)
         db = get_db()
         assigned_everyone = assignee.casefold() == 'everyone'
@@ -2221,7 +2226,7 @@ def create_app(test_config=None):
 
     def add_list_item(expected_kind):
         text = request.form.get('text','').strip()
-        if not text or len(text) > 240:
+        if not text or len(text) > limits.LIST_ITEM_TEXT_MAXIMUM:
             abort(HTTPStatus.BAD_REQUEST)
         db = get_db()
         due_date = None
@@ -2293,7 +2298,7 @@ def create_app(test_config=None):
         if target['kind'] != 'todo':
             abort(HTTPStatus.NOT_FOUND)
         text = request.form.get('text', '').strip()
-        if not text or len(text) > 240:
+        if not text or len(text) > limits.LIST_ITEM_TEXT_MAXIMUM:
             abort(HTTPStatus.BAD_REQUEST)
         due_date = request.form.get('due_date', '').strip() or None
         if due_date:
@@ -2423,7 +2428,7 @@ def create_app(test_config=None):
         list_id = payload.get('list_id')
         changes = payload.get('changes')
         if (not isinstance(list_id, int) or isinstance(list_id, bool)
-                or not isinstance(changes, list) or len(changes) > 500):
+                or not isinstance(changes, list) or len(changes) > limits.AWAY_SYNC_CHANGES_MAXIMUM):
             abort(HTTPStatus.BAD_REQUEST)
         target = visible_list(get_db(), g.user, list_id)
         if target['kind'] != 'shopping':
@@ -2438,7 +2443,7 @@ def create_app(test_config=None):
                     or item_id in ids or not isinstance(change.get('done'), bool)
                     or not isinstance(change.get('base_done'), bool)
                     or (base_updated_at is not None and
-                        (not isinstance(base_updated_at, str) or len(base_updated_at) > 64))):
+                        (not isinstance(base_updated_at, str) or len(base_updated_at) > limits.TIMESTAMP_TEXT_MAXIMUM))):
                 abort(HTTPStatus.BAD_REQUEST)
             ids.add(item_id)
 
@@ -2489,8 +2494,8 @@ def create_app(test_config=None):
         visibility, allowed_ids = recipe_sharing_values(db, request.form, g.user['id'])
         count = db.execute('SELECT COUNT(*) FROM recipes WHERE created_by=?',
                            (g.user['id'],)).fetchone()[0]
-        if count >= 128:
-            abort(HTTPStatus.CONFLICT, description='Your recipe book is full (128 recipes).')
+        if count >= limits.RECIPE_MAXIMUM:
+            abort(HTTPStatus.CONFLICT, description=f'Your recipe book is full ({limits.RECIPE_MAXIMUM} recipes).')
         with db:
             cursor = db.execute(
                 'INSERT INTO recipes(title,description,default_servings,created_by,visibility) '
@@ -2582,7 +2587,7 @@ def create_app(test_config=None):
         else:
             snapshots = [line.strip() for line in recipe['ingredients'].splitlines()
                          if line.strip()]
-        if not snapshots or any(len(text) > 240 for text in snapshots):
+        if not snapshots or any(len(text) > limits.LIST_ITEM_TEXT_MAXIMUM for text in snapshots):
             abort(HTTPStatus.BAD_REQUEST, description='Recipe ingredients must each fit within 240 characters to copy.')
         with db:
             db.executemany(
@@ -2652,7 +2657,7 @@ def create_app(test_config=None):
         db = get_db()
         visible_recipe(db, g.user, recipe_id)
         note = request.form.get('text', '').strip()
-        if not note or len(note) > 128:
+        if not note or len(note) > limits.RECIPE_USER_NOTE_MAXIMUM:
             abort(HTTPStatus.BAD_REQUEST)
         with db:
             db.execute(
@@ -2708,9 +2713,9 @@ def create_app(test_config=None):
             servings = (int(request.args.get('servings', recipe['default_servings']))
                         if recipe else None)
         except ValueError:
-            abort(HTTPStatus.BAD_REQUEST, description='Recipe servings must be from 1 to 99.')
-        if servings is not None and not 1 <= servings <= 99:
-            abort(HTTPStatus.BAD_REQUEST, description='Recipe servings must be from 1 to 99.')
+            abort(HTTPStatus.BAD_REQUEST, description=f'Recipe servings must be from {limits.RECIPE_SERVING_MINIMUM} to {limits.RECIPE_SERVING_MAXIMUM}.')
+        if servings is not None and not limits.RECIPE_SERVING_MINIMUM <= servings <= limits.RECIPE_SERVING_MAXIMUM:
+            abort(HTTPStatus.BAD_REQUEST, description=f'Recipe servings must be from {limits.RECIPE_SERVING_MINIMUM} to {limits.RECIPE_SERVING_MAXIMUM}.')
         meal_slot = request.args.get('meal_slot', '')
         if meal_slot not in ('', 'breakfast', 'lunch', 'dinner'):
             abort(HTTPStatus.BAD_REQUEST, description='Choose breakfast, lunch, or dinner.')
@@ -2960,11 +2965,11 @@ def create_app(test_config=None):
         db=sqlite3.connect(db_path)
         username=input('Admin username: ').strip()
         password=getpass.getpass('Admin password (12+ chars): ')
-        if not username or len(password)<12:
+        if not username or len(password)<limits.PASSWORD_MINIMUM:
             raise SystemExit('Username required; password must be at least 12 characters')
-        if db.execute('SELECT COUNT(*) FROM users WHERE active=1').fetchone()[0]>=32:
+        if db.execute('SELECT COUNT(*) FROM users WHERE active=1').fetchone()[0]>=limits.USER_MAXIMUM:
             raise SystemExit('User cap reached')
-        if db.execute("SELECT COUNT(*) FROM users WHERE active=1 AND role='admin'").fetchone()[0]>=4:
+        if db.execute("SELECT COUNT(*) FROM users WHERE active=1 AND role='admin'").fetchone()[0]>=limits.ADMIN_MAXIMUM:
             raise SystemExit('Admin cap reached')
         db.execute('INSERT INTO users(username,display_name,password_hash,role) VALUES(?,?,?,?)',
                    (username, username, PH.hash(password), 'admin'))
@@ -2976,8 +2981,8 @@ def create_app(test_config=None):
 def main():
     from waitress import serve
     app=create_app()
-    host=os.environ.get('HOMEHUB_BIND','127.0.0.1')
-    serve(app,host=host,port=int(os.environ.get('HOMEHUB_PORT','8080')),threads=2)
+    host=os.environ.get('HOMEHUB_BIND', limits.APP_DEFAULT_HOST)
+    serve(app,host=host,port=int(os.environ.get('HOMEHUB_PORT', str(limits.APP_DEFAULT_PORT))),threads=2)
 
 if __name__=='__main__':
     main()

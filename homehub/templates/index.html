@@ -176,7 +176,7 @@
       <form method="post" action="{{ url_for('create_list') }}">
         <input type="hidden" name="_csrf" value="{{ csrf_token }}">
         <input type="hidden" name="kind" value="{{ list_kind }}">
-        <label>List name<input name="title" maxlength="80" required></label>
+        <label>List name<input name="title" maxlength="{{ limits.LIST_TITLE_MAXIMUM }}" required></label>
         {% if list_kind == 'shopping' %}
         <label>Category<select name="category">{% for category in shopping_categories %}<option>{{ category }}</option>{% endfor %}</select></label>
         {% endif %}
@@ -209,7 +209,7 @@
       <form method="post" action="{{ url_for('add_item') if list_kind == 'shopping' else url_for('add_todo_item') }}" class="{{ 'inline' if list_kind == 'shopping' else 'todo-create' }}">
         <input type="hidden" name="_csrf" value="{{ csrf_token }}">
         <input type="hidden" name="list_id" value="{{ selected_list['id'] }}">
-        <input name="text" placeholder="{{ 'What do we need?' if list_kind == 'shopping' else 'Add a task' }}" maxlength="240" required>
+        <input name="text" placeholder="{{ 'What do we need?' if list_kind == 'shopping' else 'Add a task' }}" maxlength="{{ limits.LIST_ITEM_TEXT_MAXIMUM }}" required>
         {% if list_kind == 'todo' %}
         <label>Due date<input type="date" name="due_date"></label>
         <label>Assign to<select name="assignee_id"><option value="">Anyone</option>{% for user in todo_assignees %}<option value="{{ user['id'] }}">{{ user['display_name'] or user['username'] }}</option>{% endfor %}</select></label>
@@ -230,7 +230,7 @@
         <button type="button" onclick="document.getElementById('edit-todo-{{ item['id'] }}').showModal()">Edit task</button>
         <dialog id="edit-todo-{{ item['id'] }}"><form method="post" action="{{ url_for('edit_todo_item', item_id=item['id']) }}" class="dialog-form">
           <input type="hidden" name="_csrf" value="{{ csrf_token }}"><p class="eyebrow">Edit To-do</p><h2>Update task</h2>
-          <label>Task<input name="text" value="{{ item['text'] }}" maxlength="240" required></label>
+          <label>Task<input name="text" value="{{ item['text'] }}" maxlength="{{ limits.LIST_ITEM_TEXT_MAXIMUM }}" required></label>
           <label>Due date<input type="date" name="due_date" value="{{ item['due_date'] or '' }}"></label>
           <label>Assign to<select name="assignee_id"><option value="">Anyone</option>{% for user in todo_assignees %}<option value="{{ user['id'] }}" {% if item['assignee_id'] == user['id'] %}selected{% endif %}>{{ user['display_name'] or user['username'] }}</option>{% endfor %}</select></label>
           <div class="dialog-actions"><button type="button" onclick="this.closest('dialog').close()">Cancel</button><button class="primary">Save task</button></div>
@@ -258,7 +258,7 @@
         <input type="hidden" name="_csrf" value="{{ csrf_token }}">
         <input type="hidden" name="weekday" value="{{ selected_weekday }}">
         <label for="chore-text">Add a chore for {{ weekdays[selected_weekday] }}</label>
-        <input id="chore-text" name="text" maxlength="240" placeholder="Put clothes away" required>
+        <input id="chore-text" name="text" maxlength="{{ limits.CHORE_TEXT_MAXIMUM }}" placeholder="Put clothes away" required>
         <label for="chore-assignee">Assign to</label>
         <select id="chore-assignee" name="assignee">
           <option value="everyone">Everyone</option>
@@ -323,23 +323,23 @@
     <h2>Recipe book</h2>
     <form method="post" action="{{ url_for('add_recipe') }}" class="recipe-create">
       <input type="hidden" name="_csrf" value="{{ csrf_token }}">
-      <label>Name<input name="title" placeholder="Favourite dinner" maxlength="128" required></label>
-      <label>Description<input name="description" maxlength="256"></label>
-      <label>Default servings<input name="default_servings" type="number" min="1" max="99" value="4" required></label>
+      <label>Name<input name="title" placeholder="Favourite dinner" maxlength="{{ limits.RECIPE_TITLE_MAXIMUM }}" required></label>
+      <label>Description<input name="description" maxlength="{{ limits.RECIPE_DESCRIPTION_MAXIMUM }}"></label>
+      <label>Default servings<input name="default_servings" type="number" min="{{ limits.RECIPE_SERVING_MINIMUM }}" max="{{ limits.RECIPE_SERVING_MAXIMUM }}" value="4" required></label>
       <label>Sharing<select name="visibility"><option value="shared">Shared with household</option><option value="private">Private</option></select></label>
       <label>Private recipe viewers<select name="allowed_user_ids" multiple size="3">{% for user in list_users if user['id'] != current_user['id'] %}<option value="{{ user['id'] }}">{{ user['display_name'] or user['username'] }}</option>{% endfor %}</select></label>
       <h3>Ingredients <small>(up to 64)</small></h3>
       <div id="recipe-ingredients">
         <div class="recipe-ingredient-row">
-          <input name="ingredient_quantity" maxlength="32" aria-label="Ingredient quantity" placeholder="Quantity">
-          <input name="ingredient_unit" maxlength="16" aria-label="Ingredient unit" placeholder="Unit">
-          <input name="ingredient_name" maxlength="128" aria-label="Ingredient name" placeholder="Ingredient" required>
-          <input name="ingredient_note" maxlength="128" aria-label="Ingredient note" placeholder="Note">
+          <input name="ingredient_quantity" maxlength="{{ limits.RECIPE_INGREDIENT_QUANTITY_MAXIMUM }}" aria-label="Ingredient quantity" placeholder="Quantity">
+          <input name="ingredient_unit" maxlength="{{ limits.RECIPE_INGREDIENT_UNIT_MAXIMUM }}" aria-label="Ingredient unit" placeholder="Unit">
+          <input name="ingredient_name" maxlength="{{ limits.RECIPE_INGREDIENT_NAME_MAXIMUM }}" aria-label="Ingredient name" placeholder="Ingredient" required>
+          <input name="ingredient_note" maxlength="{{ limits.RECIPE_INGREDIENT_NOTE_MAXIMUM }}" aria-label="Ingredient note" placeholder="Note">
         </div>
       </div>
       <button type="button" id="add-recipe-ingredient">Add ingredient</button>
       <h3>Method <small>(up to 64 steps, 256 characters each)</small></h3>
-      <div id="recipe-steps"><textarea name="step" maxlength="256" aria-label="Method step" required></textarea></div>
+      <div id="recipe-steps"><textarea name="step" maxlength="{{ limits.RECIPE_STEP_TEXT_MAXIMUM }}" aria-label="Method step" required></textarea></div>
       <button type="button" id="add-recipe-step">Add step</button>
       <button class="primary">Save recipe</button>
     </form>
@@ -358,7 +358,7 @@ document.getElementById('add-recipe-ingredient')?.addEventListener('click', () =
   if (ingredientRows.children.length >= 64) return;
   const row = document.createElement('div');
   row.className = 'recipe-ingredient-row';
-  row.innerHTML = '<input name="ingredient_quantity" maxlength="32" aria-label="Ingredient quantity" placeholder="Quantity"><input name="ingredient_unit" maxlength="16" aria-label="Ingredient unit" placeholder="Unit"><input name="ingredient_name" maxlength="128" aria-label="Ingredient name" placeholder="Ingredient" required><input name="ingredient_note" maxlength="128" aria-label="Ingredient note" placeholder="Note"><button type="button" aria-label="Remove ingredient">Remove</button>';
+  row.innerHTML = '<input name="ingredient_quantity" maxlength="{{ limits.RECIPE_INGREDIENT_QUANTITY_MAXIMUM }}" aria-label="Ingredient quantity" placeholder="Quantity"><input name="ingredient_unit" maxlength="{{ limits.RECIPE_INGREDIENT_UNIT_MAXIMUM }}" aria-label="Ingredient unit" placeholder="Unit"><input name="ingredient_name" maxlength="{{ limits.RECIPE_INGREDIENT_NAME_MAXIMUM }}" aria-label="Ingredient name" placeholder="Ingredient" required><input name="ingredient_note" maxlength="{{ limits.RECIPE_INGREDIENT_NOTE_MAXIMUM }}" aria-label="Ingredient note" placeholder="Note"><button type="button" aria-label="Remove ingredient">Remove</button>';
   row.querySelector('button').addEventListener('click', () => row.remove());
   ingredientRows.append(row);
 });
@@ -367,7 +367,7 @@ document.getElementById('add-recipe-step')?.addEventListener('click', () => {
   if (recipeSteps.children.length >= 64) return;
   const row = document.createElement('div');
   row.className = 'recipe-step-row';
-  row.innerHTML = '<textarea name="step" maxlength="256" aria-label="Method step" required></textarea><button type="button" aria-label="Remove step">Remove</button>';
+  row.innerHTML = '<textarea name="step" maxlength="{{ limits.RECIPE_STEP_TEXT_MAXIMUM }}" aria-label="Method step" required></textarea><button type="button" aria-label="Remove step">Remove</button>';
   row.querySelector('button').addEventListener('click', () => row.remove());
   recipeSteps.append(row);
 });

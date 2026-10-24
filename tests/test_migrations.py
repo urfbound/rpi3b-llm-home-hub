@@ -2,6 +2,7 @@ import sqlite3
 
 import pytest
 
+from homehub.constants import LATEST_SCHEMA_VERSION
 from homehub.app import PH, create_app
 
 
@@ -47,7 +48,7 @@ def test_legacy_upgrade_preserves_data_and_creates_backup(tmp_path):
     legacy_database(path)
     create_app(config(path))
     with sqlite3.connect(path) as db:
-        assert db.execute('PRAGMA user_version').fetchone()[0] == 15
+        assert db.execute('PRAGMA user_version').fetchone()[0] == LATEST_SCHEMA_VERSION
         user = db.execute('SELECT id,username,display_name,password_hash FROM users').fetchone()
         assert user[:3] == (7, 'alex', 'alex')
         assert PH.verify(user[3], 'correct horse battery')
@@ -61,28 +62,29 @@ def test_legacy_upgrade_preserves_data_and_creates_backup(tmp_path):
                               'shopping', 'Groceries', 'Groceries', 'shared')
         assert db.execute('SELECT id,recipe_id,created_by FROM events').fetchall() == [(23, 13, 7)]
         assert db.execute('PRAGMA foreign_key_check').fetchall() == []
-    backups = list(tmp_path.glob('hub.pre-v15-*.sqlite3'))
+    backups = list(tmp_path.glob(f'hub.pre-v{str(LATEST_SCHEMA_VERSION)}-*.sqlite3'))
     assert len(backups) == 1
     with sqlite3.connect(backups[0]) as db:
         assert db.execute('PRAGMA integrity_check').fetchone()[0] == 'ok'
         assert db.execute('PRAGMA user_version').fetchone()[0] == 0
         assert db.execute('SELECT title FROM recipes WHERE id=13').fetchone()[0] == 'Soup'
     create_app(config(path))
-    assert list(tmp_path.glob('hub.pre-v15-*.sqlite3')) == backups
+    assert list(tmp_path.glob(f'hub.pre-v{str(LATEST_SCHEMA_VERSION)}-*.sqlite3')) == backups
 
 
 def test_newer_database_is_not_changed(tmp_path):
     path = tmp_path / 'future.sqlite3'
+    future_schema_version = LATEST_SCHEMA_VERSION + 1
     with sqlite3.connect(path) as db:
         db.execute('CREATE TABLE marker (value TEXT)')
         db.execute("INSERT INTO marker VALUES ('keep me')")
-        db.execute('PRAGMA user_version=99')
+        db.execute(f'PRAGMA user_version={future_schema_version}')
     with pytest.raises(RuntimeError, match='newer'):
         create_app(config(path))
     with sqlite3.connect(path) as db:
-        assert db.execute('PRAGMA user_version').fetchone()[0] == 99
+        assert db.execute('PRAGMA user_version').fetchone()[0] == future_schema_version
         assert db.execute('SELECT value FROM marker').fetchone()[0] == 'keep me'
-    assert not list(tmp_path.glob('future.pre-v15-*.sqlite3'))
+    assert not list(tmp_path.glob(f'future.pre-v{str(LATEST_SCHEMA_VERSION)}-*.sqlite3'))
 
 
 def test_failed_upgrade_rolls_back(tmp_path):
@@ -97,7 +99,7 @@ def test_failed_upgrade_rolls_back(tmp_path):
         assert 'display_name' not in [row[1] for row in db.execute('PRAGMA table_info(users)')]
         assert db.execute('SELECT title FROM recipes WHERE id=14').fetchone()[0] == 'Orphan'
         assert db.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='chores'").fetchone() is None
-    assert len(list(tmp_path.glob('broken.pre-v15-*.sqlite3'))) == 1
+    assert len(list(tmp_path.glob(f'broken.pre-v{str(LATEST_SCHEMA_VERSION)}-*.sqlite3'))) == 1
 
 
 def test_version_one_upgrade_adds_login_limiter_without_losing_data(tmp_path):
@@ -112,12 +114,12 @@ def test_version_one_upgrade_adds_login_limiter_without_losing_data(tmp_path):
 
     create_app(config(path))
     with sqlite3.connect(path) as db:
-        assert db.execute('PRAGMA user_version').fetchone()[0] == 15
+        assert db.execute('PRAGMA user_version').fetchone()[0] == LATEST_SCHEMA_VERSION
         assert db.execute('SELECT title FROM recipes').fetchall() == [('Soup',)]
         assert db.execute("SELECT name FROM sqlite_master WHERE type='table' "
                            "AND name='login_failures'").fetchone() == ('login_failures',)
         assert db.execute('PRAGMA foreign_key_check').fetchall() == []
-    backups = list(tmp_path.glob('v1.pre-v15-*.sqlite3'))
+    backups = list(tmp_path.glob(f'v1.pre-v{str(LATEST_SCHEMA_VERSION)}-*.sqlite3'))
     assert len(backups) == 1
     with sqlite3.connect(backups[0]) as db:
         assert db.execute('PRAGMA user_version').fetchone()[0] == 1
@@ -137,12 +139,12 @@ def test_version_two_upgrade_creates_lists_and_links_existing_items(tmp_path):
 
     create_app(config(path))
     with sqlite3.connect(path) as db:
-        assert db.execute('PRAGMA user_version').fetchone()[0] == 15
+        assert db.execute('PRAGMA user_version').fetchone()[0] == LATEST_SCHEMA_VERSION
         list_id = db.execute('SELECT list_id FROM shopping_items WHERE text="Bread"').fetchone()[0]
         assert db.execute('SELECT title,kind FROM household_lists WHERE id=?',
                           (list_id,)).fetchone() == ('Groceries', 'shopping')
         assert db.execute('PRAGMA foreign_key_check').fetchall() == []
-    backups = list(tmp_path.glob('v2.pre-v15-*.sqlite3'))
+    backups = list(tmp_path.glob(f'v2.pre-v{str(LATEST_SCHEMA_VERSION)}-*.sqlite3'))
     assert len(backups) == 1
 
 
@@ -160,13 +162,13 @@ def test_version_three_upgrade_adds_chores_without_losing_list_data(tmp_path):
 
     create_app(config(path))
     with sqlite3.connect(path) as db:
-        assert db.execute('PRAGMA user_version').fetchone()[0] == 15
+        assert db.execute('PRAGMA user_version').fetchone()[0] == LATEST_SCHEMA_VERSION
         tables = {row[0] for row in db.execute(
             "SELECT name FROM sqlite_master WHERE type='table'")}
         assert {'chores', 'chore_completions'} <= tables
         assert db.execute('SELECT text FROM shopping_items').fetchall() == [('Milk',)]
         assert db.execute('PRAGMA foreign_key_check').fetchall() == []
-    backups = list(tmp_path.glob('v3.pre-v15-*.sqlite3'))
+    backups = list(tmp_path.glob(f'v3.pre-v{str(LATEST_SCHEMA_VERSION)}-*.sqlite3'))
     assert len(backups) == 1
     with sqlite3.connect(backups[0]) as db:
         assert db.execute('PRAGMA user_version').fetchone()[0] == 3
@@ -185,14 +187,14 @@ def test_version_four_upgrade_preserves_legacy_recipe_text(tmp_path):
     create_app(config(path))
 
     with sqlite3.connect(path) as db:
-        assert db.execute('PRAGMA user_version').fetchone()[0] == 15
+        assert db.execute('PRAGMA user_version').fetchone()[0] == LATEST_SCHEMA_VERSION
         assert db.execute('SELECT title,ingredients,instructions FROM recipes WHERE id=13').fetchone() == (
             'Soup', '2 cups flour\n1 tsp salt', 'Mix ingredients.\nBake until ready.')
         assert {'recipe_ingredients', 'recipe_steps'} <= {
             row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")
         }
         assert db.execute('PRAGMA foreign_key_check').fetchall() == []
-    backups = list(tmp_path.glob('v4.pre-v15-*.sqlite3'))
+    backups = list(tmp_path.glob(f'v4.pre-v{str(LATEST_SCHEMA_VERSION)}-*.sqlite3'))
     assert len(backups) == 1
     with sqlite3.connect(backups[0]) as db:
         assert db.execute('PRAGMA user_version').fetchone()[0] == 4
@@ -210,14 +212,14 @@ def test_version_five_upgrade_adds_recipe_sharing_without_losing_existing_conten
     create_app(config(path))
 
     with sqlite3.connect(path) as db:
-        assert db.execute('PRAGMA user_version').fetchone()[0] == 15
+        assert db.execute('PRAGMA user_version').fetchone()[0] == LATEST_SCHEMA_VERSION
         assert db.execute('SELECT title,ingredients,instructions,visibility FROM recipes WHERE id=13').fetchone() == (
             'Soup', 'legacy ingredients', 'legacy method', 'shared')
         assert {'recipe_access', 'recipe_notes'} <= {
             row[0] for row in db.execute("SELECT name FROM sqlite_master WHERE type='table'")
         }
         assert db.execute('PRAGMA foreign_key_check').fetchall() == []
-    backups = list(tmp_path.glob('v5.pre-v15-*.sqlite3'))
+    backups = list(tmp_path.glob(f'v5.pre-v{str(LATEST_SCHEMA_VERSION)}-*.sqlite3'))
     assert len(backups) == 1
     with sqlite3.connect(backups[0]) as db:
         assert db.execute('PRAGMA user_version').fetchone()[0] == 5
@@ -236,13 +238,13 @@ def test_v10_upgrade_creates_weather_cache_and_preserves_events(tmp_path):
     create_app(config(path))
 
     with sqlite3.connect(path) as db:
-        assert db.execute('PRAGMA user_version').fetchone()[0] == 15
+        assert db.execute('PRAGMA user_version').fetchone()[0] == LATEST_SCHEMA_VERSION
         assert db.execute('SELECT title FROM events').fetchone() == ('Dinner',)
         assert db.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='weather_cache'"
         ).fetchone() == ('weather_cache',)
         assert db.execute('PRAGMA foreign_key_check').fetchall() == []
-    backups = list(tmp_path.glob('v10.pre-v15-*.sqlite3'))
+    backups = list(tmp_path.glob(f'v10.pre-v{str(LATEST_SCHEMA_VERSION)}-*.sqlite3'))
     assert len(backups) == 1
     with sqlite3.connect(backups[0]) as db:
         assert db.execute('PRAGMA user_version').fetchone()[0] == 10
@@ -261,13 +263,13 @@ def test_v11_upgrade_adds_system_metrics_without_losing_household_data(tmp_path)
     create_app(config(path))
 
     with sqlite3.connect(path) as db:
-        assert db.execute('PRAGMA user_version').fetchone()[0] == 15
+        assert db.execute('PRAGMA user_version').fetchone()[0] == LATEST_SCHEMA_VERSION
         assert db.execute('SELECT title FROM events').fetchone() == ('Dinner',)
         assert db.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='system_metrics'"
         ).fetchone() == ('system_metrics',)
         assert db.execute('PRAGMA foreign_key_check').fetchall() == []
-    backups = list(tmp_path.glob('v11.pre-v15-*.sqlite3'))
+    backups = list(tmp_path.glob(f'v11.pre-v{str(LATEST_SCHEMA_VERSION)}-*.sqlite3'))
     assert len(backups) == 1
     with sqlite3.connect(backups[0]) as db:
         assert db.execute('PRAGMA user_version').fetchone()[0] == 11
@@ -286,13 +288,13 @@ def test_v12_upgrade_adds_rss_feed_registry_and_preserves_household_data(tmp_pat
     create_app(config(path))
 
     with sqlite3.connect(path) as db:
-        assert db.execute('PRAGMA user_version').fetchone()[0] == 15
+        assert db.execute('PRAGMA user_version').fetchone()[0] == LATEST_SCHEMA_VERSION
         assert db.execute('SELECT title FROM events').fetchone() == ('Dinner',)
         assert db.execute(
             "SELECT name FROM sqlite_master WHERE type='table' AND name='rss_feeds'"
         ).fetchone() == ('rss_feeds',)
         assert db.execute('PRAGMA foreign_key_check').fetchall() == []
-    backups = list(tmp_path.glob('v12.pre-v15-*.sqlite3'))
+    backups = list(tmp_path.glob(f'v12.pre-v{str(LATEST_SCHEMA_VERSION)}-*.sqlite3'))
     assert len(backups) == 1
     with sqlite3.connect(backups[0]) as db:
         assert db.execute('PRAGMA user_version').fetchone()[0] == 12
@@ -312,11 +314,11 @@ def test_v13_upgrade_adds_explicit_rss_lan_approval_and_preserves_feed_data(tmp_
     create_app(config(path))
 
     with sqlite3.connect(path) as db:
-        assert db.execute('PRAGMA user_version').fetchone()[0] == 15
+        assert db.execute('PRAGMA user_version').fetchone()[0] == LATEST_SCHEMA_VERSION
         assert db.execute('SELECT normalized_url,allow_lan FROM rss_feeds').fetchone() == (
             'https://example.org/rss', 0)
         assert db.execute('PRAGMA foreign_key_check').fetchall() == []
-    backups = list(tmp_path.glob('v13.pre-v15-*.sqlite3'))
+    backups = list(tmp_path.glob(f'v13.pre-v{str(LATEST_SCHEMA_VERSION)}-*.sqlite3'))
     assert len(backups) == 1
     with sqlite3.connect(backups[0]) as db:
         assert db.execute('PRAGMA user_version').fetchone()[0] == 13
@@ -336,7 +338,7 @@ def test_v14_upgrade_adds_calendar_archive_metadata_without_losing_events(tmp_pa
     create_app(config(path))
 
     with sqlite3.connect(path) as db:
-        assert db.execute('PRAGMA user_version').fetchone()[0] == 15
+        assert db.execute('PRAGMA user_version').fetchone()[0] == LATEST_SCHEMA_VERSION
         assert db.execute('SELECT title,event_date FROM events').fetchone() == (
             'Old dinner', '2024-06-12')
         columns = {row[1] for row in db.execute('PRAGMA table_info(calendar_archives)')}
@@ -345,5 +347,5 @@ def test_v14_upgrade_adds_calendar_archive_metadata_without_losing_events(tmp_pa
                           "AND name='calendar_archive_failures'").fetchone() == (
                               'calendar_archive_failures',)
         assert db.execute('PRAGMA foreign_key_check').fetchall() == []
-    backups = list(tmp_path.glob('v14.pre-v15-*.sqlite3'))
+    backups = list(tmp_path.glob(f'v14.pre-v{str(LATEST_SCHEMA_VERSION)}-*.sqlite3'))
     assert len(backups) == 1

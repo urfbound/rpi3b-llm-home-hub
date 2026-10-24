@@ -3,6 +3,7 @@ import sqlite3
 
 import pytest
 
+from homehub.constants import HOUSEHOLD_FEEDS_MAXIMUM
 import homehub.app as app_module
 from homehub.app import PH, create_app
 from homehub.rss import RSSFeedError
@@ -105,7 +106,7 @@ def test_household_feed_cap_and_private_feed_ownership(app, monkeypatch):
     monkeypatch.setattr(app_module, 'validate_feed_url', lambda url, **_kwargs: url)
     user_ids = ids(app, 'admin', 'reader')
     with sqlite3.connect(app.config['DATABASE']) as db:
-        for n in range(3):
+        for n in range(HOUSEHOLD_FEEDS_MAXIMUM):
             add_feed(db, f'https://house{n}.example/rss', 'House', 'household', None,
                      user_ids['admin'])
         personal_id = add_feed(db, 'https://reader.example/rss', 'Reader', 'personal',
@@ -116,9 +117,9 @@ def test_household_feed_cap_and_private_feed_ownership(app, monkeypatch):
     capped = post(admin, '/rss/feeds', scope='household',
                   feed_url='https://house4.example/rss')
     assert capped.status_code == HTTPStatus.FOUND
-    assert b'up to three house-wide feeds' in admin.get('/rss').data
+    assert f'up to {HOUSEHOLD_FEEDS_MAXIMUM} house-wide feeds'.encode() in admin.get('/rss').data
     with sqlite3.connect(app.config['DATABASE']) as db:
-        assert db.execute("SELECT count(*) FROM rss_feeds WHERE scope='household'").fetchone()[0] == 3
+        assert db.execute("SELECT count(*) FROM rss_feeds WHERE scope='household'").fetchone()[0] == HOUSEHOLD_FEEDS_MAXIMUM
 
     reader = app.test_client()
     sign_in(reader, 'reader', 'reader password')

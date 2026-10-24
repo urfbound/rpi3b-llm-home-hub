@@ -3,6 +3,10 @@ import sqlite3
 
 import pytest
 
+from homehub.constants import (
+    EVENTS_PER_DAY_DEFAULT, EVENTS_PER_MONTH_DEFAULT,
+    EVENTS_PER_MONTH_MAXIMUM, EVENTS_PER_MONTH_MINIMUM,
+)
 from homehub.app import PH, create_app
 
 
@@ -76,10 +80,10 @@ def test_calendar_limit_settings_show_approved_defaults_and_can_be_changed_by_ad
     assert b'name="events_per_day"' in page.data
     assert b'value="8"' in page.data
     assert b'name="events_per_month"' in page.data
-    assert b'value="128"' in page.data
+    assert f'value="{EVENTS_PER_MONTH_DEFAULT}"'.encode() in page.data
 
     saved = admin.post('/admin/calendar/limits', data={
-        '_csrf': csrf(admin), 'events_per_day': '32', 'events_per_month': '512',
+        '_csrf': csrf(admin), 'events_per_day': '32', 'events_per_month': str(EVENTS_PER_MONTH_MAXIMUM),
     })
 
     assert saved.status_code == HTTPStatus.FOUND
@@ -88,12 +92,15 @@ def test_calendar_limit_settings_show_approved_defaults_and_can_be_changed_by_ad
             "SELECT key,value FROM app_settings WHERE key IN "
             "('calendar_events_per_day','calendar_events_per_month') ORDER BY key"
         ).fetchall() == [
-            ('calendar_events_per_day', '32'), ('calendar_events_per_month', '512'),
+            ('calendar_events_per_day', '32'), ('calendar_events_per_month', str(EVENTS_PER_MONTH_MAXIMUM)),
         ]
 
 
 @pytest.mark.parametrize(('daily', 'monthly'), [
-    ('0', '128'), ('8', '6'), ('8', '513'), ('bad', '128'),
+    ('0', str(EVENTS_PER_MONTH_DEFAULT)),
+    ('8', str(EVENTS_PER_MONTH_MINIMUM - 1)),
+    ('8', str(EVENTS_PER_MONTH_MAXIMUM + 1)),
+    ('bad', str(EVENTS_PER_MONTH_DEFAULT)),
 ])
 def test_admin_rejects_calendar_budget_values_outside_configured_ranges(app, daily, monthly):
     admin = signed_in(app, 'alex', 'alex calendar password')
@@ -135,8 +142,8 @@ def test_daily_budget_is_per_creator_and_counts_recurring_occurrences(app):
 
 def test_monthly_budget_counts_occurrences_and_rejects_without_partial_series(app):
     bob = signed_in(app, 'bob', 'bob calendar password')
-    store_limit(app, 'calendar_events_per_day', 128)
-    store_limit(app, 'calendar_events_per_month', 128)
+    store_limit(app, 'calendar_events_per_day', EVENTS_PER_DAY_DEFAULT)
+    store_limit(app, 'calendar_events_per_month', EVENTS_PER_MONTH_DEFAULT)
     with sqlite3.connect(app.config['DATABASE']) as db:
         db.executemany(
             'INSERT INTO events(title,event_date,created_by) VALUES(?,?,2)',
@@ -149,7 +156,7 @@ def test_monthly_budget_counts_occurrences_and_rejects_without_partial_series(ap
 
     assert denied.status_code == HTTPStatus.BAD_REQUEST
     with sqlite3.connect(app.config['DATABASE']) as db:
-        assert db.execute('SELECT COUNT(*) FROM events WHERE created_by=2').fetchone()[0] == 128
+        assert db.execute('SELECT COUNT(*) FROM events WHERE created_by=2').fetchone()[0] == EVENTS_PER_MONTH_DEFAULT
 
 
 def test_daily_budget_is_checked_for_every_date_in_a_recurrence_atomically(app):

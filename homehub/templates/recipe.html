@@ -73,7 +73,7 @@
         <button type="button" class="danger" aria-label="Delete your note" onclick="document.getElementById('delete-note-{{ note['id'] }}').showModal()">X</button>
       </div>
       <form id="edit-note-{{ note['id'] }}" class="recipe-note-editor" method="post" action="{{ url_for('save_recipe_note', recipe_id=recipe['id']) }}" hidden>
-        <input type="hidden" name="_csrf" value="{{ csrf_token }}"><label>Edit your note<textarea name="text" maxlength="128" required>{{ note['note'] }}</textarea></label><button class="primary">Save note</button>
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}"><label>Edit your note<textarea name="text" maxlength="{{ limits.RECIPE_USER_NOTE_MAXIMUM }}" required>{{ note['note'] }}</textarea></label><button class="primary">Save note</button>
       </form>
       <dialog id="delete-note-{{ note['id'] }}"><form method="post" action="{{ url_for('delete_recipe_note', recipe_id=recipe['id'], note_id=note['id']) }}" class="dialog-form">
         <input type="hidden" name="_csrf" value="{{ csrf_token }}"><p class="eyebrow">Remove note</p><h2>Delete your note?</h2><p>Your note on {{ recipe['title'] }} will be removed.</p><div class="dialog-actions"><button type="button" onclick="this.closest('dialog').close()">Keep note</button><button class="danger">Delete note</button></div>
@@ -83,7 +83,7 @@
     {% else %}<p class="muted">No notes yet.</p>{% endfor %}
     {% if current_user['account_kind'] != 'house' and not notes|selectattr('user_id', 'equalto', current_user['id'])|list %}
     <form method="post" action="{{ url_for('save_recipe_note', recipe_id=recipe['id']) }}" class="recipe-note-editor">
-      <input type="hidden" name="_csrf" value="{{ csrf_token }}"><label>Add your note<textarea name="text" maxlength="128" placeholder="A tip for this recipe" required></textarea></label><small>Up to 128 characters.</small><button class="primary">Save note</button>
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}"><label>Add your note<textarea name="text" maxlength="{{ limits.RECIPE_USER_NOTE_MAXIMUM }}" placeholder="A tip for this recipe" required></textarea></label><small>Up to {{ limits.RECIPE_USER_NOTE_MAXIMUM }} characters.</small><button class="primary">Save note</button>
     </form>
     {% endif %}
   </section>
