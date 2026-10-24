@@ -336,6 +336,15 @@ def test_v14_upgrade_adds_rss_refresh_cache_and_preserves_feed_registry(tmp_path
         db.execute('INSERT INTO rss_feeds(normalized_url,title,scope,owner_user_id,created_by) '
                    'VALUES(?,?,?,?,?)',
                    ('https://example.org/feed', 'Example', 'personal', user_id, user_id))
+        
+        
+def test_v14_upgrade_adds_calendar_archive_metadata_without_losing_events(tmp_path):
+    path = tmp_path / 'v14.sqlite3'
+    create_app(config(path))
+    with sqlite3.connect(path) as db:
+        db.execute("INSERT INTO users(username,password_hash,role) VALUES('calendar-admin','hash','admin')")
+        db.execute("INSERT INTO events(title,event_date,created_by) "
+                   "VALUES('Old dinner','2024-06-12',1)")
         db.execute('PRAGMA user_version=14')
 
     create_app(config(path))
@@ -416,4 +425,14 @@ def test_v16_upgrade_adds_rss_feed_position_without_losing_article_state(tmp_pat
         assert db.execute('SELECT is_favourite FROM rss_article_states').fetchone() == (1,)
         assert db.execute('PRAGMA foreign_key_check').fetchall() == []
     backups = list(tmp_path.glob('v16.pre-v17-*.sqlite3'))
+        assert db.execute('PRAGMA user_version').fetchone()[0] == 15
+        assert db.execute('SELECT title,event_date FROM events').fetchone() == (
+            'Old dinner', '2024-06-12')
+        columns = {row[1] for row in db.execute('PRAGMA table_info(calendar_archives)')}
+        assert {'year', 'file_name', 'event_count', 'archived_at', 'size_bytes'} <= columns
+        assert db.execute("SELECT name FROM sqlite_master WHERE type='table' "
+                          "AND name='calendar_archive_failures'").fetchone() == (
+                              'calendar_archive_failures',)
+        assert db.execute('PRAGMA foreign_key_check').fetchall() == []
+    backups = list(tmp_path.glob('v14.pre-v15-*.sqlite3'))
     assert len(backups) == 1
