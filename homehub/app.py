@@ -22,6 +22,7 @@ from flask import (Flask, Response, abort, flash, g, has_app_context, jsonify, m
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError, VerificationError
 from . import constants as limits
+from .chat import ChatProviderError, list_ollama_models
 from .backups import (BackupError, backup_filename, create_backup,
                       default_backup_directory, delete_backup, list_backups,
                       prune_backups, restore_backup, validate_backup_directory)
@@ -1103,6 +1104,7 @@ def create_app(test_config=None):
     )
     if test_config:
         app.config.update(test_config)
+    app.config.setdefault('OLLAMA_BASE_URL', 'http://127.0.0.1:11434')
     if not app.config['SECRET_KEY']:
         raise RuntimeError('Set HOMEHUB_SECRET_KEY to a long, random persistent secret')
     db_path = Path(app.config['DATABASE'])
@@ -1668,6 +1670,15 @@ def create_app(test_config=None):
         weather_units = setting_text(db, 'weather_units', 'metric')
         if weather_units not in ('metric', 'imperial'):
             weather_units = 'metric'
+        try:
+            chat_models = list_ollama_models(app.config['OLLAMA_BASE_URL'])
+            chat_models_error = ''
+        except ChatProviderError as exc:
+            chat_models = []
+            chat_models_error = str(exc)
+        chat_model = setting_text(db, 'chat_model')
+        if chat_model and chat_model not in chat_models:
+            chat_models.insert(0, chat_model)
         return render_template('accounts.html', users=users, counts=counts,
                                ownership=ownership,
                                idle_hours=setting(db, 'session_idle_hours', limits.SESSION_IDLE_HOURS_DEFAULT),
@@ -1700,7 +1711,57 @@ def create_app(test_config=None):
                                system_metrics_visible_to_all=setting(
                                    db, 'system_metrics_visible_to_all', 1),
                                system_metrics_house_account=setting(
-                                   db, 'system_metrics_house_account', 0))
+                                   db, 'system_metrics_house_account', 0),
+                               chat_enabled=setting(
+                                   db, 'chat_enabled', limits.CHAT_ENABLED_DEFAULT),
+                               chat_model=chat_model,
+                               chat_models=chat_models,
+                               chat_models_error=chat_models_error,
+                               chat_max_queue_depth=setting(
+                                   db, 'chat_max_queue_depth',
+                                   limits.CHAT_MAX_QUEUE_DEPTH_DEFAULT),
+                               chat_pairs_per_chat=setting(
+                                   db, 'chat_pairs_per_chat',
+                                   limits.CHAT_PAIRS_PER_CHAT_DEFAULT))
+
+    @app.post('/admin/chat/settings')
+    @admin_required
+    def update_chat_settings():
+        enabled = request.form.get('chat_enabled') == '1'
+        model = request.form.get('model', '').strip()
+        try:
+            max_queue_depth = int(request.form.get('max_queue_depth', ''))
+            pairs_per_chat = int(request.form.get('pairs_per_chat', ''))
+        except ValueError:
+            abort(HTTPStatus.BAD_REQUEST,
+                  description='Enter valid Chat queue and history limits.')
+        if not (limits.CHAT_MAX_QUEUE_DEPTH_MINIMUM <= max_queue_depth
+                <= limits.CHAT_MAX_QUEUE_DEPTH_MAXIMUM):
+            abort(HTTPStatus.BAD_REQUEST, description='Chat queue limit is out of range.')
+        if not (limits.CHAT_PAIRS_PER_CHAT_MINIMUM <= pairs_per_chat
+                <= limits.CHAT_PAIRS_PER_CHAT_MAXIMUM):
+            abort(HTTPStatus.BAD_REQUEST, description='Chat history limit is out of range.')
+        if len(model) > 128:
+            abort(HTTPStatus.BAD_REQUEST, description='Choose a valid installed model.')
+        if enabled:
+            try:
+                installed_models = list_ollama_models(app.config['OLLAMA_BASE_URL'])
+            except ChatProviderError as exc:
+                abort(HTTPStatus.BAD_REQUEST, description=str(exc))
+            if not model or model not in installed_models:
+                abort(HTTPStatus.BAD_REQUEST,
+                      description='Choose a model installed in local Ollama.')
+        db = get_db()
+        with db:
+            db.executemany(
+                'INSERT INTO app_settings(key,value) VALUES(?,?) '
+                'ON CONFLICT(key) DO UPDATE SET value=excluded.value',
+                (('chat_enabled', '1' if enabled else '0'),
+                 ('chat_model', model),
+                 ('chat_max_queue_depth', str(max_queue_depth)),
+                 ('chat_pairs_per_chat', str(pairs_per_chat))),
+            )
+        return redirect(url_for('accounts') + '#chat-settings-section')
 
     @app.post('/admin/system-status')
     @admin_required
