@@ -12,25 +12,18 @@ SUDOKU_SOLUTION = (
     '713924856' '961537284' '287419635' '345286179'
 )
 
-WORD_SQUARES = tuple((f'{letter}AT', 'ARE', 'TEN') for letter in 'BCFHMPRSTV') + tuple(
-    (f'{letter}AD', 'ARE', 'DEN') for letter in 'BDHLMPRSTW') + tuple(
-    (f'{letter}AP', 'ARE', 'PEN') for letter in 'CGLMNPRSTY')
+CROSSWORD_TOPS = tuple(f'{letter}AT' for letter in 'BCFHMPRSTV')
+CROSSWORD_BOTTOMS = (('ERE', 'TEN'), ('ERA', 'TAN'), ('EGO', 'TOW'))
 
 CLUES = {
     'ARE': 'Present tense of be', 'TEN': 'Two hands of fingers',
-    'DEN': 'A sheltered animal home', 'PEN': 'A writing tool',
+    'TENET': 'A guiding principle', 'ERE': 'Before, in verse',
+    'ERA': 'A distinct period of time', 'TAN': 'Light brown shade',
+    'EGO': 'Sense of self', 'TOW': 'Pull behind a vehicle',
     'BAT': 'Flying mammal', 'CAT': 'Purring pet', 'FAT': 'Opposite of lean',
     'HAT': 'Headwear', 'MAT': 'Small floor covering', 'PAT': 'Gentle tap',
     'RAT': 'Long-tailed rodent', 'SAT': 'Past tense of sit',
     'TAT': 'Small piece of lace', 'VAT': 'Large liquid container',
-    'BAD': 'Opposite of good', 'DAD': 'Father', 'HAD': 'Possessed in the past',
-    'LAD': 'Young boy', 'MAD': 'Very angry', 'PAD': 'Writing tablet',
-    'RAD': 'Informal word for excellent', 'SAD': 'Unhappy',
-    'TAD': 'A small amount', 'WAD': 'A compact bundle',
-    'CAP': 'A brimmed head covering', 'GAP': 'An opening',
-    'LAP': 'One circuit of a track', 'MAP': 'Drawing of a place',
-    'NAP': 'Short sleep', 'PAP': 'Soft food', 'RAP': 'Knock sharply',
-    'SAP': 'Tree fluid', 'TAP': 'Light knock', 'YAP': 'Bark sharply',
 }
 
 NONOGRAM_ART = tuple('#' * (row + 1) + '.' * (7 - row) for row in range(8))
@@ -74,14 +67,17 @@ def _sudoku(day):
 
 
 def _crossword(day):
-    rows = WORD_SQUARES[day.toordinal() % len(WORD_SQUARES)]
-    answer = '#####' + ''.join('#' + row + '#' for row in rows) + '#####'
+    index = day.toordinal() % 30
+    top = CROSSWORD_TOPS[index % 10]
+    lower, bottom = CROSSWORD_BOTTOMS[index // 10]
+    rows = (top, 'ARE', 'TENET', lower, bottom)
+    answer = top + '##' + 'ARE' + '##' + 'TENET' + '##' + lower + '##' + bottom
     initial = ''.join('#' if char == '#' else '.' for char in answer)
     clues = tuple((direction, number, CLUES[word])
                   for direction in ('Across', 'Down')
                   for number, word in enumerate(rows, start=1))
     return {'game': 'crossword', 'title': 'Mini Crossword', 'size': 5,
-            'initial': initial, 'answer': answer, 'first_open': 6,
+            'initial': initial, 'answer': answer, 'first_open': 0,
             'difficulty': '', 'clues': clues}
 
 

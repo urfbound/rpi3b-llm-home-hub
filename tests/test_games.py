@@ -97,6 +97,18 @@ def test_repeated_letters_use_answer_counts():
     assert mark_guess('ALLEY', 'APPLE') == ('correct', 'present', 'absent', 'present', 'absent')
 
 
+def test_word_garden_accepts_common_offline_guesses(game_app):
+    from homehub.games import VALID_WORDS
+    assert len(VALID_WORDS) >= 100
+    assert all(len(word) == 5 and word.isalpha() and word.isupper()
+               for word in VALID_WORDS)
+    alex = sign_in(game_app, 'alex')
+    for guess in ('ABOUT', 'AGAIN', 'BRAIN', 'SMILE'):
+        assert alex.post('/games/word/guess', data={
+            '_csrf': token_for(alex), 'guess': guess
+        }).status_code == 302
+
+
 def test_practice_never_changes_daily_score(game_app):
     from homehub.games import daily_answer
     alex = sign_in(game_app, 'alex')
@@ -198,6 +210,15 @@ def test_grid_games_have_thirty_distinct_daily_puzzles(game):
                for offset in range(30)]
     assert len({puzzle['answer'] for puzzle in puzzles}) == 30
     assert all(puzzle['answer'] != puzzle['initial'] for puzzle in puzzles)
+    if game == 'crossword':
+        assert all(sum(cell != '#' for cell in puzzle['answer']) >= 17 for puzzle in puzzles)
+        assert all(len(puzzle['clues']) == 10 for puzzle in puzzles)
+        for puzzle in puzzles:
+            rows = tuple(puzzle['answer'][row * 5:(row + 1) * 5].replace('#', '')
+                         for row in range(5))
+            columns = tuple(''.join(puzzle['answer'][row * 5 + col] for row in range(5))
+                            .replace('#', '') for col in range(5))
+            assert rows == columns
 
 
 @pytest.mark.parametrize('game', ['crossword', 'nonogram', 'sudoku'])
