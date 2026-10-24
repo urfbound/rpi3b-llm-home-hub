@@ -35,6 +35,7 @@ from .system_status import (collect_system_snapshot, cpu_usage_percent,
                             cpu_bar_class, record_metric_sample)
 from .rss import (DEFAULT_RSS_REFRESH_MINUTES, MAX_RSS_REFRESH_MINUTES,
                   MIN_RSS_REFRESH_MINUTES, RSSFeedError, validate_feed_url)
+from .games import games, SCHEMA as GAMES_SCHEMA, upgrade_multigame_schema
 
 PH = PasswordHasher(memory_cost=16384, time_cost=2, parallelism=1)
 SCHEMA_VERSION = limits.LATEST_SCHEMA_VERSION
@@ -431,6 +432,7 @@ CREATE TABLE IF NOT EXISTS chore_completions (
  completed_week TEXT NOT NULL,
  PRIMARY KEY(chore_id,user_id)
 );
+{GAMES_SCHEMA}
 """
 
 def get_db():
@@ -674,6 +676,8 @@ def initialize_database(db_path):
             for statement in SCHEMA.split(';'):
                 if statement.strip():
                     db.execute(statement)
+            if version == 16:
+                upgrade_multigame_schema(db)
             columns = {row[1] for row in db.execute('PRAGMA table_info(users)')}
             for column, definition in (
                 ('display_name', "TEXT NOT NULL DEFAULT ''"),
@@ -1135,6 +1139,7 @@ def create_app(test_config=None):
     db_path = Path(app.config['DATABASE'])
     db_path.parent.mkdir(parents=True, exist_ok=True)
     initialize_database(db_path)
+    app.register_blueprint(games)
     system_monitor = {'cpu_counters': None, 'lock': threading.Lock()}
     app.extensions['homehub_system_monitor'] = system_monitor
     maintenance = threading.Condition()
@@ -1304,7 +1309,15 @@ def create_app(test_config=None):
             'change_password', 'logout', 'static'):
             return redirect(url_for('change_password'))
         if g.user and g.user['account_kind'] == 'house' and request.method in (
-            'POST', 'PUT', 'PATCH', 'DELETE') and request.endpoint not in ('logout',):
+            'POST', 'PUT', 'PATCH', 'DELETE') and request.endpoint not in (
+                'logout', 'games.daily_guess', 'games.practice_start', 'games.practice_guess',
+                'games.ladder_move', 'games.ladder_hint', 'games.ladder_practice_start',
+                'games.ladder_practice_move', 'games.ladder_practice_hint',
+                'games.grid_submit', 'games.grid_hint',
+                'games.grid_practice_start', 'games.grid_practice_submit',
+                'games.grid_practice_hint',
+                'games.wumpus_action', 'games.wumpus_practice_start',
+                'games.wumpus_practice_action'):
             abort(HTTPStatus.FORBIDDEN)
         if request.method in ('POST','PUT','PATCH','DELETE'):
             token = session.get('csrf_token')
