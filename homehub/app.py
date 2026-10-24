@@ -22,7 +22,8 @@ from flask import (Flask, Response, abort, flash, g, has_app_context, jsonify, m
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError, VerificationError
 from . import constants as limits
-from .chat import ChatProviderError, list_ollama_models
+from .chat import (ChatProviderError, ChatQueueFull, ChatRequestQueue,
+                   OllamaProvider, list_ollama_models)
 from .backups import (BackupError, backup_filename, create_backup,
                       default_backup_directory, delete_backup, list_backups,
                       prune_backups, restore_backup, validate_backup_directory)
@@ -1137,6 +1138,75 @@ def create_app(test_config=None):
     maintenance = threading.Condition()
     request_state = {'active': 0, 'restoring': False}
 
+    def process_chat_job(job):
+        with app.app_context():
+            g.app_db_path = str(db_path)
+            db = get_db()
+            conversation = db.execute(
+                'SELECT id,owner_user_id,title FROM chat_conversations WHERE id=? AND owner_user_id=?',
+                (job['conversation_id'], job['owner_id']),
+            ).fetchone()
+            if conversation is None:
+                raise ChatProviderError('This chat was deleted before the request completed.')
+            pair_limit = job['pair_limit']
+            prior_pairs = db.execute(
+                'SELECT prompt,response FROM chat_pairs WHERE conversation_id=? '
+                'ORDER BY position DESC,id DESC LIMIT ?',
+                (conversation['id'], pair_limit),
+            ).fetchall()
+            db.close()
+            g.pop('db', None)
+            messages = []
+            for pair in reversed(prior_pairs):
+                messages.extend(({'role': 'user', 'content': pair['prompt']},
+                                 {'role': 'assistant', 'content': pair['response']}))
+            messages.append({'role': 'user', 'content': job['prompt']})
+            completion = app.config.get('CHAT_COMPLETION')
+            if completion is None:
+                completion = OllamaProvider(app.config['OLLAMA_BASE_URL']).complete
+            response = completion(job['model'], messages)
+            if not isinstance(response, str) or not response.strip():
+                raise ChatProviderError('The local model returned an empty response.')
+            response = response.strip()
+            db = get_db()
+            with db:
+                conversation = db.execute(
+                    'SELECT id,title FROM chat_conversations WHERE id=? AND owner_user_id=?',
+                    (job['conversation_id'], job['owner_id']),
+                ).fetchone()
+                if conversation is None:
+                    raise ChatProviderError('This chat was deleted before the response was saved.')
+                pair_count = db.execute(
+                    'SELECT COUNT(*) FROM chat_pairs WHERE conversation_id=?',
+                    (conversation['id'],),
+                ).fetchone()[0]
+                excess = max(0, pair_count - pair_limit + 1)
+                if excess:
+                    oldest = db.execute(
+                        'SELECT id FROM chat_pairs WHERE conversation_id=? '
+                        'ORDER BY position,id LIMIT ?', (conversation['id'], excess),
+                    ).fetchall()
+                    db.executemany('DELETE FROM chat_pairs WHERE id=?',
+                                   [(row['id'],) for row in oldest])
+                position = db.execute(
+                    'SELECT COALESCE(MAX(position),-1)+1 FROM chat_pairs WHERE conversation_id=?',
+                    (conversation['id'],),
+                ).fetchone()[0]
+                now = datetime.now(timezone.utc).isoformat()
+                db.execute(
+                    'INSERT INTO chat_pairs(conversation_id,position,prompt,response,model,created_at) '
+                    'VALUES(?,?,?,?,?,?)',
+                    (conversation['id'], position, job['prompt'], response, job['model'], now),
+                )
+                title = conversation['title']
+                if title == 'New chat':
+                    title = job['prompt'][:limits.LIST_TITLE_MAXIMUM].strip() or 'New chat'
+                db.execute('UPDATE chat_conversations SET title=?,updated_at=? WHERE id=?',
+                           (title, now, conversation['id']))
+            return True
+
+    app.extensions['homehub_chat_queue'] = ChatRequestQueue(process_chat_job)
+
     @app.before_request
     def enter_request():
         with maintenance:
@@ -1809,19 +1879,45 @@ def create_app(test_config=None):
             abort(HTTPStatus.NOT_FOUND)
         return conversation
 
+    def render_chat_shell(conversation=None):
+        db = get_db()
+        owner_id = conversation['owner_user_id'] if conversation else g.user['id']
+        conversations = db.execute(
+            'SELECT c.id,c.title,c.is_pinned,c.created_at,c.updated_at,'
+            '(SELECT COUNT(*) FROM chat_pairs p WHERE p.conversation_id=c.id) AS pair_count '
+            'FROM chat_conversations c WHERE c.owner_user_id=? '
+            'ORDER BY c.is_pinned DESC,c.updated_at DESC,c.id DESC', (owner_id,),
+        ).fetchall()
+        pairs = []
+        pair_limit = setting(db, 'chat_pairs_per_chat',
+                             limits.CHAT_PAIRS_PER_CHAT_DEFAULT)
+        if conversation:
+            pairs = db.execute(
+                'SELECT prompt,response,model,created_at FROM chat_pairs '
+                'WHERE conversation_id=? ORDER BY position,id', (conversation['id'],),
+            ).fetchall()
+        return render_template(
+            'chat.html', conversations=conversations, conversation=conversation,
+            pairs=pairs, pair_limit=pair_limit,
+            chat_enabled=setting(db, 'chat_enabled', limits.CHAT_ENABLED_DEFAULT),
+            confirm_pair_drop=bool(conversation and len(pairs) >= pair_limit),
+            prompt_maximum=limits.CHAT_PROMPT_MAXIMUM,
+            chat_history_maximum=limits.CHAT_HISTORY_MAXIMUM,
+            pinned_maximum=limits.CHAT_PINNED_MAXIMUM,
+        )
+
     @app.get('/chat')
     @login_required
     def chat_page():
         require_chat_user()
         db = get_db()
-        conversations = db.execute(
-            'SELECT id,title,is_pinned,created_at,updated_at FROM chat_conversations '
-            'WHERE owner_user_id=? ORDER BY is_pinned DESC,updated_at DESC,id DESC',
+        conversation = db.execute(
+            'SELECT c.*,u.username,u.display_name FROM chat_conversations c '
+            'JOIN users u ON u.id=c.owner_user_id WHERE c.owner_user_id=? '
+            'ORDER BY c.is_pinned DESC,c.updated_at DESC,c.id DESC LIMIT 1',
             (g.user['id'],),
-        ).fetchall()
-        return render_template('chat.html', conversations=conversations,
-                               chat_history_maximum=limits.CHAT_HISTORY_MAXIMUM,
-                               pinned_maximum=limits.CHAT_PINNED_MAXIMUM)
+        ).fetchone()
+        return render_chat_shell(conversation)
 
     @app.post('/chat/new')
     @login_required
@@ -1837,8 +1933,8 @@ def create_app(test_config=None):
             if len(conversations) >= limits.CHAT_HISTORY_MAXIMUM:
                 oldest_unpinned = next((chat for chat in conversations if not chat['is_pinned']), None)
                 if oldest_unpinned is None:
-                    abort(HTTPStatus.CONFLICT,
-                          description='Unpin or delete a chat before creating another.')
+                    flash('All your chats are pinned. Unpin or delete one before creating another.')
+                    return redirect(url_for('chat_page'))
                 db.execute('DELETE FROM chat_conversations WHERE id=?', (oldest_unpinned['id'],))
             cursor = db.execute(
                 'INSERT INTO chat_conversations(owner_user_id,title,created_at,updated_at) '
@@ -1856,12 +1952,68 @@ def create_app(test_config=None):
                 and g.user['role'] != 'admin':
             abort(HTTPStatus.NOT_FOUND)
         conversation = load_chat(conversation_id)
-        pairs = get_db().execute(
-            'SELECT prompt,response,model,created_at FROM chat_pairs '
-            'WHERE conversation_id=? ORDER BY position,id', (conversation_id,),
-        ).fetchall()
-        return render_template('chat_conversation.html', conversation=conversation,
-                               pairs=pairs)
+        return render_chat_shell(conversation)
+
+    @app.post('/chat/<int:conversation_id>/send')
+    @login_required
+    def send_chat_prompt(conversation_id):
+        require_chat_user()
+        conversation = load_chat(conversation_id, owner_only=True)
+        prompt = request.form.get('prompt', '').strip()
+        if not prompt or len(prompt) > limits.CHAT_PROMPT_MAXIMUM:
+            abort(HTTPStatus.BAD_REQUEST,
+                  description=f'Enter a prompt of 1 to {limits.CHAT_PROMPT_MAXIMUM} characters.')
+        db = get_db()
+        pair_limit = setting(db, 'chat_pairs_per_chat', limits.CHAT_PAIRS_PER_CHAT_DEFAULT)
+        pair_count = db.execute(
+            'SELECT COUNT(*) FROM chat_pairs WHERE conversation_id=?', (conversation_id,),
+        ).fetchone()[0]
+        if pair_count >= pair_limit and request.form.get('confirm_drop_oldest') != '1':
+            flash('This chat has reached its history limit. Sending will remove the oldest '
+                  'prompt-and-response pair. Confirm below to continue.')
+            return redirect(url_for('view_chat', conversation_id=conversation_id))
+        model = setting_text(db, 'chat_model')
+        if not model:
+            abort(HTTPStatus.SERVICE_UNAVAILABLE,
+                  description='An administrator must select an installed local model first.')
+        job_id = secrets.token_urlsafe(18)
+        job = {
+            'id': job_id,
+            'owner_id': g.user['id'],
+            'conversation_id': conversation_id,
+            'model': model,
+            'prompt': prompt,
+            'pair_limit': pair_limit,
+            'is_admin': g.user['role'] == 'admin',
+            'confirm_drop_oldest': request.form.get('confirm_drop_oldest') == '1',
+        }
+        try:
+            app.extensions['homehub_chat_queue'].enqueue(
+                job,
+                max_waiting=setting(db, 'chat_max_queue_depth',
+                                    limits.CHAT_MAX_QUEUE_DEPTH_DEFAULT),
+            )
+        except ChatQueueFull:
+            message = 'The Chat waiting queue is full. Try again shortly.'
+            if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+                return jsonify(error=message), HTTPStatus.TOO_MANY_REQUESTS
+            abort(HTTPStatus.TOO_MANY_REQUESTS,
+                  description=message)
+        if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+            return jsonify(request_id=job_id, status='queued'), HTTPStatus.ACCEPTED
+        return redirect(url_for('view_chat', conversation_id=conversation_id,
+                                request_id=job_id))
+
+    @app.get('/chat/requests/<request_id>')
+    @login_required
+    def chat_request_status(request_id):
+        require_chat_user()
+        status = app.extensions['homehub_chat_queue'].status(request_id)
+        if (status is None or (status['owner_id'] != g.user['id']
+                               and g.user['role'] != 'admin')):
+            abort(HTTPStatus.NOT_FOUND)
+        return jsonify(status=status['status'], queue_position=status['queue_position'],
+                       error=status['error'], conversation_id=status['conversation_id'])
 
     @app.post('/chat/<int:conversation_id>/pin')
     @login_required
@@ -1877,8 +2029,8 @@ def create_app(test_config=None):
                     'WHERE owner_user_id=? AND is_pinned=1', (g.user['id'],),
                 ).fetchone()[0]
                 if count >= limits.CHAT_PINNED_MAXIMUM:
-                    abort(HTTPStatus.CONFLICT,
-                          description='Unpin a chat before pinning another.')
+                    flash(f'You can pin up to {limits.CHAT_PINNED_MAXIMUM} chats. Unpin one first.')
+                    return redirect(url_for('chat_page'))
             db.execute('UPDATE chat_conversations SET is_pinned=? WHERE id=?',
                        (0 if pinned else 1, conversation_id))
         return redirect(url_for('chat_page'))

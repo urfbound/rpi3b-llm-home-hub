@@ -2,7 +2,8 @@ import json
 
 import pytest
 
-from homehub.chat import ChatProviderError, list_ollama_models
+from homehub.chat import ChatProviderError, OllamaProvider, list_ollama_models
+from homehub.constants import CHAT_CONTEXT_TOKENS_DEFAULT
 
 
 class FakeResponse:
@@ -54,3 +55,34 @@ def test_model_discovery_rejects_malformed_ollama_payload(monkeypatch):
 
     with pytest.raises(ChatProviderError):
         list_ollama_models()
+
+
+def test_ollama_provider_sends_nonstreaming_chat_only_to_loopback(monkeypatch):
+    calls = []
+
+    def fake_urlopen(request, timeout):
+        calls.append((request.full_url, json.loads(request.data), timeout))
+        return FakeResponse({'message': {'content': 'Hello from local Ollama'}})
+
+    monkeypatch.setattr('homehub.chat.urlopen', fake_urlopen)
+
+    response = OllamaProvider().complete(
+        'gemma3:270m', [{'role': 'user', 'content': 'Hello'}])
+
+    assert response == 'Hello from local Ollama'
+    assert calls == [(
+        'http://127.0.0.1:11434/api/chat',
+        {'model': 'gemma3:270m', 'messages': [{'role': 'user', 'content': 'Hello'}],
+         'stream': False, 'keep_alive': 0,
+         'options': {'num_ctx': CHAT_CONTEXT_TOKENS_DEFAULT}},
+        900,
+    )]
+
+
+def test_ollama_provider_rejects_non_loopback_before_sending(monkeypatch):
+    monkeypatch.setattr('homehub.chat.urlopen', lambda *_args, **_kwargs: pytest.fail(
+        'provider must not contact a non-loopback Ollama host'))
+
+    with pytest.raises(ChatProviderError):
+        OllamaProvider('http://192.168.1.9:11434').complete(
+            'model', [{'role': 'user', 'content': 'Hi'}])

@@ -1,17 +1,80 @@
 {% extends 'base.html' %}
 {% block content %}
 <div class="crumb">Home / <strong>Chat</strong></div>
-<div class="page-heading"><div><p class="eyebrow">Private local assistant</p><h1>Your chats</h1><p class="muted">Your conversations are private to you. Admins can view and delete chat histories.</p></div></div>
-<section class="panel chat-history-panel">
-  <div class="section-heading"><div><h2>Conversation history</h2><p class="muted">{{ conversations|length }} of {{ chat_history_maximum }} chats · up to {{ pinned_maximum }} pinned</p></div>
-    <form method="post" action="{{ url_for('create_chat_conversation') }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><button class="primary">New chat</button></form>
-  </div>
-  {% if conversations %}<ul class="chat-list">
-    {% for conversation in conversations %}<li>
-      <a class="chat-list-title" href="{{ url_for('view_chat', conversation_id=conversation.id) }}">{{ conversation.title }}{% if conversation.is_pinned %}<span class="chip amber">Pinned</span>{% endif %}</a>
-      <small>Updated {{ conversation.updated_at }}</small>
-      <div class="chat-list-actions"><form method="post" action="{{ url_for('toggle_chat_pin', conversation_id=conversation.id) }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><button class="quiet">{{ 'Unpin' if conversation.is_pinned else 'Pin' }}</button></form><form method="post" action="{{ url_for('delete_own_chat', conversation_id=conversation.id) }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><button class="quiet">Delete</button></form></div>
-    </li>{% endfor %}
-  </ul>{% else %}<p class="empty-state">Start a private conversation with a new chat.</p>{% endif %}
-</section>
+<div class="page-heading"><div><p class="eyebrow">Private local assistant</p><h1>Chat</h1><p class="muted">Responses may take a few minutes. Your prompts stay on the home network.</p></div><span class="chip">Local model enabled</span></div>
+<div class="chat-layout">
+  <aside class="panel chat-history-panel">
+    <div class="chat-history-head"><div><h2>Your chats</h2><p class="muted">{{ conversations|length }} / {{ chat_history_maximum }} · {{ conversations|selectattr('is_pinned')|list|length }} / {{ pinned_maximum }} pinned</p></div>
+      <form method="post" action="{{ url_for('create_chat_conversation') }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><button class="primary">New chat</button></form>
+    </div>
+    {% if conversations %}<ul class="chat-list">
+      {% for chat in conversations %}<li class="{% if conversation and conversation.id == chat.id %}selected{% endif %}">
+        <a class="chat-list-title" href="{{ url_for('view_chat', conversation_id=chat.id) }}">{{ chat.title }}{% if chat.is_pinned %}<span aria-label="Pinned">★</span>{% endif %}</a>
+        <small>{{ chat.pair_count }} prompt-and-response pairs</small>
+        {% if chat_enabled and (not conversation or conversation.owner_user_id == current_user['id']) %}<div class="chat-list-actions"><form method="post" action="{{ url_for('toggle_chat_pin', conversation_id=chat.id) }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><button class="quiet">{{ 'Unpin' if chat.is_pinned else 'Pin' }}</button></form><form method="post" action="{{ url_for('delete_own_chat', conversation_id=chat.id) }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><button class="quiet">Delete</button></form></div>{% endif %}
+      </li>{% endfor %}
+    </ul>{% else %}<p class="empty-state">Start a private chat when you are ready.</p>{% endif %}
+    <p class="chat-history-disclosure">Admins can review and delete chat histories. The house-wide account cannot use Chat.</p>
+  </aside>
+  <section class="panel chat-conversation-panel" aria-label="Chat conversation">
+    {% if conversation %}
+    <header class="chat-conversation-head"><div><p class="eyebrow">{% if conversation.owner_user_id == current_user['id'] %}Private conversation{% else %}Admin view · {{ conversation.display_name }}{% endif %}</p><h2>{{ conversation.title }}</h2><p>{{ pairs|length }} / {{ pair_limit }} prompt-and-response pairs</p></div>
+      {% if conversation.owner_user_id == current_user['id'] and chat_enabled %}<div class="chat-header-actions"><form method="post" action="{{ url_for('toggle_chat_pin', conversation_id=conversation.id) }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><button class="quiet">{{ 'Unpin chat' if conversation.is_pinned else 'Pin chat' }}</button></form></div>{% endif %}
+    </header>
+    <div class="chat-messages" aria-live="polite">
+      {% if pairs %}{% for pair in pairs %}<article class="chat-pair"><div class="chat-message user-message"><p class="chat-prompt preserve">{{ pair.prompt }}</p><small>You · {{ pair.created_at }}</small></div><div class="chat-message assistant-message"><p class="chat-assistant-label">Home Hub assistant</p><p class="preserve">{{ pair.response }}</p><small>Local model · {{ pair.model }} · {{ pair.created_at }}</small></div></article>{% endfor %}
+      {% else %}<p class="empty-state">Ask a short question to begin. Local model answers may take a few minutes.</p>{% endif %}
+    </div>
+    {% if conversation.owner_user_id == current_user['id'] and chat_enabled %}
+    <form id="chat-prompt-form" method="post" action="{{ url_for('send_chat_prompt', conversation_id=conversation.id) }}" class="chat-prompt-form">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      {% if confirm_pair_drop %}<label class="callout"><input type="checkbox" name="confirm_drop_oldest" value="1" required> This chat has reached its history limit. Sending another prompt will remove the oldest prompt-and-response pair.</label>{% endif %}
+      <label for="chat-prompt">Your prompt<textarea id="chat-prompt" name="prompt" rows="3" maxlength="{{ prompt_maximum }}" placeholder="Ask a short question…" required></textarea></label>
+      <div class="chat-submit-row"><small id="chat-prompt-count">0 / {{ prompt_maximum }} characters</small><div><small>Responses may take a few minutes.</small> <button class="primary">Send</button></div></div>
+      <p id="chat-request-status" class="muted" role="status" aria-live="polite"></p>
+    </form>
+    {% elif conversation.owner_user_id == current_user['id'] %}<p class="chat-readonly-note">Chat is currently disabled by an administrator.</p>
+    {% else %}<p class="chat-readonly-note">This is a read-only admin view. Only {{ conversation.display_name }} can send prompts.</p>{% endif %}
+    {% else %}<div class="chat-empty-conversation"><h2>Choose a chat or start a new one</h2><p class="muted">Your conversations are private to your account.</p></div>{% endif %}
+  </section>
+</div>
+{% if conversation and conversation.owner_user_id == current_user['id'] and chat_enabled %}<script>
+(() => {
+  const form = document.getElementById('chat-prompt-form');
+  const prompt = document.getElementById('chat-prompt');
+  const count = document.getElementById('chat-prompt-count');
+  const status = document.getElementById('chat-request-status');
+  const max = {{ prompt_maximum }};
+  let requestId = {{ request.args.get('request_id', '')|tojson }};
+  prompt.addEventListener('input', () => { count.textContent = `${prompt.value.length} / ${max} characters`; });
+  const poll = () => {
+    if (!requestId) return;
+    fetch(`/chat/requests/${encodeURIComponent(requestId)}`, {headers: {'Accept': 'application/json'}})
+      .then(response => response.ok ? response.json() : Promise.reject())
+      .then(data => {
+        if (data.status === 'queued') status.textContent = `Waiting in queue · position ${data.queue_position}`;
+        else if (data.status === 'running') status.textContent = 'Your local model is working…';
+        else if (data.status === 'complete') { status.textContent = 'Response ready.'; location.reload(); return; }
+        else if (data.status === 'failed') { status.textContent = data.error || 'The model request failed.'; requestId = ''; return; }
+        window.setTimeout(poll, 1200);
+      }).catch(() => { status.textContent = 'Chat request status is temporarily unavailable.'; });
+  };
+  form.addEventListener('submit', event => {
+    event.preventDefault();
+    status.textContent = 'Adding your request to the queue…';
+    fetch(form.action, {method: 'POST', body: new FormData(form), headers: {'X-Requested-With': 'XMLHttpRequest'}})
+      .then(async response => {
+        if (response.status === 202) return response.json();
+        if (response.redirected) { location.href = response.url; return null; }
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || 'The request could not be queued. Check the form or try again.');
+      }).then(data => {
+        if (!data) return;
+        requestId = data.request_id;
+        poll();
+      }).catch(error => { status.textContent = error.message; });
+  });
+  if (requestId) poll();
+})();
+</script>{% endif %}
 {% endblock %}

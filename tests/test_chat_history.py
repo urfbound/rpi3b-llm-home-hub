@@ -137,7 +137,8 @@ def test_new_chat_is_rejected_when_all_existing_chats_are_pinned(app):
 
     response = post(alice, '/chat/new')
 
-    assert response.status_code == HTTPStatus.CONFLICT
+    assert response.status_code == HTTPStatus.FOUND
+    assert b'All your chats are pinned' in alice.get('/chat').data
     with sqlite3.connect(app.config['DATABASE']) as db:
         assert db.execute('SELECT count(*) FROM chat_conversations').fetchone()[0] == (
             CHAT_HISTORY_MAXIMUM)
@@ -151,7 +152,8 @@ def test_user_can_pin_up_to_ten_chats_and_cannot_pin_another(app):
         assert post(alice, f'/chat/{chat_id}/pin').status_code == HTTPStatus.FOUND
     blocked = post(alice, f'/chat/{CHAT_PINNED_MAXIMUM + 1}/pin')
 
-    assert blocked.status_code == HTTPStatus.CONFLICT
+    assert blocked.status_code == HTTPStatus.FOUND
+    assert b'You can pin up to' in alice.get('/chat').data
     with sqlite3.connect(app.config['DATABASE']) as db:
         assert db.execute('SELECT count(*) FROM chat_conversations WHERE is_pinned=1').fetchone()[0] == (
             CHAT_PINNED_MAXIMUM)
@@ -183,6 +185,20 @@ def test_chat_history_admin_tools_are_not_available_to_regular_users(app):
 
     assert reader.get('/admin/chat/history').status_code == HTTPStatus.FORBIDDEN
     assert post(reader, '/admin/chat/1/delete').status_code == HTTPStatus.FORBIDDEN
+
+
+def test_admin_can_still_review_histories_when_chat_is_disabled(app):
+    make_chats(app, 'alice', 1)
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        db.execute("UPDATE app_settings SET value='0' WHERE key='chat_enabled'")
+    admin = sign_in(app, 'admin', 'admin chat password')
+
+    page = admin.get('/chat/1')
+
+    assert page.status_code == HTTPStatus.OK
+    assert b'alice conversation 0' in page.data
+    assert b'This is a read-only admin view' in page.data
+    assert b'name="prompt"' not in page.data
 
 
 def _table_exists(db, name):
