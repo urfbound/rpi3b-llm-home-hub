@@ -165,20 +165,21 @@ to `main` only after the user approves the completed change.
 
 ### Games
 
-- The user confirmed Games work may begin. The first branch adds the Games tab
-  and Word Garden as a playable daily and practice puzzle, with a 30-answer
-  offline bank, private resumable attempts, scoreboards, streaks, and a v16
-  schema upgrade. The other five game cards remain marked coming soon.
-- Implement all six first-release games: Wordle-style word guessing, mini
-  crosswords, Hunt the Wumpus, word ladders, mini nonograms, and Sudoku.
-- Start with a curated offline bank covering at least 30 days. Add daily
-  household-wide puzzles, practice mode, scoring and hints, per-user streaks,
-  visible daily/all-time scoreboards, and house-wide play without leaderboard
-  ranking.
-- Use visible daily/practice seeds only where appropriate; make Hunt the
-  Wumpus maps deterministic and avoid repeats within a rolling year. Keep
-  score floors, tie-breaking, attempt expiry, and answer visibility covered
-  by tests.
+- All six first-release games are playable on the Games branch: Word Garden,
+  Mini Crossword, Hunt the Wumpus, Word Ladder, Mini Nonogram, and Mini Sudoku.
+  Daily puzzles share the household date; each game has at least 30 distinct
+  offline puzzles, and Wumpus has 365 nonrepeating seeded maps. Practice uses
+  past puzzles for the word and grid games; Wumpus offers a chosen or random
+  seed. A v17 upgrade preserves v16 Word Garden attempts.
+- Private resumable attempts, midnight expiry, per-game streaks, score floors,
+  optional hints where approved, daily and all-time scoreboards, timed-game
+  tie breaking, and next-day solution visibility are implemented and tested.
+  The house-wide account can play without ranking. Practice is unscored and
+  capped at ten saved attempts per user and game.
+- Desktop and narrow-phone browser checks of the Games hub and selected puzzle
+  pages in light and dark themes found no horizontal overflow. Sudoku was played
+  through its server-rendered form without JavaScript. Pi resource profiling
+  and broader household playtesting remain before release.
 - Deferred game work: more than one daily puzzle per game and Pi-generated
   puzzle content. Sudoku generation/difficulty rating is a later benchmark.
 

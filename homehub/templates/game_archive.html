@@ -1,0 +1,6 @@
+{% extends 'base.html' %}
+{% block content %}
+<p><a href="{{ url_for('games.page') }}">← All games</a></p>
+<p class="eyebrow">Past daily puzzle</p><h1>{{ title }} · {{ day.isoformat() }}</h1>
+<section class="panel"><h2>Solution</h2><pre>{{ solution }}</pre></section>
+{% endblock %}

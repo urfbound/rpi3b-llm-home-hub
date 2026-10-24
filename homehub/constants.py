@@ -9,7 +9,7 @@ HTTP_DEFAULT_PORT = 80
 HTTPS_DEFAULT_PORT = 443
 
 # Schema version is referenced in paths and SQL statements as text at runtime.
-LATEST_SCHEMA_VERSION = 16
+LATEST_SCHEMA_VERSION = 17
 
 # Account limits and input sizes.
 USER_MAXIMUM = 32
