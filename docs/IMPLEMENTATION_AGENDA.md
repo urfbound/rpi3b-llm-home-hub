@@ -200,11 +200,23 @@ to `main` only after the user approves the completed change.
 ### Chat
 
 - Keep Chat hidden by default. Initial Pi 3B warm latency and model-only memory
-  are measured; see [CHAT_PI_BENCHMARK.md](CHAT_PI_BENCHMARK.md). Before
-  enabling it, profile Home Hub and the selected model together, then verify
-  answer quality. Implement one installed model at a time, one queued request
-  at a time, admin priority, queue depth and position, per-user private chat
-  history and pin/delete limits, and 128-character prompts.
+  are measured; see [CHAT_PI_BENCHMARK.md](CHAT_PI_BENCHMARK.md). The
+  `feature/chat-initial-release` branch now has test-verified admin-only
+  enable/model settings, loopback-only Ollama model discovery, configurable
+  queue and pair limits, and private conversation history with pin/delete
+  rules, history caps, account isolation, admin visibility, and a schema
+  upgrade. Its responsive conversation view now sends bounded prompts through
+  one lazy in-process worker, prioritizes admins among waiting requests, shows
+  queue positions, and records successful answers with the model name. Ollama
+  requests use a 2048-token context and unload the model after each response.
+  Read-only list and calendar tools are implemented behind an admin toggle
+  that defaults off. They enforce requester visibility, a 31-day calendar
+  window, three tool calls per request, and 100-row/16-KiB result caps. The
+  Pi resource-budget measurement remains; keep database tools disabled until
+  that measurement passes. App-plus-model profiling, answer-quality review,
+  and manual browser review of the approved design also remain.
+  Before enabling Chat for household use, profile Home Hub and the selected
+  model together, then verify answer quality.
 - Add a provider interface for possible remote models, off by default. If
   database tools are enabled, enforce the approved read-only per-user scope
   and resource budget; require explicit confirmation and fresh authorization
