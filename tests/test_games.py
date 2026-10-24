@@ -2,6 +2,7 @@
 
 import sqlite3
 import json
+import re
 from datetime import date
 
 import pytest
@@ -270,6 +271,79 @@ def test_wumpus_maps_are_shared_deterministic_and_unique_for_a_year():
     assert all(len(ROOMS[room]) == 3 for room in ROOMS)
     assert all(room in ROOMS[neighbor] for room, neighbors in ROOMS.items()
                for neighbor in neighbors)
+
+
+def test_wumpus_map_shows_topology_and_only_visited_clues(game_app):
+    from homehub.game_wumpus import ROOMS, daily_map, map_geometry, warnings_for
+
+    points, edges = map_geometry()
+    lengths = [sum((points[a][i] - points[b][i]) ** 2 for i in range(3))
+               for a, b in edges]
+    assert max(lengths) - min(lengths) < .001
+
+    alex = sign_in(game_app, 'alex')
+    game = daily_map(date(2026, 10, 24))
+    start = game['placements'][0]
+    page = alex.get('/games/wumpus').data.decode()
+    assert 'id="hide-wumpus-map"' in page
+    assert 'wumpus-map.js' in page
+    assert len(re.findall(r'class="wumpus-corridor"', page)) == 30
+    rooms = dict((int(room), clues) for room, clues in
+                 re.findall(r'data-room="(\d+)" data-clues="([^"]*)"', page))
+    assert set(rooms) == set(ROOMS)
+    assert rooms[start] == ', '.join(warnings_for(start, game['placements']))
+    assert all(not clues for room, clues in rooms.items() if room != start)
+    assert all(f'class="wumpus-room-number" x="30">{room}</text>' in page for room in ROOMS)
+    with sqlite3.connect(game_app.config['DATABASE']) as db:
+        assert db.execute("SELECT COUNT(*) FROM game_attempts WHERE game='wumpus'").fetchone()[0] == 0
+
+    safe = next(room for room in ROOMS[start] if room not in game['placements'][1:])
+    alex.post('/games/wumpus/action', data={'_csrf': token_for(alex),
+                                            'action': 'move', 'rooms': str(safe)})
+    page = alex.get('/games/wumpus').data.decode()
+    rooms = dict((int(room), clues) for room, clues in
+                 re.findall(r'data-room="(\d+)" data-clues="([^"]*)"', page))
+    assert rooms[start] == ', '.join(warnings_for(start, game['placements']))
+    assert rooms[safe] == ', '.join(warnings_for(safe, game['placements']))
+    assert all(not clues for room, clues in rooms.items() if room not in (start, safe))
+    with sqlite3.connect(game_app.config['DATABASE']) as db:
+        attempt = db.execute("SELECT moves,points,state FROM game_attempts WHERE game='wumpus'").fetchone()
+    alex.get('/games/wumpus')
+    with sqlite3.connect(game_app.config['DATABASE']) as db:
+        assert db.execute("SELECT moves,points,state FROM game_attempts WHERE game='wumpus'").fetchone() == attempt
+
+    legacy = json.loads(attempt[2])
+    legacy.pop('seen')
+    legacy.pop('bat_rooms')
+    with sqlite3.connect(game_app.config['DATABASE']) as db:
+        db.execute("UPDATE game_attempts SET state=? WHERE game='wumpus'", (json.dumps(legacy),))
+    page = alex.get('/games/wumpus').data.decode()
+    rooms = dict((int(room), clues) for room, clues in
+                 re.findall(r'data-room="(\d+)" data-clues="([^"]*)"', page))
+    assert rooms[start] == ', '.join(warnings_for(start, game['placements']))
+    assert rooms[safe] == ', '.join(warnings_for(safe, game['placements']))
+
+
+def test_wumpus_map_records_bat_encounter_without_unseen_warnings(game_app):
+    from homehub.game_wumpus import ROOMS, bat_destination, map_for_seed, warnings_for
+
+    seed, bat = next((seed, bat) for seed in range(1000)
+                     for game in [map_for_seed(seed)]
+                     for bat in game['placements'][4:]
+                     if bat in ROOMS[game['placements'][0]]
+                     and bat_destination(seed, 1) != bat
+                     and warnings_for(bat, game['placements']))
+    alex = sign_in(game_app, 'alex')
+    url = alex.post('/games/wumpus/practice', data={
+        '_csrf': token_for(alex), 'seed': str(seed)}).headers['Location']
+    alex.post(f'{url}/action', data={'_csrf': token_for(alex),
+                                     'action': 'move', 'rooms': str(bat)})
+    page = alex.get(url).data.decode()
+    rooms = dict((int(room), clues) for room, clues in
+                 re.findall(r'data-room="(\d+)" data-clues="([^"]*)"', page))
+    assert rooms[bat] == 'Bats carried you away.'
+    assert rooms[bat_destination(seed, 1)] == ', '.join(
+        warnings_for(bat_destination(seed, 1), map_for_seed(seed)['placements']))
 
 
 def test_wumpus_move_shoot_score_and_seeded_practice(game_app):

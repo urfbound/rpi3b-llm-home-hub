@@ -692,7 +692,8 @@ def _wumpus_practice(db, attempt_id):
 
 
 def _create_wumpus(db, day, mode, game):
-    state = {'room': game['placements'][0], 'arrows': 5, 'misses': 0, 'history': []}
+    state = {'room': game['placements'][0], 'arrows': 5, 'misses': 0, 'history': [],
+             'seen': [game['placements'][0]], 'bat_rooms': []}
     cursor = db.execute("INSERT INTO game_attempts(user_id,game,mode,puzzle_date,answer,state,seed) "
                         "VALUES(?,'wumpus',?,?,?,?,?)",
                         (g.user['id'], mode, day.isoformat(), json.dumps(game['placements']),
@@ -708,8 +709,27 @@ def _wumpus_render(db, today, attempt=None, practice=False):
             if attempt else game_wumpus.daily_map(today))
     state = json.loads(attempt['state']) if attempt else {
         'room': game['placements'][0], 'arrows': 5, 'misses': 0, 'history': []}
+    points, edges = game_wumpus.map_geometry()
+    if 'seen' in state:
+        seen = set(state['seen'])
+    else:
+        seen = {game['placements'][0], state['room']}
+        seen.update(int(match.group(1)) for event in state['history']
+                    if (match := re.fullmatch(r'Moved to room (\d+)\.', event)))
+    bat_rooms = set(state.get('bat_rooms', []))
+    map_rooms = []
+    for room, (x, y, z) in points.items():
+        clues = (['Bats carried you away.'] if room in bat_rooms and room != state['room']
+                 else game_wumpus.warnings_for(room, game['placements'])
+                 if room in seen else [])
+        map_rooms.append({'number': room, 'x': x, 'y': y, 'z': z,
+                          'seen': room in seen, 'clues': clues,
+                          'labels': ['Smell' if 'smell' in clue else
+                                     'Draft' if 'draft' in clue else 'Bats'
+                                     for clue in clues]})
     return render_template('game_wumpus.html', day=today, attempt=attempt,
                            state=state, game=game, practice=practice,
+                           map_rooms=map_rooms, map_edges=edges,
                            exits=game_wumpus.ROOMS[state['room']],
                            warnings=game_wumpus.warnings_for(state['room'], game['placements']),
                            scores=_scoreboard(db, today, 'wumpus'), all_scores=_scoreboard(db, game='wumpus'),
@@ -756,8 +776,11 @@ def _wumpus_action(db, attempt, action, rooms):
     if action == 'move':
         room = rooms[0]
         moves += 1
+        state.setdefault('seen', [player]).append(room)
         if room in (bat1, bat2):
+            state.setdefault('bat_rooms', []).append(room)
             room = game_wumpus.bat_destination(int(attempt['seed']), moves)
+            state['seen'].append(room)
             state['history'].append('Bats carried you to another room.')
         state['room'] = room
         if room == wumpus or room in (pit1, pit2):

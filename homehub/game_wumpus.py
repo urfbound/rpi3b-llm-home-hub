@@ -2,6 +2,7 @@
 
 from collections import deque
 import hashlib
+import math
 
 
 ROOMS = {
@@ -12,6 +13,26 @@ ROOMS = {
     16: (15, 17, 20), 17: (7, 16, 18), 18: (9, 17, 19),
     19: (11, 18, 20), 20: (13, 16, 19),
 }
+
+
+def map_geometry():
+    """Dodecahedron vertices matched to the cave's numbered corridors."""
+    phi = (1 + math.sqrt(5)) / 2
+    small = 1 / phi
+    vertices = {
+        1: (-1, -1, -1), 2: (0, -small, -phi), 3: (1, -1, -1),
+        4: (small, -phi, 0), 5: (-small, -phi, 0), 6: (-1, -1, 1),
+        7: (-phi, 0, small), 8: (-phi, 0, -small), 9: (-1, 1, -1),
+        10: (0, small, -phi), 11: (1, 1, -1), 12: (phi, 0, -small),
+        13: (phi, 0, small), 14: (1, -1, 1), 15: (0, -small, phi),
+        16: (0, small, phi), 17: (-1, 1, 1), 18: (-small, phi, 0),
+        19: (small, phi, 0), 20: (1, 1, 1),
+    }
+    points = {room: tuple(round(value / phi, 4) for value in vertex)
+              for room, vertex in vertices.items()}
+    edges = [(room, neighbor) for room, neighbors in ROOMS.items()
+             for neighbor in neighbors if room < neighbor]
+    return points, edges
 
 
 def shortest_rooms(start, target):
