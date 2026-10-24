@@ -1,6 +1,7 @@
 """One-shot backup runner invoked by the systemd timer."""
 from __future__ import annotations
 
+import argparse
 import logging
 import os
 import sqlite3
@@ -13,7 +14,7 @@ from .backups import (BackupError, create_backup, default_backup_directory,
 
 
 def run_backup_cycle(database: Path, logger, now: float | None = None,
-                     raise_on_error: bool = False) -> bool:
+                     raise_on_error: bool = False, force: bool = False) -> bool:
     """Create a verified backup when the configured interval has elapsed."""
     import time
 
@@ -22,18 +23,21 @@ def run_backup_cycle(database: Path, logger, now: float | None = None,
         with closing(sqlite3.connect(database, timeout=5)) as db:
             settings = dict(db.execute('SELECT key,value FROM app_settings'))
         interval = int(settings.get('backup_interval_days', '1'))
-        if interval == 0:
+        if interval == 0 and not force:
             return False
         retention = int(settings.get('backup_retention', '14'))
         folder = (Path(settings['backup_folder']) if 'backup_folder' in settings
                   else default_backup_directory(database))
         folder = validate_backup_directory(folder)
         backups = list_backups(folder)
-        if backups and now - backups[0]['created_at'].timestamp() < interval * 86400:
+        if (not force and backups
+                and now - backups[0]['created_at'].timestamp() < interval * 86400):
             return False
         created = create_backup(database, folder)
-        prune_backups(folder, retention)
-        logger.info('Created and verified scheduled backup %s', created.name)
+        if not force:
+            prune_backups(folder, retention)
+        logger.info('Created and verified %s backup %s',
+                    'immediate' if force else 'scheduled', created)
         return True
     except (OSError, ValueError, sqlite3.Error, BackupError):
         logger.exception('Scheduled Home Hub backup failed')
@@ -44,12 +48,17 @@ def run_backup_cycle(database: Path, logger, now: float | None = None,
 
 def main() -> int:
     """Run one backup check; systemd owns the recurring schedule."""
+    parser = argparse.ArgumentParser(description='Create a Home Hub database backup.')
+    parser.add_argument('--force', action='store_true',
+                        help='create a verified backup now without pruning old copies')
+    args = parser.parse_args()
     logging.basicConfig(level=logging.INFO,
                         format='%(asctime)s %(levelname)s %(name)s: %(message)s')
     database = Path(os.environ.get(
         'HOMEHUB_DB', str(Path.home() / '.local/share/homehub/homehub.sqlite3')))
     try:
-        run_backup_cycle(database, logging.getLogger('homehub.backup'), raise_on_error=True)
+        run_backup_cycle(database, logging.getLogger('homehub.backup'),
+                         raise_on_error=True, force=args.force)
     except (OSError, ValueError, sqlite3.Error, BackupError):
         return 1
     return 0

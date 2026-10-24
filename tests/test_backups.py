@@ -6,6 +6,7 @@ from contextlib import closing
 
 from homehub.constants import BACKUP_INTERVAL_DAYS_MAXIMUM, BACKUP_RETENTION_DEFAULT
 from homehub.backup_scheduler import main as backup_main, run_backup_cycle
+from homehub.backups import create_backup
 from homehub.app import PH, create_app
 
 
@@ -206,7 +207,41 @@ def test_backup_command_uses_configured_database_and_reports_failures(tmp_path, 
         db.commit()
 
     monkeypatch.setenv('HOMEHUB_DB', str(database))
+    monkeypatch.setattr('sys.argv', ['homehub-backup'])
     assert backup_main() == 0
 
     monkeypatch.setenv('HOMEHUB_DB', str(tmp_path / 'missing.sqlite3'))
     assert backup_main() == 1
+
+
+def test_forced_backup_ignores_pause_and_does_not_prune_existing_backups(tmp_path):
+    _, _, database = make_admin_client(tmp_path)
+    folder = tmp_path / 'preserved backups'
+    folder.mkdir()
+    with closing(sqlite3.connect(database)) as db:
+        db.executemany('INSERT INTO app_settings(key,value) VALUES(?,?)', [
+            ('backup_folder', str(folder)), ('backup_interval_days', '0'),
+            ('backup_retention', '1'),
+        ])
+        db.commit()
+    create_backup(database, folder)
+    create_backup(database, folder)
+
+    result = run_backup_cycle(
+        database, logging.getLogger('test-forced-backup'), now=time.time(), force=True)
+
+    assert result is True
+    assert len(list(folder.glob('homehub-*.sqlite3'))) == 3
+
+
+def test_backup_command_force_makes_immediate_verified_copy_when_disabled(
+        tmp_path, monkeypatch):
+    _, _, database = make_admin_client(tmp_path)
+    with closing(sqlite3.connect(database)) as db:
+        db.execute("INSERT INTO app_settings(key,value) VALUES('backup_interval_days','0')")
+        db.commit()
+    monkeypatch.setenv('HOMEHUB_DB', str(database))
+    monkeypatch.setattr('sys.argv', ['homehub-backup', '--force'])
+
+    assert backup_main() == 0
+    assert len(list((tmp_path / 'backups').glob('homehub-*.sqlite3'))) == 1
