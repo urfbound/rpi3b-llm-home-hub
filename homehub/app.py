@@ -16,7 +16,8 @@ from fractions import Fraction
 from functools import wraps
 from pathlib import Path
 from urllib.parse import urlsplit
-from flask import (Flask, Response, abort, flash, g, jsonify, make_response, redirect,
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
+from flask import (Flask, Response, abort, flash, g, has_app_context, jsonify, make_response, redirect,
                    render_template, request, send_file, send_from_directory, session, url_for)
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError, VerificationError
@@ -31,7 +32,7 @@ from .rss import (DEFAULT_RSS_REFRESH_MINUTES, MAX_RSS_REFRESH_MINUTES,
                   MIN_RSS_REFRESH_MINUTES, RSSFeedError, validate_feed_url)
 
 PH = PasswordHasher(memory_cost=16384, time_cost=2, parallelism=1)
-SCHEMA_VERSION = 14
+SCHEMA_VERSION = 15
 LOGIN_WINDOW_SECONDS = 15 * 60
 LOGIN_USERNAME_LIMIT = 5
 LOGIN_ADDRESS_LIMIT = 30
@@ -344,6 +345,18 @@ CREATE TABLE IF NOT EXISTS event_participants (
  PRIMARY KEY(event_id,user_id)
 );
 CREATE INDEX IF NOT EXISTS event_participants_user ON event_participants(user_id,event_id);
+CREATE TABLE IF NOT EXISTS calendar_archives (
+ year INTEGER PRIMARY KEY,
+ file_name TEXT NOT NULL UNIQUE,
+ event_count INTEGER NOT NULL CHECK(event_count>=0),
+ archived_at TEXT NOT NULL,
+ size_bytes INTEGER NOT NULL CHECK(size_bytes>=0)
+);
+CREATE TABLE IF NOT EXISTS calendar_archive_failures (
+ year INTEGER PRIMARY KEY,
+ attempted_at TEXT NOT NULL,
+ error TEXT NOT NULL CHECK(length(error)<=256)
+);
 CREATE TABLE IF NOT EXISTS weather_cache (
  cache_key TEXT PRIMARY KEY,
  payload TEXT NOT NULL,
@@ -508,9 +521,18 @@ def system_status_for_dashboard(db, user, app, monitor):
         'history': history,
     }
 
-def household_today():
-    """Use the Pi's configured local date until household timezone settings exist."""
-    return datetime.now().astimezone().date()
+def household_today(db=None, *, now=None):
+    """Use the timezone attached to the admin-selected household location."""
+    instant = now or datetime.now(timezone.utc)
+    if db is None and has_app_context():
+        db = get_db()
+    timezone_name = setting_text(db, 'weather_timezone') if db is not None else ''
+    if timezone_name:
+        try:
+            return instant.astimezone(ZoneInfo(timezone_name)).date()
+        except (ValueError, ZoneInfoNotFoundError):
+            pass
+    return instant.astimezone().date()
 
 def week_start_for(day):
     """Return the Sunday that begins the week containing day."""
@@ -693,6 +715,82 @@ def initialize_database(db_path):
 
 def safe_ics_text(value):
     return str(value).replace('\\', '\\\\').replace('\n', '\\n').replace(',', '\\,').replace(';', '\\;')
+
+def calendar_archive_directory(database_path):
+    return Path(database_path).resolve().parent / 'calendar-archives'
+
+def calendar_ics_content(events, *, viewer=None, participant_ids=(), only_required=False):
+    lines = ['BEGIN:VCALENDAR', 'VERSION:2.0',
+             'PRODID:-//HomeHub//Local Calendar//EN', 'CALSCALE:GREGORIAN']
+    stamp = datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
+    for event in events:
+        required = (viewer is not None and
+                    (event['created_by'] == viewer['id'] or event['id'] in participant_ids))
+        if only_required and not required:
+            continue
+        can_view_details = (viewer is None or event['visibility'] == 'shared'
+                            or viewer['role'] == 'admin' or required)
+        lines.extend(['BEGIN:VEVENT', f'UID:homehub-{event["id"]}@local', f'DTSTAMP:{stamp}'])
+        if event['all_day']:
+            lines.append(f'DTSTART;VALUE=DATE:{event["event_date"].replace("-", "")}')
+        else:
+            start_value = (f'{event["event_date"].replace("-", "")}'
+                           f'T{event["start_time"].replace(":", "")}00')
+            lines.append(f'DTSTART:{start_value}')
+            if event['end_time']:
+                end_value = (f'{event["event_date"].replace("-", "")}'
+                             f'T{event["end_time"].replace(":", "")}00')
+                lines.append(f'DTEND:{end_value}')
+        lines.append(f'SUMMARY:{safe_ics_text(event["title"] if can_view_details else "Busy")}')
+        if can_view_details and event['description']:
+            lines.append(f'DESCRIPTION:{safe_ics_text(event["description"])}')
+        lines.append('END:VEVENT')
+    lines.append('END:VCALENDAR')
+    return '\r\n'.join(lines) + '\r\n'
+
+def write_calendar_archive(directory, year, events):
+    directory = Path(directory)
+    directory.mkdir(parents=True, exist_ok=True)
+    filename = f'homehub-calendar-{year}.ics'
+    path = directory / filename
+    temporary = directory / f'.{filename}.{secrets.token_hex(6)}.tmp'
+    content = calendar_ics_content(events).encode('utf-8')
+    try:
+        with temporary.open('xb') as archive:
+            archive.write(content)
+            archive.flush()
+            os.fsync(archive.fileno())
+        os.replace(temporary, path)
+    finally:
+        try:
+            temporary.unlink()
+        except FileNotFoundError:
+            pass
+    return filename, len(content)
+
+def process_calendar_year(db, directory, year, *, archive):
+    start = f'{year:04d}-01-01'
+    end = f'{year + 1:04d}-01-01'
+    events = db.execute(
+        'SELECT * FROM events WHERE event_date>=? AND event_date<? ORDER BY event_date,id',
+        (start, end),
+    ).fetchall()
+    if not events:
+        return False
+    archive_details = write_calendar_archive(directory, year, events) if archive else None
+    with db:
+        if archive_details:
+            filename, size_bytes = archive_details
+            db.execute(
+                'INSERT INTO calendar_archives(year,file_name,event_count,archived_at,size_bytes) '
+                'VALUES(?,?,?,?,?) ON CONFLICT(year) DO UPDATE SET '
+                'file_name=excluded.file_name,event_count=excluded.event_count,'
+                'archived_at=excluded.archived_at,size_bytes=excluded.size_bytes',
+                (year, filename, len(events), datetime.now(timezone.utc).isoformat(), size_bytes),
+            )
+        db.execute('DELETE FROM events WHERE event_date>=? AND event_date<?', (start, end))
+        db.execute('DELETE FROM calendar_archive_failures WHERE year=?', (year,))
+    return True
 
 def event_form_values(form):
     title = form.get('title', '').strip()
@@ -1097,6 +1195,34 @@ def create_app(test_config=None):
         if (not 1 <= calendar_month <= 12
                 or not minimum_calendar_year <= calendar_year <= maximum_calendar_year):
             abort(HTTPStatus.BAD_REQUEST)
+        expire_action = setting_text(db, 'calendar_expiry_action', 'archive')
+        if expire_action not in ('archive', 'delete'):
+            expire_action = 'archive'
+        expired_years = [row[0] for row in db.execute(
+            'SELECT DISTINCT CAST(substr(event_date,1,4) AS INTEGER) FROM events '
+            'WHERE event_date<? AND length(event_date)>=4 ORDER BY 1',
+            (f'{minimum_calendar_year:04d}-01-01',),
+        ).fetchall()]
+        failed_cleanup_years = {row[0] for row in db.execute(
+            'SELECT year FROM calendar_archive_failures'
+        ).fetchall()}
+        for expired_year in expired_years:
+            if expire_action == 'delete' and expired_year in failed_cleanup_years:
+                continue
+            try:
+                process_calendar_year(
+                    db, calendar_archive_directory(db_path), expired_year,
+                    archive=(expire_action == 'archive'),
+                )
+            except (OSError, sqlite3.Error) as exc:
+                with db:
+                    db.execute(
+                        'INSERT INTO calendar_archive_failures(year,attempted_at,error) '
+                        'VALUES(?,?,?) ON CONFLICT(year) DO UPDATE SET '
+                        'attempted_at=excluded.attempted_at,error=excluded.error',
+                        (expired_year, datetime.now(timezone.utc).isoformat(), str(exc)[:256]),
+                    )
+                flash(f'Calendar year {expired_year} could not be archived; its events remain in the database.')
         calendar_year_options = range(minimum_calendar_year, maximum_calendar_year + 1)
         if calendar_month == 1:
             previous_month, previous_year = 12, calendar_year - 1
@@ -1527,6 +1653,14 @@ def create_app(test_config=None):
         backup_frequency = setting(db, 'backup_interval_days', 1)
         backup_retention = setting(db, 'backup_retention', 14)
         backups = list_backups(backup_folder, backup_retention) if backup_folder_available else []
+        archive_folder = calendar_archive_directory(db_path)
+        calendar_archives = db.execute(
+            'SELECT year,file_name,event_count,archived_at,size_bytes '
+            'FROM calendar_archives ORDER BY year DESC'
+        ).fetchall()
+        calendar_archive_failures = db.execute(
+            'SELECT year,attempted_at,error FROM calendar_archive_failures ORDER BY year DESC'
+        ).fetchall()
         weather_units = setting_text(db, 'weather_units', 'metric')
         if weather_units not in ('metric', 'imperial'):
             weather_units = 'metric'
@@ -1536,6 +1670,13 @@ def create_app(test_config=None):
                                absolute_days=setting(db, 'session_absolute_days', 7),
                                events_per_day=setting(db, 'calendar_events_per_day', 8),
                                events_per_month=setting(db, 'calendar_events_per_month', 128),
+                               calendar_previous_years=setting(db, 'calendar_retention_years', 3),
+                               calendar_expiry_action=setting_text(
+                                   db, 'calendar_expiry_action', 'archive'),
+                               calendar_archive_folder=str(archive_folder),
+                               calendar_timezone=setting_text(db, 'weather_timezone', 'Pi local'),
+                               calendar_archives=calendar_archives,
+                               calendar_archive_failures=calendar_archive_failures,
                                backup_folder=str(configured_folder),
                                backup_folder_available=backup_folder_available,
                                backup_frequency=backup_frequency,
@@ -1701,6 +1842,66 @@ def create_app(test_config=None):
                             ('calendar_events_per_month', str(events_per_month))))
         flash('Calendar limits updated.')
         return redirect(url_for('accounts') + '#calendar-limits-section')
+
+    @app.post('/admin/calendar/retention')
+    @admin_required
+    def update_calendar_retention():
+        db = get_db()
+        try:
+            previous_years = int(request.form.get('previous_years', ''))
+        except ValueError:
+            abort(HTTPStatus.BAD_REQUEST, description='Choose between zero and ten previous years.')
+        expiry_action = request.form.get('expiry_action', '')
+        if not 0 <= previous_years <= 10 or expiry_action not in ('archive', 'delete'):
+            abort(HTTPStatus.BAD_REQUEST, description='Choose between zero and ten previous years and a valid expiry action.')
+        old_previous_years = setting(db, 'calendar_retention_years', 3)
+        today = household_today()
+        excluded_start = today.year - old_previous_years
+        excluded_end = today.year - previous_years
+        failed_years = []
+        archived_count = 0
+        archive_folder = calendar_archive_directory(db_path)
+        if previous_years < old_previous_years:
+            # An explicit reduction always archives first. The selected expiry
+            # action is retained for future automatic age cleanup behavior.
+            for year in range(excluded_start, excluded_end):
+                try:
+                    if process_calendar_year(db, archive_folder, year, archive=True):
+                        archived_count += 1
+                except (OSError, sqlite3.Error) as exc:
+                    failed_years.append(year)
+                    with db:
+                        db.execute(
+                            'INSERT INTO calendar_archive_failures(year,attempted_at,error) '
+                            'VALUES(?,?,?) ON CONFLICT(year) DO UPDATE SET '
+                            'attempted_at=excluded.attempted_at,error=excluded.error',
+                            (year, datetime.now(timezone.utc).isoformat(), str(exc)[:256]),
+                        )
+        with db:
+            db.executemany(
+                'INSERT INTO app_settings(key,value) VALUES(?,?) '
+                'ON CONFLICT(key) DO UPDATE SET value=excluded.value',
+                (('calendar_retention_years', str(previous_years)),
+                 ('calendar_expiry_action', expiry_action)),
+            )
+        if failed_years:
+            years = ', '.join(str(year) for year in failed_years)
+            flash(f'Calendar retention updated, but {years} could not be archived; those events remain in the database.')
+        else:
+            flash(f'Calendar retention updated. Archived {archived_count} year(s).')
+        return redirect(url_for('accounts') + '#calendar-retention-section')
+
+    @app.get('/admin/calendar/archives/<path:filename>')
+    @admin_required
+    def download_calendar_archive(filename):
+        archive = get_db().execute(
+            'SELECT file_name FROM calendar_archives WHERE file_name=?', (filename,)
+        ).fetchone()
+        if archive is None:
+            abort(HTTPStatus.NOT_FOUND)
+        return send_from_directory(calendar_archive_directory(db_path), archive['file_name'],
+                                   mimetype='text/calendar', as_attachment=True,
+                                   download_name=archive['file_name'])
 
     def configured_backup_directory(db):
         row = db.execute('SELECT value FROM app_settings WHERE key=?',
