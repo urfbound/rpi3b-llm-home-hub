@@ -2,6 +2,7 @@
 from http import HTTPStatus
 import hashlib
 import hmac
+import json
 import os
 import re
 import calendar as pycalendar
@@ -24,6 +25,7 @@ from argon2.exceptions import VerifyMismatchError, VerificationError
 from . import constants as limits
 from .chat import (ChatProviderError, ChatQueueFull, ChatRequestQueue,
                    OllamaProvider, list_ollama_models)
+from .chat_tools import ChatDataTools, ChatToolError
 from .backups import (BackupError, backup_filename, create_backup,
                       default_backup_directory, delete_backup, list_backups,
                       prune_backups, restore_backup, validate_backup_directory)
@@ -1154,6 +1156,8 @@ def create_app(test_config=None):
                 'ORDER BY position DESC,id DESC LIMIT ?',
                 (conversation['id'], pair_limit),
             ).fetchall()
+            data_tools_enabled = bool(job.get('data_tools_enabled')) and bool(setting(
+                db, 'chat_data_tools_enabled', limits.CHAT_DATA_TOOLS_DEFAULT))
             db.close()
             g.pop('db', None)
             messages = []
@@ -1164,7 +1168,57 @@ def create_app(test_config=None):
             completion = app.config.get('CHAT_COMPLETION')
             if completion is None:
                 completion = OllamaProvider(app.config['OLLAMA_BASE_URL']).complete
-            response = completion(job['model'], messages)
+            if data_tools_enabled:
+                data_tools = ChatDataTools(db_path, job['owner_id'])
+                tool_completion = app.config.get('CHAT_COMPLETION_WITH_TOOLS')
+                provider = OllamaProvider(app.config['OLLAMA_BASE_URL'])
+                tool_definitions = data_tools.definitions()
+                tool_calls_used = 0
+                while True:
+                    if tool_completion is not None:
+                        tool_response = tool_completion(
+                            job['model'], messages,
+                            tool_definitions if tool_calls_used < limits.CHAT_TOOL_CALLS_PER_REQUEST_MAXIMUM
+                            else None,
+                        )
+                    else:
+                        tool_response = provider.complete_message(
+                            job['model'], messages,
+                            tool_definitions if tool_calls_used < limits.CHAT_TOOL_CALLS_PER_REQUEST_MAXIMUM
+                            else None,
+                        )
+                    if isinstance(tool_response, str):
+                        tool_response = {'content': tool_response, 'tool_calls': []}
+                    if (not isinstance(tool_response, dict)
+                            or not isinstance(tool_response.get('content'), str)
+                            or not isinstance(tool_response.get('tool_calls', []), list)):
+                        raise ChatProviderError('The local model returned an invalid tool response.')
+                    calls = tool_response.get('tool_calls', [])
+                    if not calls:
+                        response = tool_response['content']
+                        break
+                    if tool_calls_used >= limits.CHAT_TOOL_CALLS_PER_REQUEST_MAXIMUM:
+                        raise ChatProviderError('The local model exceeded the Chat tool-call limit.')
+                    assistant_message = dict(tool_response)
+                    assistant_message['role'] = 'assistant'
+                    messages.append(assistant_message)
+                    for tool_call in calls:
+                        function = tool_call.get('function') if isinstance(tool_call, dict) else None
+                        name = function.get('name') if isinstance(function, dict) else None
+                        arguments = function.get('arguments', {}) if isinstance(function, dict) else {}
+                        try:
+                            if tool_calls_used >= limits.CHAT_TOOL_CALLS_PER_REQUEST_MAXIMUM:
+                                raise ChatToolError('Chat reached its tool-call limit.')
+                            result = data_tools.call(name, arguments)
+                        except ChatToolError as exc:
+                            result = {'error': str(exc)}
+                        tool_calls_used += 1
+                        messages.append({
+                            'role': 'tool', 'tool_name': str(name or '')[:80],
+                            'content': json.dumps(result, ensure_ascii=False, separators=(',', ':')),
+                        })
+            else:
+                response = completion(job['model'], messages)
             if not isinstance(response, str) or not response.strip():
                 raise ChatProviderError('The local model returned an empty response.')
             response = response.strip()
@@ -1819,12 +1873,15 @@ def create_app(test_config=None):
                                    limits.CHAT_MAX_QUEUE_DEPTH_DEFAULT),
                                chat_pairs_per_chat=setting(
                                    db, 'chat_pairs_per_chat',
-                                   limits.CHAT_PAIRS_PER_CHAT_DEFAULT))
+                                   limits.CHAT_PAIRS_PER_CHAT_DEFAULT),
+                               chat_data_tools_enabled=setting(
+                                   db, 'chat_data_tools_enabled', limits.CHAT_DATA_TOOLS_DEFAULT))
 
     @app.post('/admin/chat/settings')
     @admin_required
     def update_chat_settings():
         enabled = request.form.get('chat_enabled') == '1'
+        data_tools_enabled = request.form.get('chat_data_tools_enabled') == '1'
         model = request.form.get('model', '').strip()
         try:
             max_queue_depth = int(request.form.get('max_queue_depth', ''))
@@ -1856,7 +1913,8 @@ def create_app(test_config=None):
                 (('chat_enabled', '1' if enabled else '0'),
                  ('chat_model', model),
                  ('chat_max_queue_depth', str(max_queue_depth)),
-                 ('chat_pairs_per_chat', str(pairs_per_chat))),
+                 ('chat_pairs_per_chat', str(pairs_per_chat)),
+                 ('chat_data_tools_enabled', '1' if data_tools_enabled else '0')),
             )
         return redirect(url_for('accounts') + '#chat-settings-section')
 
@@ -1986,6 +2044,8 @@ def create_app(test_config=None):
             'pair_limit': pair_limit,
             'is_admin': g.user['role'] == 'admin',
             'confirm_drop_oldest': request.form.get('confirm_drop_oldest') == '1',
+            'data_tools_enabled': bool(setting(
+                db, 'chat_data_tools_enabled', limits.CHAT_DATA_TOOLS_DEFAULT)),
         }
         try:
             app.extensions['homehub_chat_queue'].enqueue(

@@ -76,13 +76,17 @@ def test_chat_is_hidden_by_default_and_admin_can_configure_installed_model(app):
     assert f'value="{CHAT_MAX_QUEUE_DEPTH_DEFAULT}"'.encode() in page.data
     assert b'name="pairs_per_chat"' in page.data
     assert f'value="{CHAT_PAIRS_PER_CHAT_DEFAULT}"'.encode() in page.data
+    assert b'name="chat_data_tools_enabled" value="1"' in page.data
+    assert b'name="chat_data_tools_enabled" value="1" checked' not in page.data
     response = post(admin, chat_enabled='1', model='qwen2.5:0.5b',
-                    max_queue_depth='12', pairs_per_chat='24')
+                    max_queue_depth='12', pairs_per_chat='24',
+                    chat_data_tools_enabled='1')
 
     assert response.status_code == HTTPStatus.FOUND
     assert setting_values(app) == {
         'chat_enabled': '1', 'chat_model': 'qwen2.5:0.5b',
         'chat_max_queue_depth': '12', 'chat_pairs_per_chat': '24',
+        'chat_data_tools_enabled': '1',
     }
 
 
@@ -126,6 +130,7 @@ def test_disabling_chat_hides_it_without_erasing_saved_model(app):
     assert setting_values(app) == {
         'chat_enabled': '0', 'chat_model': 'qwen2.5:0.5b',
         'chat_max_queue_depth': '8', 'chat_pairs_per_chat': '16',
+        'chat_data_tools_enabled': '0',
     }
 
 
@@ -140,3 +145,18 @@ def test_only_admins_can_change_chat_settings(app):
                 max_queue_depth='8', pairs_per_chat='16').status_code == HTTPStatus.FORBIDDEN
     assert post(house, chat_enabled='1', model='gemma3:270m',
                 max_queue_depth='8', pairs_per_chat='16').status_code == HTTPStatus.FORBIDDEN
+
+
+def test_chat_data_tools_setting_is_admin_controlled_and_defaults_off(app):
+    admin = sign_in(app, 'admin', 'admin chat password')
+    reader = sign_in(app, 'reader', 'reader chat password')
+
+    assert setting_values(app).get('chat_data_tools_enabled') is None
+    assert post(reader, chat_data_tools_enabled='1', chat_enabled='0',
+                model='', max_queue_depth='8', pairs_per_chat='16').status_code == HTTPStatus.FORBIDDEN
+
+    response = post(admin, chat_data_tools_enabled='1', chat_enabled='0',
+                    model='', max_queue_depth='8', pairs_per_chat='16')
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert setting_values(app)['chat_data_tools_enabled'] == '1'

@@ -70,18 +70,20 @@ class OllamaProvider(ChatProvider):
     def __init__(self, base_url=OLLAMA_DEFAULT_URL):
         self.base_url = _validated_base_url(base_url)
 
-    def complete(self, model, messages):
+    def _request(self, model, messages, tools=None):
         if not isinstance(model, str) or not model.strip() or len(model) > 128:
             raise ChatProviderError('Choose a valid installed model.')
-        payload = json.dumps({
+        payload = {
             'model': model,
             'messages': messages,
             'stream': False,
             'keep_alive': 0,
             'options': {'num_ctx': CHAT_CONTEXT_TOKENS_DEFAULT},
-        }).encode()
+        }
+        if tools is not None:
+            payload['tools'] = tools
         request = Request(
-            self.base_url + '/api/chat', data=payload,
+            self.base_url + '/api/chat', data=json.dumps(payload).encode(),
             headers={'Content-Type': 'application/json'}, method='POST',
         )
         try:
@@ -90,10 +92,19 @@ class OllamaProvider(ChatProvider):
         except (OSError, URLError, TimeoutError, ValueError) as exc:
             raise ChatProviderError('Local Ollama could not complete the request.') from exc
         message = result.get('message') if isinstance(result, dict) else None
-        content = message.get('content') if isinstance(message, dict) else None
-        if not isinstance(content, str):
+        if not isinstance(message, dict) or not isinstance(message.get('content'), str):
             raise ChatProviderError('Local Ollama returned an invalid chat response.')
-        return content.strip()
+        tool_calls = message.get('tool_calls', [])
+        if not isinstance(tool_calls, list):
+            raise ChatProviderError('Local Ollama returned invalid tool calls.')
+        return message
+
+    def complete(self, model, messages):
+        return self._request(model, messages)['content'].strip()
+
+    def complete_message(self, model, messages, tools=None):
+        """Return a validated assistant message, optionally with tool calls."""
+        return self._request(model, messages, tools)
 
 
 class ChatRequestQueue:

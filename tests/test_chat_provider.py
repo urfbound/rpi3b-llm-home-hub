@@ -86,3 +86,21 @@ def test_ollama_provider_rejects_non_loopback_before_sending(monkeypatch):
     with pytest.raises(ChatProviderError):
         OllamaProvider('http://192.168.1.9:11434').complete(
             'model', [{'role': 'user', 'content': 'Hi'}])
+
+
+def test_ollama_provider_sends_only_supplied_tool_schemas(monkeypatch):
+    calls = []
+
+    def fake_urlopen(request, timeout):
+        calls.append(json.loads(request.data))
+        return FakeResponse({'message': {'content': '', 'tool_calls': []}})
+
+    monkeypatch.setattr('homehub.chat.urlopen', fake_urlopen)
+    tools = [{'type': 'function', 'function': {'name': 'get_household_lists'}}]
+
+    response = OllamaProvider().complete_message(
+        'gemma3:270m', [{'role': 'user', 'content': 'What is on my list?'}], tools)
+
+    assert response == {'content': '', 'tool_calls': []}
+    assert calls[0]['tools'] == tools
+    assert calls[0]['options'] == {'num_ctx': CHAT_CONTEXT_TOKENS_DEFAULT}

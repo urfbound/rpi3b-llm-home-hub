@@ -6,7 +6,11 @@ from threading import Event
 import pytest
 
 from homehub.app import PH, create_app
-from homehub.constants import CHAT_PAIRS_PER_CHAT_DEFAULT, CHAT_PROMPT_MAXIMUM
+from homehub.constants import (
+    CHAT_PAIRS_PER_CHAT_DEFAULT,
+    CHAT_PROMPT_MAXIMUM,
+    CHAT_TOOL_RESULT_BYTES_MAXIMUM,
+)
 
 
 @pytest.fixture
@@ -260,3 +264,58 @@ def test_chat_requires_enabled_feature_and_a_selected_model(app):
         db.execute("UPDATE app_settings SET value='1' WHERE key='chat_enabled'")
         db.execute("UPDATE app_settings SET value='' WHERE key='chat_model'")
     assert submit(alice, 'No model').status_code == HTTPStatus.SERVICE_UNAVAILABLE
+
+
+def test_enabled_chat_data_tools_are_scoped_and_model_receives_bounded_result(app):
+    calls = []
+
+    def completion_with_tools(_model, messages, tools):
+        calls.append((messages, tools))
+        if len(calls) == 1:
+            return {'content': '', 'tool_calls': [{
+                'function': {'name': 'get_household_lists', 'arguments': {}},
+            }]}
+        return {'content': 'Your shared list has bread.', 'tool_calls': []}
+
+    app.config['CHAT_COMPLETION_WITH_TOOLS'] = completion_with_tools
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        db.execute(
+            "INSERT INTO app_settings(key,value) VALUES('chat_data_tools_enabled','1') "
+            "ON CONFLICT(key) DO UPDATE SET value='1'"
+        )
+        shared = db.execute(
+            "INSERT INTO household_lists(kind,title,category,visibility,created_by) "
+            "VALUES('shopping','Groceries','Other','shared',1)"
+        ).lastrowid
+        hidden = db.execute(
+            "INSERT INTO household_lists(kind,title,category,visibility,created_by) "
+            "VALUES('shopping','Bob private','Other','private',3)"
+        ).lastrowid
+        db.execute("INSERT INTO shopping_items(text,created_by,list_id) VALUES('Bread',1,?)", (shared,))
+        db.execute("INSERT INTO shopping_items(text,created_by,list_id) VALUES('Secret',3,?)", (hidden,))
+    alice = sign_in(app, 'alice', 'alice chat password')
+
+    queued = submit(alice, 'What do I need?')
+    assert queued.status_code == HTTPStatus.ACCEPTED
+    wait_for_request(alice, queued.get_json()['request_id'])
+
+    assert [tool['function']['name'] for tool in calls[0][1]] == [
+        'get_household_lists', 'get_calendar_events',
+    ]
+    serialized_tool_result = calls[1][0][-1]['content']
+    assert 'Groceries' in serialized_tool_result and 'Bread' in serialized_tool_result
+    assert 'Bob private' not in serialized_tool_result and 'Secret' not in serialized_tool_result
+    assert len(serialized_tool_result.encode()) <= CHAT_TOOL_RESULT_BYTES_MAXIMUM
+
+
+def test_chat_data_tools_are_omitted_when_admin_setting_is_off(app):
+    calls = []
+    app.config['CHAT_COMPLETION_WITH_TOOLS'] = lambda _model, messages, tools: (
+        calls.append(tools) or {'content': 'No tools attached.', 'tool_calls': []})
+    alice = sign_in(app, 'alice', 'alice chat password')
+
+    queued = submit(alice, 'Hello')
+    assert queued.status_code == HTTPStatus.ACCEPTED
+    wait_for_request(alice, queued.get_json()['request_id'])
+
+    assert calls == []
