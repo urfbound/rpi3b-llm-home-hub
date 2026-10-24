@@ -49,6 +49,7 @@
   }
 
   svg.addEventListener('pointerdown', event => {
+    event.preventDefault();
     drag = {x: event.clientX, y: event.clientY};
     svg.setPointerCapture(event.pointerId);
   });

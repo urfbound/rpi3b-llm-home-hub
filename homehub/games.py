@@ -717,16 +717,31 @@ def _wumpus_render(db, today, attempt=None, practice=False):
         seen.update(int(match.group(1)) for event in state['history']
                     if (match := re.fullmatch(r'Moved to room (\d+)\.', event)))
     bat_rooms = set(state.get('bat_rooms', []))
+    death = None
+    if attempt and attempt['status'] == 'lost':
+        if state['room'] == game['placements'][1]:
+            death = ('🍽️', 'The Wumpus ate you.')
+        elif state['room'] in game['placements'][2:4]:
+            death = ('⬇️', 'You fell into a pit.')
     map_rooms = []
     for room, (x, y, z) in points.items():
         clues = (['Bats carried you away.'] if room in bat_rooms and room != state['room']
                  else game_wumpus.warnings_for(room, game['placements'])
                  if room in seen else [])
+        if death and room == state['room']:
+            clues = [death[1]]
+            markers = [{'kind': 'death', 'symbol': death[0], 'x': 0, 'y': 1}]
+        else:
+            markers = [{'kind': kind, 'symbol': symbol, 'x': marker_x, 'y': marker_y}
+                       for kind, symbol, marker_x, marker_y, message in (
+                           ('wind', '🍃', 0, -9, 'You feel a draft.'),
+                           ('bats', '🦇', 11, 8, 'You hear bats fluttering.'),
+                           ('smell', '🐲', -11, 8, 'You smell the Wumpus nearby.'))
+                       if message in clues or (kind == 'bats' and
+                                               'Bats carried you away.' in clues)]
         map_rooms.append({'number': room, 'x': x, 'y': y, 'z': z,
                           'seen': room in seen, 'clues': clues,
-                          'labels': ['Smell' if 'smell' in clue else
-                                     'Draft' if 'draft' in clue else 'Bats'
-                                     for clue in clues]})
+                          'markers': markers})
     return render_template('game_wumpus.html', day=today, attempt=attempt,
                            state=state, game=game, practice=practice,
                            map_rooms=map_rooms, map_edges=edges,

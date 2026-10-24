@@ -287,13 +287,27 @@ def test_wumpus_map_shows_topology_and_only_visited_clues(game_app):
     page = alex.get('/games/wumpus').data.decode()
     assert 'id="hide-wumpus-map"' in page
     assert 'wumpus-map.js' in page
-    assert len(re.findall(r'class="wumpus-corridor"', page)) == 30
+    assert page.index('<section class="panel"><div class="wumpus-map-wrap">') < page.index('<h2>Room ')
+    assert (page.index('Drag to rotate the cave.') < page.index('id="hide-wumpus-map"')
+            < page.index('<svg id="wumpus-map"'))
+    corridors = [(classes, int(a), int(b)) for classes, a, b in
+                 re.findall(r'<line class="([^"]+)" data-a="(\d+)" data-b="(\d+)"', page)]
+    assert len(corridors) == 30
+    assert all(('dashed' in classes) == (a != start or b != start)
+               for classes, a, b in corridors)
     rooms = dict((int(room), clues) for room, clues in
                  re.findall(r'data-room="(\d+)" data-clues="([^"]*)"', page))
     assert set(rooms) == set(ROOMS)
     assert rooms[start] == ', '.join(warnings_for(start, game['placements']))
     assert all(not clues for room, clues in rooms.items() if room != start)
-    assert all(f'class="wumpus-room-number" x="30">{room}</text>' in page for room in ROOMS)
+    assert f'class="wumpus-room-number" x="30">{start}</text>' in page
+    assert all(f'class="wumpus-room-number" x="30">{room}</text>' not in page
+               for room in ROOMS if room != start)
+    assert len(re.findall(r'class="wumpus-room unseen"', page)) == 19
+    start_markup = re.search(rf'id="wumpus-room-{start}".*?</g>', page).group()
+    assert ('🍃' in start_markup) == ('You feel a draft.' in warnings_for(start, game['placements']))
+    assert ('🦇' in start_markup) == ('You hear bats fluttering.' in warnings_for(start, game['placements']))
+    assert ('🐲' in start_markup) == ('You smell the Wumpus nearby.' in warnings_for(start, game['placements']))
     with sqlite3.connect(game_app.config['DATABASE']) as db:
         assert db.execute("SELECT COUNT(*) FROM game_attempts WHERE game='wumpus'").fetchone()[0] == 0
 
@@ -306,6 +320,11 @@ def test_wumpus_map_shows_topology_and_only_visited_clues(game_app):
     assert rooms[start] == ', '.join(warnings_for(start, game['placements']))
     assert rooms[safe] == ', '.join(warnings_for(safe, game['placements']))
     assert all(not clues for room, clues in rooms.items() if room not in (start, safe))
+    assert f'class="wumpus-room-number" x="30">{safe}</text>' in page
+    corridors = [(classes, int(a), int(b)) for classes, a, b in
+                 re.findall(r'<line class="([^"]+)" data-a="(\d+)" data-b="(\d+)"', page)]
+    assert all(('dashed' in classes) == (a not in (start, safe) or b not in (start, safe))
+               for classes, a, b in corridors)
     with sqlite3.connect(game_app.config['DATABASE']) as db:
         attempt = db.execute("SELECT moves,points,state FROM game_attempts WHERE game='wumpus'").fetchone()
     alex.get('/games/wumpus')
@@ -332,6 +351,7 @@ def test_wumpus_map_records_bat_encounter_without_unseen_warnings(game_app):
                      for bat in game['placements'][4:]
                      if bat in ROOMS[game['placements'][0]]
                      and bat_destination(seed, 1) != bat
+                     and bat_destination(seed, 1) not in game['placements'][1:4]
                      and warnings_for(bat, game['placements']))
     alex = sign_in(game_app, 'alex')
     url = alex.post('/games/wumpus/practice', data={
@@ -344,6 +364,28 @@ def test_wumpus_map_records_bat_encounter_without_unseen_warnings(game_app):
     assert rooms[bat] == 'Bats carried you away.'
     assert rooms[bat_destination(seed, 1)] == ', '.join(
         warnings_for(bat_destination(seed, 1), map_for_seed(seed)['placements']))
+    bat_markup = re.search(rf'id="wumpus-room-{bat}".*?</g>', page).group()
+    assert '🦇' in bat_markup
+    assert '🍃' not in bat_markup and '🐲' not in bat_markup
+
+
+@pytest.mark.parametrize(('hazard_index', 'emoji'), [(1, '🍽️'), (2, '⬇️')])
+def test_wumpus_map_shows_only_cause_of_death(game_app, hazard_index, emoji):
+    from homehub.game_wumpus import ROOMS, map_for_seed
+
+    seed, hazard = next((seed, game['placements'][hazard_index])
+                        for seed in range(1000)
+                        for game in [map_for_seed(seed)]
+                        if game['placements'][hazard_index] in ROOMS[game['placements'][0]])
+    alex = sign_in(game_app, 'alex')
+    url = alex.post('/games/wumpus/practice', data={
+        '_csrf': token_for(alex), 'seed': str(seed)}).headers['Location']
+    alex.post(f'{url}/action', data={'_csrf': token_for(alex),
+                                     'action': 'move', 'rooms': str(hazard)})
+    page = alex.get(url).data.decode()
+    room_markup = re.search(rf'id="wumpus-room-{hazard}".*?</g>', page).group()
+    assert emoji in room_markup
+    assert not any(marker in room_markup for marker in ('🦇', '🍃', '🐲'))
 
 
 def test_wumpus_move_shoot_score_and_seeded_practice(game_app):
