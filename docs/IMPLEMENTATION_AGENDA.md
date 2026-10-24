@@ -165,9 +165,10 @@ to `main` only after the user approves the completed change.
 
 ### Games
 
-- **Do not begin Games implementation until the user is asked and confirms.**
-  The user intends to use a heavier model for this work; save it for the end
-  of the agenda if practical.
+- The user confirmed Games work may begin. The first branch adds the Games tab
+  and Word Garden as a playable daily and practice puzzle, with a 30-answer
+  offline bank, private resumable attempts, scoreboards, streaks, and a v16
+  schema upgrade. The other five game cards remain marked coming soon.
 - Implement all six first-release games: Wordle-style word guessing, mini
   crosswords, Hunt the Wumpus, word ladders, mini nonograms, and Sudoku.
 - Start with a curated offline bank covering at least 30 days. Add daily
