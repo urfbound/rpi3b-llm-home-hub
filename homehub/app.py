@@ -35,6 +35,7 @@ from .system_status import (collect_system_snapshot, cpu_usage_percent,
                             cpu_bar_class, record_metric_sample)
 from .rss import (DEFAULT_RSS_REFRESH_MINUTES, MAX_RSS_REFRESH_MINUTES,
                   MIN_RSS_REFRESH_MINUTES, RSSFeedError, validate_feed_url)
+from .rss_store import RSSArticleError, articles_for_user, set_article_state
 from .games import games, SCHEMA as GAMES_SCHEMA, upgrade_multigame_schema
 
 PH = PasswordHasher(memory_cost=16384, time_cost=2, parallelism=1)
@@ -436,6 +437,10 @@ CREATE TABLE IF NOT EXISTS rss_feed_refresh (
  succeeded_at TEXT,
  last_error TEXT CHECK(last_error IS NULL OR length(last_error)<={limits.ERROR_TEXT_MAXIMUM}),
  articles_added INTEGER NOT NULL DEFAULT 0 CHECK(articles_added>=0)
+);
+CREATE TABLE IF NOT EXISTS rss_user_preferences (
+ user_id INTEGER PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+ ask_before_done_delete INTEGER NOT NULL DEFAULT 1 CHECK(ask_before_done_delete IN (0,1))
 );
 CREATE TABLE IF NOT EXISTS system_metrics (
  sampled_at TEXT PRIMARY KEY,
@@ -1621,6 +1626,14 @@ def create_app(test_config=None):
     @login_required
     def rss_page():
         db = get_db()
+        articles_by_feed = {}
+        for article in articles_for_user(db, g.user['id']):
+            articles_by_feed.setdefault(article['feed_id'], []).append(article)
+        favourite_articles = sorted(
+            (article for rows in articles_by_feed.values() for article in rows
+             if article['is_favorite']),
+            key=lambda article: (article['first_seen_at'], article['id']), reverse=True,
+        )
         personal_feeds = []
         if g.user['account_kind'] == 'person':
             personal_feeds = db.execute(
@@ -1630,8 +1643,113 @@ def create_app(test_config=None):
         household_feeds = db.execute(
             "SELECT * FROM rss_feeds WHERE scope='household' ORDER BY sort_order,id"
         ).fetchall()
+        preference = db.execute(
+            'SELECT ask_before_done_delete FROM rss_user_preferences WHERE user_id=?',
+            (g.user['id'],),
+        ).fetchone()
         return render_template('rss.html', personal_feeds=personal_feeds,
-                               household_feeds=household_feeds)
+                               household_feeds=household_feeds,
+                               articles_by_feed=articles_by_feed,
+                               favourite_articles=favourite_articles,
+                               ask_before_done_delete=(preference[0] if preference else 1))
+
+    @app.get('/rss/articles/<int:article_id>/open')
+    @login_required
+    def open_rss_article(article_id):
+        db = get_db()
+        article = next((item for item in articles_for_user(db, g.user['id'])
+                        if item['id'] == article_id), None)
+        if article is None:
+            abort(HTTPStatus.NOT_FOUND)
+        set_article_state(db, g.user['id'], article_id, is_read=True)
+        db.commit()
+        return redirect(article['url'] or url_for('rss_page'))
+
+    @app.post('/rss/articles/<int:article_id>/done-reading')
+    @login_required
+    def done_reading_rss_article(article_id):
+        if g.user['account_kind'] != 'person':
+            abort(HTTPStatus.FORBIDDEN)
+        db = get_db()
+        article = next((item for item in articles_for_user(db, g.user['id'])
+                        if item['id'] == article_id), None)
+        if article is None:
+            abort(HTTPStatus.NOT_FOUND)
+        preference = db.execute(
+            'SELECT ask_before_done_delete FROM rss_user_preferences WHERE user_id=?',
+            (g.user['id'],),
+        ).fetchone()
+        ask_first = preference is None or bool(preference[0])
+        confirmed = request.form.get('confirmed') == '1'
+        if ask_first and not confirmed:
+            abort(HTTPStatus.CONFLICT, description='Confirm the Done reading choice.')
+        choice = request.form.get('choice', 'delete')
+        if choice not in ('delete', 'keep'):
+            abort(HTTPStatus.BAD_REQUEST)
+        if request.form.get('dont_ask_again') == '1' and confirmed:
+            db.execute(
+                'INSERT INTO rss_user_preferences(user_id,ask_before_done_delete) VALUES(?,0) '
+                'ON CONFLICT(user_id) DO UPDATE SET ask_before_done_delete=0',
+                (g.user['id'],),
+            )
+        set_article_state(db, g.user['id'], article_id, is_read=True,
+                          is_deleted=(choice == 'delete'))
+        db.commit()
+        flash('Marked as read.' if choice == 'keep' else 'Article removed after reading.')
+        return redirect(url_for('rss_page'))
+
+    @app.post('/rss/articles/<int:article_id>/delete')
+    @login_required
+    def delete_rss_article(article_id):
+        if g.user['account_kind'] != 'person':
+            abort(HTTPStatus.FORBIDDEN)
+        db = get_db()
+        article = next((item for item in articles_for_user(db, g.user['id'])
+                        if item['id'] == article_id), None)
+        if article is None:
+            abort(HTTPStatus.NOT_FOUND)
+        state = db.execute(
+            'SELECT is_favorite FROM rss_article_states WHERE article_id=? AND user_id=?',
+            (article_id, g.user['id']),
+        ).fetchone()
+        if state and state[0] and request.form.get('confirmed') != '1':
+            abort(HTTPStatus.CONFLICT, description='Confirm deleting this favourite article.')
+        set_article_state(db, g.user['id'], article_id, is_deleted=True)
+        db.commit()
+        return redirect(url_for('rss_page'))
+
+    @app.post('/rss/articles/<int:article_id>/favorite')
+    @login_required
+    def favorite_rss_article(article_id):
+        if g.user['account_kind'] != 'person':
+            abort(HTTPStatus.FORBIDDEN)
+        db = get_db()
+        try:
+            set_article_state(db, g.user['id'], article_id,
+                              is_favorite=request.form.get('favorite') == '1')
+        except RSSArticleError as exc:
+            if not any(item['id'] == article_id for item in articles_for_user(db, g.user['id'])):
+                abort(HTTPStatus.NOT_FOUND)
+            flash(str(exc))
+            return redirect(url_for('rss_page'))
+        db.commit()
+        return redirect(url_for('rss_page'))
+
+    @app.post('/rss/preferences/done-reading')
+    @login_required
+    def update_rss_done_reading_preference():
+        if g.user['account_kind'] != 'person':
+            abort(HTTPStatus.FORBIDDEN)
+        ask_before_delete = int(request.form.get('ask_before_done_delete') == '1')
+        db = get_db()
+        db.execute(
+            'INSERT INTO rss_user_preferences(user_id,ask_before_done_delete) VALUES(?,?) '
+            'ON CONFLICT(user_id) DO UPDATE SET ask_before_done_delete=excluded.ask_before_done_delete',
+            (g.user['id'], ask_before_delete),
+        )
+        db.commit()
+        flash('RSS reading preference saved.')
+        return redirect(url_for('rss_page'))
 
     @app.post('/rss/feeds')
     @login_required

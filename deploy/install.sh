@@ -24,7 +24,9 @@ for required in "$REPO_ROOT/homehub" "$REPO_ROOT/pyproject.toml" \
                 "$SCRIPT_DIR/venv_permissions.sh" \
                 "$SCRIPT_DIR/homehub.service.example" \
                 "$SCRIPT_DIR/homehub-backup.service.example" \
-                "$SCRIPT_DIR/homehub-backup.timer.example"; do
+                "$SCRIPT_DIR/homehub-backup.timer.example" \
+                "$SCRIPT_DIR/homehub-rss-refresh.service.example" \
+                "$SCRIPT_DIR/homehub-rss-refresh.timer.example"; do
   if [[ ! -e $required ]]; then
     printf 'Required project file is missing: %s\n' "$required" >&2
     exit 1
@@ -138,6 +140,10 @@ sudo install -o root -g root -m 0644 "$SCRIPT_DIR/homehub-backup.service.example
   /etc/systemd/system/homehub-backup.service
 sudo install -o root -g root -m 0644 "$SCRIPT_DIR/homehub-backup.timer.example" \
   /etc/systemd/system/homehub-backup.timer
+sudo install -o root -g root -m 0644 "$SCRIPT_DIR/homehub-rss-refresh.service.example" \
+  /etc/systemd/system/homehub-rss-refresh.service
+sudo install -o root -g root -m 0644 "$SCRIPT_DIR/homehub-rss-refresh.timer.example" \
+  /etc/systemd/system/homehub-rss-refresh.timer
 
 # Remove legacy Home Hub cron entries so only the systemd timer schedules backups.
 for cron_user in root "$SERVICE_USER"; do
@@ -152,7 +158,7 @@ done
 sudo rm -f -- /etc/cron.d/homehub-backup
 
 sudo systemctl daemon-reload
-sudo systemctl enable --now homehub.service homehub-backup.timer
+sudo systemctl enable --now homehub.service homehub-backup.timer homehub-rss-refresh.timer
 
 printf '\nHome Hub is installed. It listens on the Pi loopback interface only.\n'
 printf 'For setup, open an SSH tunnel from Windows: ssh -L 8080:127.0.0.1:8080 %s@hostname\n' "$USER"

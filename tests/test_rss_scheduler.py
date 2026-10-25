@@ -4,6 +4,7 @@ import sqlite3
 from homehub.app import create_app
 from homehub.rss import RSSFeedError
 from homehub.rss_scheduler import refresh_due_feeds
+from homehub.rss_store import store_feed_articles
 
 
 FEED_BODY = b'''<rss><channel><title>Example</title><item>
@@ -28,13 +29,20 @@ def make_app(path, *, outbound='1', interval='30'):
 def test_refresh_obeys_outbound_toggle_before_any_network_request(tmp_path):
     app = make_app(tmp_path / 'rss.sqlite3', outbound='0')
     with sqlite3.connect(app.config['DATABASE']) as db:
+        db.row_factory = sqlite3.Row
+        store_feed_articles(db, 1, [{
+            'title': 'Expired story', 'url': 'https://news.example/expired',
+            'summary': '', 'published': '',
+        }], fetched_at='2026-07-20T12:00:00+00:00')
         result = refresh_due_feeds(
             db, now=datetime(2026, 10, 24, 12, tzinfo=timezone.utc),
             fetcher=lambda *_args, **_kwargs: (_ for _ in ()).throw(
                 AssertionError('outbound fetch must be disabled')),
         )
+        remaining = db.execute('SELECT COUNT(*) FROM rss_articles').fetchone()[0]
 
     assert result == {'disabled': True, 'checked': 0, 'refreshed': 0, 'failed': 0}
+    assert remaining == 0
 
 
 def test_refresh_fetches_due_feed_once_and_respects_configured_interval(tmp_path):

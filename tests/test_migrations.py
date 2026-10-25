@@ -395,3 +395,21 @@ def test_v18_upgrade_adds_rss_refresh_status_without_losing_articles(tmp_path):
                 'articles_added'} <= {
                     row[1] for row in db.execute('PRAGMA table_info(rss_feed_refresh)')}
         assert db.execute('PRAGMA foreign_key_check').fetchall() == []
+
+
+def test_v19_upgrade_adds_rss_user_preferences(tmp_path):
+    path = tmp_path / 'v19.sqlite3'
+    create_app(config(path))
+    with sqlite3.connect(path) as db:
+        db.execute("INSERT INTO users(username,password_hash,role) VALUES('rss-reader','hash','user')")
+        db.execute('PRAGMA user_version=19')
+
+    create_app(config(path))
+
+    with sqlite3.connect(path) as db:
+        assert db.execute('PRAGMA user_version').fetchone()[0] == LATEST_SCHEMA_VERSION
+        columns = {row[1] for row in db.execute('PRAGMA table_info(rss_user_preferences)')}
+        assert {'user_id', 'ask_before_done_delete'} <= columns
+        db.execute('INSERT INTO rss_user_preferences(user_id) VALUES(1)')
+        assert db.execute('SELECT ask_before_done_delete FROM rss_user_preferences').fetchone() == (1,)
+        assert db.execute('PRAGMA foreign_key_check').fetchall() == []

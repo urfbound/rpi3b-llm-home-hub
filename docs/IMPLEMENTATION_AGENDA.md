@@ -162,16 +162,18 @@ to `main` only after the user approves the completed change.
   explicit admin approval for a private household feed host. LAN approval does
   not permit loopback or redirects to another private host. Interval-aware
   refresh selection now respects the outbound toggle and records per-feed
-  success or failure. The short-lived systemd timer integration and article
-  serving while outbound access is disabled remain. Admin can set a
-  10–240-minute RSS interval (default 30).
+  success or failure. A short-lived systemd timer invokes the refresh runner
+  every ten minutes; the runner applies the admin-configured 10–240-minute
+  interval and outbound toggle. Saved articles continue to display while
+  outbound access is disabled.
 - Article persistence now stores feed content once and keeps read, favourite,
-  and delete state per user; personal-feed visibility is owner-only. Implement
-  article-open read tracking, Done reading
-  behavior, prompt preference, favourite confirmation, and the bottom
-  favourites card. Keep house-wide articles for at most three days; track
-  their read state per user when practical, otherwise ignore it. Personal
-  articles retain the 90-day/64 MB per-user cap and eviction order.
+  and delete state per user; personal-feed visibility is owner-only. Article
+  open tracking, feed-grouped display, Done reading with its configurable
+  deletion prompt, favourite-deletion confirmation, and centralized Manage
+  feeds controls, and the bottom favourites card are implemented. Cleanup
+  expires household articles after three days and personal articles after 90;
+  personal storage evicts oldest unread, then oldest read until within 64 MB,
+  while favourites remain protected.
 
 ### Games
 
