@@ -148,6 +148,33 @@ def test_list_page_offers_copy_and_paste_controls(client):
     assert b'Paste list' in page.data
     assert b'Clipboard access unavailable' in page.data
 
+def test_top_navigation_links_to_dedicated_lists_and_calendar_pages(client):
+    sign_in(client)
+    page = client.get('/')
+
+    assert b'href="/lists"' in page.data
+    assert b'href="/calendar"' in page.data
+
+def test_homepage_cards_link_to_dedicated_pages(client):
+    sign_in(client)
+    page = client.get('/')
+
+    assert b'href="/lists?kind=chores"' in page.data
+    assert b'href="/calendar"' in page.data
+
+def test_lists_and_calendar_routes_show_their_own_sections(client):
+    sign_in(client)
+
+    lists_page = client.get('/lists')
+    calendar_page = client.get('/calendar')
+
+    assert lists_page.status_code == HTTPStatus.OK
+    assert b'id="shopping"' in lists_page.data
+    assert b'id="calendar"' not in lists_page.data
+    assert calendar_page.status_code == HTTPStatus.OK
+    assert b'id="calendar"' in calendar_page.data
+    assert b'id="shopping"' not in calendar_page.data
+
 def test_list_text_exports_the_selected_todo_list(client):
     sign_in(client)
     token = csrf_token(client)
