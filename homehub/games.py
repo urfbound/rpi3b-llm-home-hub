@@ -721,6 +721,9 @@ def _wumpus_render(db, today, attempt=None, practice=False):
         seen = {game['placements'][0], state['room']}
         seen.update(int(match.group(1)) for event in state['history']
                     if (match := re.fullmatch(r'Moved to room (\d+)\.', event)))
+    numbered_rooms = set(seen)
+    for visited in seen:
+        numbered_rooms.update(game_wumpus.ROOMS[visited])
     bat_rooms = set(state.get('bat_rooms', []))
     death = None
     if attempt and attempt['status'] == 'lost':
@@ -745,7 +748,8 @@ def _wumpus_render(db, today, attempt=None, practice=False):
                        if message in clues or (kind == 'bats' and
                                                'Bats carried you away.' in clues)]
         map_rooms.append({'number': room, 'x': x, 'y': y, 'z': z,
-                          'seen': room in seen, 'clues': clues,
+                          'seen': room in seen, 'number_visible': room in numbered_rooms,
+                          'clues': clues,
                           'markers': markers})
     return render_template('game_wumpus.html', day=today, attempt=attempt,
                            state=state, game=game, practice=practice,

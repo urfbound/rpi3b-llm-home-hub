@@ -374,9 +374,13 @@ def test_wumpus_map_shows_topology_and_only_visited_clues(game_app):
     assert set(rooms) == set(ROOMS)
     assert rooms[start] == ', '.join(warnings_for(start, game['placements']))
     assert all(not clues for room, clues in rooms.items() if room != start)
-    assert f'class="wumpus-room-number" x="30">{start}</text>' in page
-    assert all(f'class="wumpus-room-number" x="30">{room}</text>' not in page
-               for room in ROOMS if room != start)
+    visible_numbers = {int(room) for room in re.findall(
+        r'class="wumpus-room-number" x="30">(\d+)</text>', page)}
+    assert visible_numbers == {start, *ROOMS[start]}
+    assert '.wumpus-room.unseen .wumpus-room-number{fill:var(--muted)}' in page
+    assert all(f'class="wumpus-room unseen"' in re.search(
+        rf'<g class="([^"]+)"[^>]*id="wumpus-room-{room}".*?</g>', page).group()
+               for room in ROOMS[start])
     assert len(re.findall(r'class="wumpus-room unseen"', page)) == 19
     start_markup = re.search(rf'id="wumpus-room-{start}".*?</g>', page).group()
     assert ('🍃' in start_markup) == ('You feel a draft.' in warnings_for(start, game['placements']))
@@ -394,7 +398,14 @@ def test_wumpus_map_shows_topology_and_only_visited_clues(game_app):
     assert rooms[start] == ', '.join(warnings_for(start, game['placements']))
     assert rooms[safe] == ', '.join(warnings_for(safe, game['placements']))
     assert all(not clues for room, clues in rooms.items() if room not in (start, safe))
-    assert f'class="wumpus-room-number" x="30">{safe}</text>' in page
+    newly_visible = {start, safe} | {neighbor for visited in (start, safe)
+                                     for neighbor in ROOMS[visited]}
+    visible_numbers = {int(room) for room in re.findall(
+        r'class="wumpus-room-number" x="30">(\d+)</text>', page)}
+    assert visible_numbers == newly_visible
+    assert all(f'class="wumpus-room unseen"' in re.search(
+        rf'<g class="([^"]+)"[^>]*id="wumpus-room-{room}".*?</g>', page).group()
+               for room in newly_visible - {start, safe})
     corridors = [(classes, int(a), int(b)) for classes, a, b in
                  re.findall(r'<line class="([^"]+)" data-a="(\d+)" data-b="(\d+)"', page)]
     assert all(('dashed' in classes) == (a not in (start, safe) or b not in (start, safe))
