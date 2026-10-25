@@ -256,6 +256,16 @@ to `main` only after the user approves the completed change.
 - Multiple daily puzzles, locally generated puzzle banks, weather almanac,
   on-demand historical weather, and alternate weather providers.
 
+## Post-R1.0
+
+- Add Chat working-state bubbles: show `🧠...` while the model is reasoning and
+  `🗣️...` while it is composing a response.
+- Add more read-only and proposal-based Chat tools, including RSS summaries and
+  adding a day's recipes to a shopping list. Any write proposal must be shown
+  for confirmation and re-authorized by the server before applying it.
+- Allow users to navigate away from an in-progress Chat conversation while the
+  server-side request continues, then return to see its status and response.
+
 ## Release gates
 
 - Test-first workflow: write a failing behavior test before implementation,

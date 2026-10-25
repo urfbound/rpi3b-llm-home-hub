@@ -30,38 +30,48 @@
       <input type="hidden" name="_csrf" value="{{ csrf_token }}">
       {% if confirm_pair_drop %}<label class="callout"><input type="checkbox" name="confirm_drop_oldest" value="1" required> This chat has reached its history limit. Sending another prompt will remove the oldest prompt-and-response pair.</label>{% endif %}
       <label for="chat-prompt">Your prompt<textarea id="chat-prompt" name="prompt" rows="3" maxlength="{{ prompt_maximum }}" placeholder="Ask a short question…" required></textarea></label>
-      <div class="chat-submit-row"><small id="chat-prompt-count">0 / {{ prompt_maximum }} characters</small><div><small>Responses may take a few minutes.</small> <button class="primary">Send</button></div></div>
-      <p id="chat-request-status" class="muted" role="status" aria-live="polite"></p>
+      <div class="chat-submit-row"><small id="chat-prompt-count">0 / {{ prompt_maximum }} characters</small><div><small>Responses may take a few minutes.</small> <button id="chat-send-button" class="primary">Send</button></div></div>
+      <p id="chat-request-status" class="muted" role="status" aria-live="polite"><span id="chat-request-status-text"></span><span id="chat-request-ellipsis" class="chat-working-ellipsis" aria-hidden="true" hidden>...</span></p>
     </form>
     {% elif conversation.owner_user_id == current_user['id'] %}<p class="chat-readonly-note">Chat is currently disabled by an administrator.</p>
     {% else %}<p class="chat-readonly-note">This is a read-only admin view. Only {{ conversation.display_name }} can send prompts.</p>{% endif %}
     {% else %}<div class="chat-empty-conversation"><h2>Choose a chat or start a new one</h2><p class="muted">Your conversations are private to your account.</p></div>{% endif %}
   </section>
 </div>
-{% if conversation and conversation.owner_user_id == current_user['id'] and chat_enabled %}<script>
+{% if conversation and conversation.owner_user_id == current_user['id'] and chat_enabled %}<script src="{{ url_for('static', filename='chat-ui.js') }}"></script><script>
 (() => {
   const form = document.getElementById('chat-prompt-form');
   const prompt = document.getElementById('chat-prompt');
+  const sendButton = document.getElementById('chat-send-button');
   const count = document.getElementById('chat-prompt-count');
-  const status = document.getElementById('chat-request-status');
+  const statusText = document.getElementById('chat-request-status-text');
+  const ellipsis = document.getElementById('chat-request-ellipsis');
   const max = {{ prompt_maximum }};
   let requestId = {{ request.args.get('request_id', '')|tojson }};
+  const setStatus = (message, working = false) =>
+    window.HomeHubChatUI.setWorkingStatus(statusText, ellipsis, message, working);
+  const setBusy = busy => window.HomeHubChatUI.setBusy(prompt, sendButton, busy);
   prompt.addEventListener('input', () => { count.textContent = `${prompt.value.length} / ${max} characters`; });
   const poll = () => {
     if (!requestId) return;
     fetch(`/chat/requests/${encodeURIComponent(requestId)}`, {headers: {'Accept': 'application/json'}})
       .then(response => response.ok ? response.json() : Promise.reject())
       .then(data => {
-        if (data.status === 'queued') status.textContent = `Waiting in queue · position ${data.queue_position}`;
-        else if (data.status === 'running') status.textContent = 'Your local model is working…';
-        else if (data.status === 'complete') { status.textContent = 'Response ready.'; location.reload(); return; }
-        else if (data.status === 'failed') { status.textContent = data.error || 'The model request failed.'; requestId = ''; return; }
+        if (data.status === 'queued') setStatus(`Waiting in queue · position ${data.queue_position}`);
+        else if (data.status === 'running') setStatus('Your local model is working', true);
+        else if (data.status === 'complete') { setStatus('Response ready.'); setBusy(false); location.reload(); return; }
+        else if (data.status === 'failed') { setStatus(data.error || 'The model request failed.'); requestId = ''; setBusy(false); return; }
         window.setTimeout(poll, 1200);
-      }).catch(() => { status.textContent = 'Chat request status is temporarily unavailable.'; });
+      }).catch(() => {
+        setStatus('Chat request status is temporarily unavailable.');
+        window.setTimeout(poll, 1200);
+      });
   };
   form.addEventListener('submit', event => {
     event.preventDefault();
-    status.textContent = 'Adding your request to the queue…';
+    if (sendButton.disabled) return;
+    setBusy(true);
+    setStatus('Adding your request to the queue');
     fetch(form.action, {method: 'POST', body: new FormData(form), headers: {'X-Requested-With': 'XMLHttpRequest'}})
       .then(async response => {
         if (response.status === 202) return response.json();
@@ -72,9 +82,9 @@
         if (!data) return;
         requestId = data.request_id;
         poll();
-      }).catch(error => { status.textContent = error.message; });
+      }).catch(error => { setStatus(error.message); setBusy(false); });
   });
-  if (requestId) poll();
+  if (requestId) { setBusy(true); poll(); }
 })();
 </script>{% endif %}
 {% endblock %}
