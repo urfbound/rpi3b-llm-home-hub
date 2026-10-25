@@ -52,24 +52,27 @@ Open PowerShell in the project folder on Windows. Replace `username` and
 Windows OpenSSH's `ssh` and `scp` utilities are used.
 
 ```powershell
-ssh username@hostname "mkdir -p ~/homehub-starter"
-scp -r .\homehub .\deploy .\pyproject.toml .\README.md .\LICENSE username@hostname:~/homehub-starter/
-ssh username@hostname "cd ~/homehub-starter && chmod +x deploy/install.sh deploy/uninstall.sh && ./deploy/install.sh"
+tar.exe -czf "$env:TEMP\homehub-transfer.tar.gz" --exclude=__pycache__ --exclude="*.pyc" -C . homehub deploy scripts pyproject.toml README.md LICENSE
+if ($LASTEXITCODE -ne 0) { throw "Could not create the transfer archive." }
+ssh username@hostname "mkdir -p ~/homehub-release"
+if ($LASTEXITCODE -ne 0) { throw "Could not create the Pi staging directory." }
+scp "$env:TEMP\homehub-transfer.tar.gz" username@hostname:~/homehub-release/
+if ($LASTEXITCODE -ne 0) { throw "Transfer failed; do not run the installer." }
+$extract = 'cd ~/homehub-release && mkdir -p source && tar -tzf homehub-transfer.tar.gz | while IFS= read -r p; do case "$p" in */) mkdir -p "source/$p";; */*) mkdir -p "source/${p%/*}";; esac; done && find source -type d -exec chmod u+rwx {} + && tar --no-same-owner --no-same-permissions --no-overwrite-dir -xzf homehub-transfer.tar.gz -C source && rm homehub-transfer.tar.gz'
+ssh username@hostname $extract
+if ($LASTEXITCODE -ne 0) { throw "Could not unpack the transfer on the Pi." }
+ssh -t username@hostname "cd ~/homehub-release/source && chmod +x deploy/install.sh deploy/uninstall.sh && ./deploy/install.sh"
 ```
 
-If `scp` reports `Permission denied` for many existing destination files,
-some files in the checkout may be owned by root from an earlier copy. Repair
-ownership of the checkout only, then retry the transfer as your normal Pi
-login:
+This transfers source and deployment files in an archive, excluding Python
+bytecode caches. Before extracting, the Pi creates the archive's directory
+tree with your account's write permission, then tells GNU tar to preserve those
+permissions while extracting. This handles read-only permission bits that
+Windows may have stored in the archive and permits retrying after a partial
+extraction. Do not use `sudo scp` or run the installer with `sudo`.
 
-```powershell
-ssh -t username@hostname 'sudo chown -R -- "$USER:$(id -gn)" "$HOME/homehub-starter"'
-```
-
-Do not use `sudo scp` or run the installer with `sudo`. If the Pi reports
-`env: 'bash\r': No such file or directory`, the transferred shell scripts have
-Windows CRLF endings. Convert the deployment scripts on the Pi, then retry the
-installer:
+If a previous direct `scp` transfer left CRLF endings, convert those scripts
+before retrying that older checkout's installer:
 
 ```sh
 cd ~/homehub-starter
@@ -79,15 +82,14 @@ chmod +x deploy/install.sh deploy/uninstall.sh
 ```
 
 The repository's `.gitattributes` keeps deployment shell scripts in Unix LF
-format in future Windows checkouts. Run the installer as your normal Pi login;
-it requests sudo only for system changes.
+format in future Windows checkouts. The installer requests sudo only for
+system changes.
 
-The transfer includes only runtime files and deployment examples, not your
-Windows `.git` directory, virtual environment, database, or backups. The
-installer copies the application into `/opt/homehub`; it leaves the transferred
-repository in your Pi home directory. To update later, repeat the same `scp`
-command and run `./deploy/install.sh` again from `~/homehub-starter`. An
-existing database is backed up and verified before the new service starts.
+The transfer includes application code, scripts, and deployment examples, not
+your Windows `.git` directory, virtual environment, database, or backups. The
+installer copies the application into `/opt/homehub`; it leaves the staging
+directory in your Pi home directory. An existing database is backed up and
+verified before the new service starts.
 Keep `/etc/homehub/homehub.env` private and persistent; it contains the
 session-signing secret.
 
