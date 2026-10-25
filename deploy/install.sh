@@ -107,6 +107,7 @@ sudo chown -R root:root "$INSTALL_ROOT/.venv"
 homehub_make_venv_service_accessible "$INSTALL_ROOT/.venv" sudo
 sudo "$INSTALL_ROOT/.venv/bin/python" -m pip install \
   --disable-pip-version-check "$INSTALL_ROOT"
+sudo chmod -R a+rX -- "$INSTALL_ROOT/.venv"
 
 database_path="$(as_homehub "$INSTALL_ROOT/.venv/bin/python" -c \
   'import os; from pathlib import Path; print(os.environ.get("HOMEHUB_DB", Path.home()/".local/share/homehub/homehub.sqlite3"))')"
