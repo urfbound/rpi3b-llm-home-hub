@@ -117,7 +117,7 @@
         <form method="get" action="{{ url_for('index') }}">
           <label class="visually-hidden" for="calendar-month">Choose month</label>
           <select id="calendar-month" name="month" onchange="this.form.submit()">
-            {% for month_number in range(1,13) %}<option value="{{ month_number }}"{% if month_number == calendar_month %} selected{% endif %}>{{ months[month_number-1] }}</option>{% endfor %}
+            {% for month_number in range(1,13) %}<option value="{{ month_number }}"{% if month_number == calendar_month %} selected{% endif %}>{{ months[month_number] }}</option>{% endfor %}
           </select>
           <input type="hidden" name="year" value="{{ calendar_year }}">
         </form>
@@ -133,7 +133,7 @@
       <a class="calendar-today" href="{{ calendar_today_url }}">Today</a>
     </nav>
     <table class="calendar-month-grid">
-      <thead><tr>{% for day_name in calendar_days %}<th scope="col">{{ day_name }}</th>{% endfor %}</tr></thead>
+      <thead><tr>{% for day_name in calendar_days %}<th scope="col"><span class="weekday-full">{{ day_name }}</span><span class="weekday-short">{{ day_name[:3] }}</span><span class="weekday-narrow">{{ 'R' if day_name == 'Thursday' else day_name[0] }}</span></th>{% endfor %}</tr></thead>
       <tbody>
         {% for week in calendar_weeks %}<tr>
           {% for day in week %}
@@ -147,8 +147,8 @@
       </tbody>
     </table>
     {% if current_user['account_kind'] != 'house' %}<p><a class="button primary" href="{{ url_for('new_event') }}">Add event</a></p>{% endif %}
-    <a href="{{ url_for('export_calendar') }}">Download calendar (.ics)</a>
-    <a href="{{ url_for('export_calendar', only_required=1) }}">Download only events involving me (.ics)</a>
+    <p><a href="{{ url_for('export_calendar') }}">Download calendar (.ics)</a></p>
+    <p><a href="{{ url_for('export_calendar', only_required=1) }}">Download only events involving me (.ics)</a></p>
   </section>
 
   <section class="panel" id="shopping" {% if list_kind == 'shopping' and selected_list %}data-away-list-id="{{ selected_list['id'] }}" data-away-list-title="{{ selected_list['title'] }}"{% endif %}>
@@ -160,11 +160,15 @@
     </nav>
 
     {% if lists %}
-    <form method="get" action="{{ url_for('index') }}" class="inline">
+    <form method="get" action="{{ url_for('index') }}" class="inline list-picker-form">
       <input type="hidden" name="kind" value="{{ list_kind }}">
       <label for="list-picker">Choose a list</label>
       <select id="list-picker" name="list_id">
-        {% for list in lists %}<option value="{{ list['id'] }}" {% if selected_list and selected_list['id'] == list['id'] %}selected{% endif %}>{{ list['title'] }}{% if list['visibility'] == 'private' %} · Private{% endif %}</option>{% endfor %}
+        {% if list_kind == 'shopping' %}
+          {% for category in shopping_categories %}{% set category_lists = lists|selectattr('category', 'equalto', category)|list %}{% if category_lists %}<optgroup label="{{ category }}">{% for list in category_lists %}<option value="{{ list['id'] }}" {% if selected_list and selected_list['id'] == list['id'] %}selected{% endif %}>{{ list['title'] }}{% if list['visibility'] == 'private' %} · Private{% endif %}</option>{% endfor %}</optgroup>{% endif %}{% endfor %}
+        {% else %}
+          {% for list in lists %}<option value="{{ list['id'] }}" {% if selected_list and selected_list['id'] == list['id'] %}selected{% endif %}>{{ list['title'] }}{% if list['visibility'] == 'private' %} · Private{% endif %}</option>{% endfor %}
+        {% endif %}
       </select>
       <button>Open</button>
     </form>
@@ -218,7 +222,7 @@
       </form>
       {% endif %}
       {% if list_kind == 'shopping' %}<div class="away-sync" id="away-sync" role="status" aria-live="polite"><span data-away-message>Changes to this shopping list will be saved on this phone and synced when the hub is reachable.</span><a href="{{ url_for('login') }}" data-away-login hidden>Sign in to sync</a><button type="button" data-away-sync hidden>Sync now</button></div>{% endif %}
-      <ul class="checks">
+      <ul class="checks list-items">
         {% for item in items %}
         <li {% if list_kind == 'shopping' %}data-away-item data-away-id="{{ item['id'] }}" data-away-text="{{ item['text'] }}" data-away-done="{{ 'true' if item['done'] else 'false' }}" data-away-updated-at="{{ item['updated_at'] or '' }}"{% endif %}><form method="post" action="{{ url_for('toggle_item', item_id=item['id']) }}" {% if list_kind == 'shopping' %}data-away-toggle{% endif %}>
           <input type="hidden" name="_csrf" value="{{ csrf_token }}">
@@ -366,7 +370,7 @@
       </div>
       <button type="button" id="add-recipe-ingredient">Add ingredient</button>
       <h3>Method <small>(up to 64 steps, 256 characters each)</small></h3>
-      <div id="recipe-steps"><textarea name="step" maxlength="{{ limits.RECIPE_STEP_TEXT_MAXIMUM }}" aria-label="Method step" required></textarea></div>
+      <div id="recipe-steps"><div class="recipe-step-row"><textarea name="step" maxlength="{{ limits.RECIPE_STEP_TEXT_MAXIMUM }}" aria-label="Method step" required></textarea></div></div>
       <button type="button" id="add-recipe-step">Add step</button>
       <button class="primary">Save recipe</button>
     </form>
@@ -410,22 +414,42 @@ document.querySelectorAll('[data-copy-url]').forEach((button) => {
   });
 });
 const ingredientRows = document.getElementById('recipe-ingredients');
+function syncRecipeRemoveButtons(container, label) {
+  const rows = Array.from(container.children);
+  rows.forEach((row) => {
+    let remove = row.querySelector('[data-remove-row]');
+    if (rows.length > 1 && !remove) {
+      remove = document.createElement('button');
+      remove.type = 'button';
+      remove.dataset.removeRow = '';
+      remove.setAttribute('aria-label', `Remove ${label}`);
+      remove.textContent = 'Remove';
+      remove.addEventListener('click', () => {
+        row.remove();
+        syncRecipeRemoveButtons(container, label);
+      });
+      row.append(remove);
+    } else if (rows.length === 1 && remove) {
+      remove.remove();
+    }
+  });
+}
 document.getElementById('add-recipe-ingredient')?.addEventListener('click', () => {
   if (ingredientRows.children.length >= 64) return;
   const row = document.createElement('div');
   row.className = 'recipe-ingredient-row';
-  row.innerHTML = '<input name="ingredient_quantity" maxlength="{{ limits.RECIPE_INGREDIENT_QUANTITY_MAXIMUM }}" aria-label="Ingredient quantity" placeholder="Quantity"><input name="ingredient_unit" maxlength="{{ limits.RECIPE_INGREDIENT_UNIT_MAXIMUM }}" aria-label="Ingredient unit" placeholder="Unit"><input name="ingredient_name" maxlength="{{ limits.RECIPE_INGREDIENT_NAME_MAXIMUM }}" aria-label="Ingredient name" placeholder="Ingredient" required><input name="ingredient_note" maxlength="{{ limits.RECIPE_INGREDIENT_NOTE_MAXIMUM }}" aria-label="Ingredient note" placeholder="Note"><button type="button" aria-label="Remove ingredient">Remove</button>';
-  row.querySelector('button').addEventListener('click', () => row.remove());
+  row.innerHTML = '<input name="ingredient_quantity" maxlength="{{ limits.RECIPE_INGREDIENT_QUANTITY_MAXIMUM }}" aria-label="Ingredient quantity" placeholder="Quantity"><input name="ingredient_unit" maxlength="{{ limits.RECIPE_INGREDIENT_UNIT_MAXIMUM }}" aria-label="Ingredient unit" placeholder="Unit"><input name="ingredient_name" maxlength="{{ limits.RECIPE_INGREDIENT_NAME_MAXIMUM }}" aria-label="Ingredient name" placeholder="Ingredient" required><input name="ingredient_note" maxlength="{{ limits.RECIPE_INGREDIENT_NOTE_MAXIMUM }}" aria-label="Ingredient note" placeholder="Note">';
   ingredientRows.append(row);
+  syncRecipeRemoveButtons(ingredientRows, 'ingredient');
 });
 const recipeSteps = document.getElementById('recipe-steps');
 document.getElementById('add-recipe-step')?.addEventListener('click', () => {
   if (recipeSteps.children.length >= 64) return;
   const row = document.createElement('div');
   row.className = 'recipe-step-row';
-  row.innerHTML = '<textarea name="step" maxlength="{{ limits.RECIPE_STEP_TEXT_MAXIMUM }}" aria-label="Method step" required></textarea><button type="button" aria-label="Remove step">Remove</button>';
-  row.querySelector('button').addEventListener('click', () => row.remove());
+  row.innerHTML = '<textarea name="step" maxlength="{{ limits.RECIPE_STEP_TEXT_MAXIMUM }}" aria-label="Method step" required></textarea>';
   recipeSteps.append(row);
+  syncRecipeRemoveButtons(recipeSteps, 'step');
 });
 </script>
 {% endblock %}
