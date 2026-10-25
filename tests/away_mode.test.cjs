@@ -7,6 +7,10 @@ test('offline state is separated per user and list', () => {
   assert.notEqual(away.storageKey(1, 5), away.storageKey(1, 6));
 });
 
+test('initial snapshot request includes the selected list id', () => {
+  assert.equal(away.snapshotUrl(5), '/shopping/sync?list_id=5');
+});
+
 test('checkbox changes queue desired state and cancel when returned to baseline', () => {
   const state = away.newState(1, { id: 5, title: 'Groceries' }, [
     { id: 9, text: 'Milk', done: false, updated_at: 'v1' },
