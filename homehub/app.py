@@ -430,6 +430,13 @@ CREATE TABLE IF NOT EXISTS rss_article_states (
 );
 CREATE INDEX IF NOT EXISTS rss_article_states_user_recent
  ON rss_article_states(user_id,is_read,is_favorite,article_id);
+CREATE TABLE IF NOT EXISTS rss_feed_refresh (
+ feed_id INTEGER PRIMARY KEY REFERENCES rss_feeds(id) ON DELETE CASCADE,
+ attempted_at TEXT NOT NULL,
+ succeeded_at TEXT,
+ last_error TEXT CHECK(last_error IS NULL OR length(last_error)<={limits.ERROR_TEXT_MAXIMUM}),
+ articles_added INTEGER NOT NULL DEFAULT 0 CHECK(articles_added>=0)
+);
 CREATE TABLE IF NOT EXISTS system_metrics (
  sampled_at TEXT PRIMARY KEY,
  cpu_percent REAL,

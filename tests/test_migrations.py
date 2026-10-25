@@ -373,3 +373,25 @@ def test_v17_upgrade_adds_rss_article_storage_without_losing_feeds(tmp_path):
                 'deleted_at'} <= {
                     row[1] for row in db.execute('PRAGMA table_info(rss_article_states)')}
         assert db.execute('PRAGMA foreign_key_check').fetchall() == []
+
+
+def test_v18_upgrade_adds_rss_refresh_status_without_losing_articles(tmp_path):
+    path = tmp_path / 'v18.sqlite3'
+    create_app(config(path))
+    with sqlite3.connect(path) as db:
+        db.execute("INSERT INTO users(username,password_hash,role) VALUES('rss-reader','hash','user')")
+        db.execute("INSERT INTO rss_feeds(normalized_url,title,scope,owner_user_id,created_by) "
+                   "VALUES('https://feed.example/rss','Example','personal',1,1)")
+        db.execute("INSERT INTO rss_articles(feed_id,article_key,title,summary,published,first_seen_at,content_bytes) "
+                   "VALUES(1,?,'Story','','','2026-10-24T12:00:00+00:00',5)", ('a' * 64,))
+        db.execute('PRAGMA user_version=18')
+
+    create_app(config(path))
+
+    with sqlite3.connect(path) as db:
+        assert db.execute('PRAGMA user_version').fetchone()[0] == LATEST_SCHEMA_VERSION
+        assert db.execute('SELECT title FROM rss_articles').fetchone() == ('Story',)
+        assert {'feed_id', 'attempted_at', 'succeeded_at', 'last_error',
+                'articles_added'} <= {
+                    row[1] for row in db.execute('PRAGMA table_info(rss_feed_refresh)')}
+        assert db.execute('PRAGMA foreign_key_check').fetchall() == []
