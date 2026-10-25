@@ -20,7 +20,7 @@ build-backend = "setuptools.build_meta"
 include = ["homehub*"]
 
 [tool.setuptools.package-data]
-homehub = ["game_data/*.json", "game_data/*.jsonl", "game_data/*.md"]
+homehub = ["game_data/*.json", "game_data/*.jsonl", "game_data/*.md", "static/*", "static/**/*",  "templates/*", "templates/**/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

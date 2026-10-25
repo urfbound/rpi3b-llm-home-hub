@@ -6,6 +6,12 @@ readonly DATA_ROOT=/var/lib/homehub
 readonly CONFIG_ROOT=/etc/homehub
 readonly ENV_FILE=/etc/homehub/homehub.env
 readonly SERVICE_USER=homehub
+readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+if [[ ! -f $SCRIPT_DIR/uninstall_helpers.sh ]]; then
+  printf 'Required uninstall helper is missing: %s\n' "$SCRIPT_DIR/uninstall_helpers.sh" >&2
+  exit 1
+fi
+source "$SCRIPT_DIR/uninstall_helpers.sh"
 
 if [[ ${EUID:-$(id -u)} -eq 0 ]]; then
   printf 'Run this script as your regular Pi user; it will request sudo when needed.\n' >&2
@@ -117,9 +123,7 @@ sudo rm -f -- /etc/systemd/system/homehub.service \
   /etc/systemd/system/homehub-backup.timer
 sudo systemctl daemon-reload
 sudo systemctl reset-failed
-sudo rm -rf -- "$INSTALL_ROOT"
-sudo rm -f -- "$ENV_FILE"
-sudo rmdir -- "$CONFIG_ROOT" 2>/dev/null || true
+homehub_remove_installed_files "$INSTALL_ROOT" "$ENV_FILE" "$CONFIG_ROOT" sudo
 sudo chown -R root:root "$DATA_ROOT"
 if id -u "$SERVICE_USER" >/dev/null 2>&1; then
   sudo userdel "$SERVICE_USER"
