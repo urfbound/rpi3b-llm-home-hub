@@ -41,6 +41,9 @@ def refresh_feed_now(db, feed_id, *, now=None, fetcher=None):
     try:
         document, final_url = fetcher(feed['normalized_url'], allow_lan=bool(feed['allow_lan']))
         parsed = parse_feed(document, final_url)
+        if parsed['title']:
+            db.execute('UPDATE rss_feeds SET title=? WHERE id=?',
+                       (parsed['title'], feed['id']))
         added = store_feed_articles(db, feed['id'], parsed['articles'], fetched_at=stamp)
         db.execute(
             'INSERT INTO rss_feed_refresh(feed_id,attempted_at,succeeded_at,last_error,articles_added) '
@@ -97,6 +100,9 @@ def refresh_due_feeds(db, *, now=None, fetcher=fetch_feed):
         try:
             document, final_url = fetcher(feed[1], allow_lan=bool(feed[2]))
             parsed = parse_feed(document, final_url)
+            if parsed['title']:
+                db.execute('UPDATE rss_feeds SET title=? WHERE id=?',
+                           (parsed['title'], feed[0]))
             added = store_feed_articles(
                 db, feed[0], parsed['articles'], fetched_at=stamp)
             db.execute(

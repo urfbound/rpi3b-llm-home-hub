@@ -1384,10 +1384,13 @@ def create_app(test_config=None):
                 request_state['active'] -= 1
                 maintenance.notify_all()
 
+    @app.get('/calendar')
+    @app.get('/lists')
     @app.get('/')
     @login_required
     def index():
         db = get_db()
+        page_mode = {'/lists': 'lists', '/calendar': 'calendar'}.get(request.path, 'home')
         today = household_today()
         try:
             calendar_month = int(request.args.get('month', today.month))
@@ -1607,9 +1610,12 @@ def create_app(test_config=None):
           calendar_year_options=calendar_year_options,
           calendar_has_previous=calendar_has_previous,
           calendar_has_next=calendar_has_next,
-          calendar_previous_url=url_for('index', month=previous_month, year=previous_year),
-          calendar_next_url=url_for('index', month=next_month, year=next_year),
-          calendar_today_url=url_for('index', month=today.month, year=today.year),
+          calendar_previous_url=url_for('index', _external=False, month=previous_month, year=previous_year)
+              if page_mode == 'home' else f"/calendar?month={previous_month}&year={previous_year}",
+          calendar_next_url=url_for('index', _external=False, month=next_month, year=next_year)
+              if page_mode == 'home' else f"/calendar?month={next_month}&year={next_year}",
+          calendar_today_url=f"/calendar?month={today.month}&year={today.year}",
+          page_mode=page_mode, list_page_url='/lists', calendar_page_url='/calendar',
           items=items, lists=lists, selected_list=selected_list, list_kind=list_kind,
           list_users=list_users, todo_assignees=todo_assignees,
           shopping_categories=SHOPPING_CATEGORIES,
@@ -1644,6 +1650,14 @@ def create_app(test_config=None):
         household_feeds = db.execute(
             "SELECT * FROM rss_feeds WHERE scope='household' ORDER BY sort_order,id"
         ).fetchall()
+        refresh_status = {
+            row['feed_id']: row for row in db.execute(
+                'SELECT s.feed_id,s.attempted_at,s.succeeded_at,s.last_error,s.articles_added '
+                'FROM rss_feed_refresh s JOIN rss_feeds f ON f.id=s.feed_id '
+                "WHERE f.scope='household' OR f.owner_user_id=?",
+                (g.user['id'],),
+            ).fetchall()
+        }
         preference = db.execute(
             'SELECT ask_before_done_delete FROM rss_user_preferences WHERE user_id=?',
             (g.user['id'],),
@@ -1651,6 +1665,8 @@ def create_app(test_config=None):
         return render_template('rss.html', personal_feeds=personal_feeds,
                                household_feeds=household_feeds,
                                articles_by_feed=articles_by_feed,
+                               refresh_status=refresh_status,
+                               rss_outbound_enabled=setting(db, 'rss_outbound_enabled', 1),
                                favourite_articles=favourite_articles,
                                ask_before_done_delete=(preference[0] if preference else 1))
 
@@ -2968,9 +2984,7 @@ def create_app(test_config=None):
     @login_required
     def delete_list(list_id):
         db = get_db()
-        target = db.execute('SELECT * FROM household_lists WHERE id=?', (list_id,)).fetchone()
-        if not target:
-            abort(HTTPStatus.NOT_FOUND)
+        target = visible_list(db, g.user, list_id)
         if target['created_by'] != g.user['id'] and g.user['role'] != 'admin':
             abort(HTTPStatus.FORBIDDEN)
         kind = target['kind']

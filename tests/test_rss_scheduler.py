@@ -69,6 +69,18 @@ def test_refresh_fetches_due_feed_once_and_respects_configured_interval(tmp_path
     assert calls == [('https://news.example/rss', False)] * 2
     assert article_count == attempts == 1
 
+def test_refresh_updates_feed_title_from_feed_metadata(tmp_path):
+    app = make_app(tmp_path / 'rss-title.sqlite3')
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        db.execute("UPDATE rss_feeds SET title='Old title' WHERE id=1")
+        refresh_due_feeds(
+            db, now=datetime(2026, 10, 24, 12, tzinfo=timezone.utc),
+            fetcher=lambda url, **_kwargs: (FEED_BODY, url),
+        )
+        title = db.execute('SELECT title FROM rss_feeds WHERE id=1').fetchone()[0]
+
+    assert title == 'Example'
+
 
 def test_refresh_records_feed_failure_and_retries_after_interval(tmp_path):
     app = make_app(tmp_path / 'rss.sqlite3')

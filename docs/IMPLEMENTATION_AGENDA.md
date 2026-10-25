@@ -177,6 +177,12 @@ to `main` only after the user approves the completed change.
   expires household articles after three days and personal articles after 90;
   personal storage evicts oldest unread, then oldest read until within 64 MB,
   while favourites remain protected.
+- Future investigation: evaluate increasing RSS article retention while
+  preserving at least 20% of the 10 GB app/data budget for other growth. Model
+  low, medium, and high household usage across up to 32 accounts; measure
+  SQLite payload, indexes, WAL/temporary growth, favourites that outlive normal
+  retention, and retained database backups together. Do not raise quotas until
+  measured totals show adequate headroom and pruning/backup limits are tested.
 
 ### Games
 

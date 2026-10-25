@@ -188,6 +188,32 @@ def test_list_and_recipe_remove_controls_have_inline_layout_hooks(client):
     assert b'class="checks list-items"' in response.data
     assert b'class="recipe-ingredient-row"' in response.data
     assert b'class="recipe-step-row"' in response.data
+def test_top_navigation_links_to_dedicated_lists_and_calendar_pages(client):
+    sign_in(client)
+    page = client.get('/')
+
+    assert b'href="/lists"' in page.data
+    assert b'href="/calendar"' in page.data
+
+def test_homepage_cards_link_to_dedicated_pages(client):
+    sign_in(client)
+    page = client.get('/')
+
+    assert b'href="/lists?kind=chores"' in page.data
+    assert b'href="/calendar"' in page.data
+
+def test_lists_and_calendar_routes_show_their_own_sections(client):
+    sign_in(client)
+
+    lists_page = client.get('/lists')
+    calendar_page = client.get('/calendar')
+
+    assert lists_page.status_code == HTTPStatus.OK
+    assert b'id="shopping"' in lists_page.data
+    assert b'id="calendar"' not in lists_page.data
+    assert calendar_page.status_code == HTTPStatus.OK
+    assert b'id="calendar"' in calendar_page.data
+    assert b'id="shopping"' not in calendar_page.data
 
 def test_list_text_exports_the_selected_todo_list(client):
     sign_in(client)
@@ -431,3 +457,46 @@ def test_only_list_creator_or_admin_can_delete_list_and_items_cascade(client):
 
     token = csrf_token(client)
     assert client.post(f'/lists/{list_id}/delete', data={'_csrf': token}).status_code == HTTPStatus.NOT_FOUND
+
+
+def test_non_owner_cannot_delete_a_list_or_cascade_its_items(client):
+    sign_in(client)
+    db_path = client.application.config['DATABASE']
+    with sqlite3.connect(db_path) as db:
+        db.execute("INSERT INTO users(username,display_name,password_hash,role) "
+                   "VALUES('bob','Bob',?,'user')", (PH.hash('bob test password'),))
+        db.execute("INSERT INTO users(username,display_name,password_hash,role) "
+                   "VALUES('carol','Carol',?,'user')", (PH.hash('carol test password'),))
+        db.execute("INSERT INTO users(username,display_name,password_hash,role) "
+                   "VALUES('dave','Dave',?,'user')", (PH.hash('dave test password'),))
+        bob_id = db.execute("SELECT id FROM users WHERE username='bob'").fetchone()[0]
+        carol_id = db.execute("SELECT id FROM users WHERE username='carol'").fetchone()[0]
+        db.execute("INSERT INTO household_lists(kind,title,visibility,created_by) "
+                   "VALUES('shopping','Bob private list','private',?)", (bob_id,))
+        list_id = db.execute(
+            "SELECT id FROM household_lists WHERE title='Bob private list'"
+        ).fetchone()[0]
+        db.execute('INSERT INTO shopping_items(text,created_by,list_id) VALUES(?,?,?)',
+                   ('Keep this item', bob_id, list_id))
+        db.execute('INSERT INTO list_access(list_id,user_id) VALUES(?,?)',
+                   (list_id, carol_id))
+        item_id = db.execute('SELECT id FROM shopping_items WHERE list_id=?',
+                             (list_id,)).fetchone()[0]
+
+    dave = client.application.test_client()
+    sign_in_as(dave, 'dave', 'dave test password')
+    token = csrf_token(dave)
+    hidden = dave.post(f'/lists/{list_id}/delete', data={'_csrf': token})
+    assert hidden.status_code == HTTPStatus.NOT_FOUND
+
+    carol = client.application.test_client()
+    sign_in_as(carol, 'carol', 'carol test password')
+    token = csrf_token(carol)
+    response = carol.post(f'/lists/{list_id}/delete', data={'_csrf': token})
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    with sqlite3.connect(db_path) as db:
+        assert db.execute('SELECT title FROM household_lists WHERE id=?',
+                          (list_id,)).fetchone() == ('Bob private list',)
+        assert db.execute('SELECT text FROM shopping_items WHERE id=?',
+                          (item_id,)).fetchone() == ('Keep this item',)
