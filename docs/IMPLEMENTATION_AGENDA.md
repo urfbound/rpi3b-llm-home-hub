@@ -159,12 +159,13 @@ to `main` only after the user approves the completed change.
   interval and outbound toggle. Article serving while outbound access is
   disabled remains.
 - Article persistence now stores feed content once and keeps read, favourite,
-  and delete state per user; personal-feed visibility is owner-only. Implement
-  article-open read tracking and feed-grouped article display. Done reading
-  behavior, prompt preference, favourite confirmation, and the bottom
-  favourites card. Keep house-wide articles for at most three days; track
-  their read state per user when practical, otherwise ignore it. Personal
-  articles retain the 90-day/64 MB per-user cap and eviction order.
+  and delete state per user; personal-feed visibility is owner-only. Article
+  open tracking, feed-grouped display, Done reading with its configurable
+  deletion prompt, and favourite-deletion confirmation are implemented. The
+  Manage feeds controls, bottom favourites card, and retention/eviction remain.
+  Keep house-wide articles for at most three days; track their read state per
+  user when practical, otherwise ignore it. Personal articles retain the
+  90-day/64 MB per-user cap and eviction order.
 
 ### Games
 
