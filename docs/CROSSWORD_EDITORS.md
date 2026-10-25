@@ -3,7 +3,7 @@
 The four editor profiles below define the house style for the offline Mini
 Crossword bank. Keep each voice recognizable in its clue writing, not just in
 the editor label. The machine-readable signature and version are stored with
-each puzzle in `homehub/game_data/crossword_editors.json`.
+each puzzle in `homehub/game_data/crossword_editors.jsonl`.
 
 ## Shared puzzle contract
 
@@ -112,11 +112,18 @@ solvability tests. Store its locale and style version with generated records.
 ## Generation and review
 
 `scripts/generate_crossword_editor_bank.py` deterministically constructs fills
-from `homehub/game_data/crossword_vocabulary.json`. It checks every across and
-down entry against the curated vocabulary before storing the bank as
-line-delimited JSON. The runtime indexes line offsets and reads only the
-selected puzzle, keeping the 5,000-puzzle bank from loading all clue objects
-into memory. Unit tests verify counts, fill consistency, clue coverage,
-difficulty mix, and style identity. Those checks cannot reliably judge
-whether a clue is natural or whether a pun lands; review a sample from each
-editor before future releases.
+from the checked-in filtered `crossword_fill_words.json` and the clueable
+vocabularies in `crossword_vocabulary.json` and
+`crossword_vocabulary_additions.json`. Common answers use hand-written
+editor-specific options from `crossword_editor_clues.json`; remaining answers
+use two direct definitions. The generator checks each across/down entry before
+storing line-delimited JSON. The runtime indexes line offsets and reads only
+the selected puzzle, keeping the 5,000-puzzle bank from loading all clue
+objects into memory. Bank tests verify fill consistency, ten distinct entries,
+clue coverage, style identity, daily spacing, and reproducibility.
+
+The [quality audit](CROSSWORD_QUALITY_AUDIT.md) records the October 2026
+rebuild and its measured gains. Direct-definition fallbacks mean a portion of
+Larry, Curly, and Shemp clues have less distinctive voices. The difficulty
+labels and naturalness of every clue require broader human solving review
+before release; automated tests cannot establish either.
