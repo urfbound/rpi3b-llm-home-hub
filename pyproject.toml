@@ -11,6 +11,7 @@ dev = ["pytest>=8,<10"]
 [project.scripts]
 homehub = "homehub.app:main"
 homehub-backup = "homehub.backup_scheduler:main"
+homehub-rss-refresh = "homehub.rss_scheduler:main"
 
 [build-system]
 requires = ["setuptools>=68"]

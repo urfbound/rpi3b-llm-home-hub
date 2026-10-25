@@ -89,8 +89,14 @@ fi
 if sudo systemctl cat homehub-backup.timer >/dev/null 2>&1; then
   sudo systemctl disable --now homehub-backup.timer
 fi
+if sudo systemctl cat homehub-rss-refresh.timer >/dev/null 2>&1; then
+  sudo systemctl disable --now homehub-rss-refresh.timer
+fi
 if sudo systemctl is-active --quiet homehub-backup.service; then
   sudo systemctl stop homehub-backup.service
+fi
+if sudo systemctl is-active --quiet homehub-rss-refresh.service; then
+  sudo systemctl stop homehub-rss-refresh.service
 fi
 if sudo systemctl cat homehub.service >/dev/null 2>&1; then
   sudo systemctl disable --now homehub.service
@@ -114,7 +120,9 @@ done
 sudo rm -f -- /etc/cron.d/homehub-backup
 sudo rm -f -- /etc/systemd/system/homehub.service \
   /etc/systemd/system/homehub-backup.service \
-  /etc/systemd/system/homehub-backup.timer
+  /etc/systemd/system/homehub-backup.timer \
+  /etc/systemd/system/homehub-rss-refresh.service \
+  /etc/systemd/system/homehub-rss-refresh.timer
 sudo systemctl daemon-reload
 sudo systemctl reset-failed
 sudo rm -rf -- "$INSTALL_ROOT"

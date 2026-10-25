@@ -154,9 +154,10 @@ to `main` only after the user approves the completed change.
   explicit admin approval for a private household feed host. LAN approval does
   not permit loopback or redirects to another private host. Interval-aware
   refresh selection now respects the outbound toggle and records per-feed
-  success or failure. The short-lived systemd timer integration and article
-  serving while outbound access is disabled remain. Admin can set a
-  10–240-minute RSS interval (default 30).
+  success or failure. A short-lived systemd timer invokes the refresh runner
+  every ten minutes; the runner applies the admin-configured 10–240-minute
+  interval and outbound toggle. Article serving while outbound access is
+  disabled remains.
 - Article persistence now stores feed content once and keeps read, favourite,
   and delete state per user; personal-feed visibility is owner-only. Implement
   article-open read tracking, Done reading

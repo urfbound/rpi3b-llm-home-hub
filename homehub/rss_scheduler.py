@@ -79,3 +79,21 @@ def refresh_due_feeds(db, *, now=None, fetcher=fetch_feed):
             )
             result['failed'] += 1
     return result
+
+
+def main():
+    """Entry point for the short-lived systemd service."""
+    from .app import create_app, get_db
+
+    app = create_app()
+    with app.app_context():
+        db = get_db()
+        result = refresh_due_feeds(db)
+        db.commit()
+    print('RSS refresh: {checked} checked, {refreshed} refreshed, '
+          '{failed} failed.'.format(**result))
+    return 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())
