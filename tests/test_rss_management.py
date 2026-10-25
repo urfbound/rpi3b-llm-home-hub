@@ -104,6 +104,40 @@ def test_personal_feed_add_normalizes_url_and_rejects_household_duplicate(app, m
         ).fetchone()
         assert refresh[0] is not None
         assert refresh[1:] == (1, None)
+        assert db.execute('SELECT title FROM rss_feeds WHERE normalized_url=?',
+                          ('https://garden.example/feed',)).fetchone() == ('Example',)
+
+def test_rss_page_shows_feed_status_and_keeps_feed_url_visible(app, monkeypatch):
+    monkeypatch.setattr(app_module, 'validate_feed_url', lambda url, **_kwargs: url)
+    client = app.test_client()
+    sign_in(client, 'reader', 'reader password')
+    post(client, '/rss/feeds', scope='personal', feed_url='https://garden.example/feed')
+
+    page = client.get('/rss').data
+
+    assert b'Example' in page
+    assert b'https://garden.example/feed' in page
+    assert b'Last successful refresh' in page
+
+def test_rss_add_form_sits_above_manage_feeds_and_explains_lan_approval(app):
+    client = app.test_client()
+    sign_in(client, 'admin', 'admin password')
+
+    page = client.get('/rss').data
+
+    assert page.index(b'id="rss-add-heading"') > page.index(b'id="house-feeds-heading"')
+    assert page.index(b'id="rss-add-heading"') < page.index(b'id="rss-manage"')
+    assert b'This lets Home Hub fetch a feed hosted on a device inside your home network' in page
+
+def test_rss_page_explains_when_outbound_refresh_is_disabled(app):
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        db.execute("INSERT INTO app_settings(key,value) VALUES('rss_outbound_enabled','0')")
+    client = app.test_client()
+    sign_in(client, 'reader', 'reader password')
+
+    page = client.get('/rss').data
+
+    assert b'RSS refresh is paused because household outbound access is disabled' in page
 
 
 def test_feed_add_keeps_feed_and_notifies_user_when_first_refresh_fails(app, monkeypatch):
@@ -326,7 +360,6 @@ def test_feed_management_actions_are_collected_in_manage_feeds_panel(app, monkey
 
     assert b'Manage feeds' in page
     assert b'href="#rss-manage"' in page
-    assert page.index(b'Move personal.example up') > panel
-    assert page.index(b'Move house.example up') > panel
+    assert page.index(b'Move Example up') > panel
     assert page.index(b'Remove') > panel
     assert b'aria-label="Move personal.example up"' not in page[:panel]
