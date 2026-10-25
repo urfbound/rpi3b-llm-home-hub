@@ -6,6 +6,10 @@
 </section>
 
 {% if current_user['account_kind'] == 'person' or current_user['role'] == 'admin' %}
+<div class="rss-top-actions">
+  <a class="button primary" href="#rss-add-heading">Add a feed</a>
+  <a class="button" href="#rss-manage">Manage feeds</a>
+</div>
 <section class="panel rss-manage" aria-labelledby="rss-add-heading">
   <h2 id="rss-add-heading">Add a feed</h2>
   <p class="muted">Use a public HTTP or HTTPS RSS or Atom feed URL.</p>
@@ -37,19 +41,6 @@
   <ul class="rss-feed-list">
     {% for feed in personal_feeds %}
     <li><div><strong>{{ feed['title'] }}</strong><small>{{ feed['normalized_url'] }}</small></div>
-      <div class="rss-feed-actions">
-        <form method="post" action="{{ url_for('move_rss_feed', feed_id=feed['id']) }}">
-          <input type="hidden" name="_csrf" value="{{ csrf_token }}"><input type="hidden" name="direction" value="up">
-          <button aria-label="Move {{ feed['title'] }} up" {% if loop.first %}disabled{% endif %}>↑</button>
-        </form>
-        <form method="post" action="{{ url_for('move_rss_feed', feed_id=feed['id']) }}">
-          <input type="hidden" name="_csrf" value="{{ csrf_token }}"><input type="hidden" name="direction" value="down">
-          <button aria-label="Move {{ feed['title'] }} down" {% if loop.last %}disabled{% endif %}>↓</button>
-        </form>
-        <form method="post" action="{{ url_for('delete_rss_feed', feed_id=feed['id']) }}">
-          <input type="hidden" name="_csrf" value="{{ csrf_token }}"><button>Remove</button>
-        </form>
-      </div>
     </li>
     {% for article in articles_by_feed.get(feed['id'], []) %}
     <li class="rss-article-row{% if article['is_read'] %} is-read{% endif %}">
@@ -84,19 +75,6 @@
   <ul class="rss-feed-list">
     {% for feed in household_feeds %}
     <li><div><strong>{{ feed['title'] }}</strong>{% if feed['allow_lan'] and current_user['role'] == 'admin' %}<span class="chip amber">LAN approved</span>{% endif %}<small>{{ feed['normalized_url'] }}</small></div>
-      {% if current_user['role'] == 'admin' %}<div class="rss-feed-actions">
-        <form method="post" action="{{ url_for('move_rss_feed', feed_id=feed['id']) }}">
-          <input type="hidden" name="_csrf" value="{{ csrf_token }}"><input type="hidden" name="direction" value="up">
-          <button aria-label="Move {{ feed['title'] }} up" {% if loop.first %}disabled{% endif %}>↑</button>
-        </form>
-        <form method="post" action="{{ url_for('move_rss_feed', feed_id=feed['id']) }}">
-          <input type="hidden" name="_csrf" value="{{ csrf_token }}"><input type="hidden" name="direction" value="down">
-          <button aria-label="Move {{ feed['title'] }} down" {% if loop.last %}disabled{% endif %}>↓</button>
-        </form>
-        <form method="post" action="{{ url_for('delete_rss_feed', feed_id=feed['id']) }}">
-          <input type="hidden" name="_csrf" value="{{ csrf_token }}"><button>Remove</button>
-        </form>
-      </div>{% endif %}
     </li>
     {% for article in articles_by_feed.get(feed['id'], []) %}
     <li class="rss-article-row{% if article['is_read'] %} is-read{% endif %}">
@@ -124,13 +102,27 @@
   {% else %}<p class="muted">No house-wide feeds have been added.</p>{% endif %}
 </section>
 {% if current_user['account_kind'] == 'person' %}
-<details class="panel rss-feed-section rss-manage-preferences">
+<details class="panel rss-feed-section rss-manage-preferences" id="rss-manage">
   <summary>Manage feeds</summary>
   <form method="post" action="{{ url_for('update_rss_done_reading_preference') }}">
     <input type="hidden" name="_csrf" value="{{ csrf_token }}">
     <label><input type="checkbox" name="ask_before_done_delete" value="1"{% if ask_before_done_delete %} checked{% endif %}> Ask before deleting after Done reading</label>
     <button>Save reading preference</button>
   </form>
+  {% if personal_feeds %}<section><h3>My feeds</h3><ul class="rss-feed-list">
+    {% for feed in personal_feeds %}<li><div><strong>{{ feed['title'] }}</strong><small>{{ feed['normalized_url'] }}</small></div><div class="rss-feed-actions">
+      <form method="post" action="{{ url_for('move_rss_feed', feed_id=feed['id']) }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><input type="hidden" name="direction" value="up"><button aria-label="Move {{ feed['title'] }} up" {% if loop.first %}disabled{% endif %}>Up</button></form>
+      <form method="post" action="{{ url_for('move_rss_feed', feed_id=feed['id']) }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><input type="hidden" name="direction" value="down"><button aria-label="Move {{ feed['title'] }} down" {% if loop.last %}disabled{% endif %}>Down</button></form>
+      <form method="post" action="{{ url_for('delete_rss_feed', feed_id=feed['id']) }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><button>Remove</button></form>
+    </div></li>{% endfor %}
+  </ul></section>{% endif %}
+  {% if current_user['role'] == 'admin' and household_feeds %}<section><h3>House-wide feeds</h3><ul class="rss-feed-list">
+    {% for feed in household_feeds %}<li><div><strong>{{ feed['title'] }}</strong><small>{{ feed['normalized_url'] }}</small></div><div class="rss-feed-actions">
+      <form method="post" action="{{ url_for('move_rss_feed', feed_id=feed['id']) }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><input type="hidden" name="direction" value="up"><button aria-label="Move {{ feed['title'] }} up" {% if loop.first %}disabled{% endif %}>Up</button></form>
+      <form method="post" action="{{ url_for('move_rss_feed', feed_id=feed['id']) }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><input type="hidden" name="direction" value="down"><button aria-label="Move {{ feed['title'] }} down" {% if loop.last %}disabled{% endif %}>Down</button></form>
+      <form method="post" action="{{ url_for('delete_rss_feed', feed_id=feed['id']) }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><button>Remove</button></form>
+    </div></li>{% endfor %}
+  </ul></section>{% endif %}
 </details>
 <dialog id="rss-done-reading-dialog" class="rss-dialog">
   <h2>Done reading?</h2><p>Delete this article after marking it read?</p>

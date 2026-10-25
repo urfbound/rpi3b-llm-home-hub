@@ -211,3 +211,21 @@ def test_reordering_is_limited_to_the_feed_owner_or_household_admin(app):
         assert db.execute("SELECT normalized_url FROM rss_feeds WHERE scope='household' "
                           'ORDER BY sort_order,id').fetchall() == [
                               ('https://house-two.example/rss',), ('https://house-one.example/rss',)]
+
+
+def test_feed_management_actions_are_collected_in_manage_feeds_panel(app, monkeypatch):
+    monkeypatch.setattr(app_module, 'validate_feed_url', lambda value, **_kwargs: value)
+    admin = app.test_client()
+    sign_in(admin, 'admin', 'admin password')
+    post(admin, '/rss/feeds', scope='personal', feed_url='https://personal.example/rss')
+    post(admin, '/rss/feeds', scope='household', feed_url='https://house.example/rss')
+
+    page = admin.get('/rss').data
+    panel = page.index(b'id="rss-manage"')
+
+    assert b'Manage feeds' in page
+    assert b'href="#rss-manage"' in page
+    assert page.index(b'Move personal.example up') > panel
+    assert page.index(b'Move house.example up') > panel
+    assert page.index(b'Remove') > panel
+    assert b'aria-label="Move personal.example up"' not in page[:panel]
