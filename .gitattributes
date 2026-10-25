@@ -1,0 +1,2 @@
+# Shell scripts are deployed to Linux hosts and must keep a Unix shebang.
+*.sh text eol=lf

@@ -57,18 +57,30 @@ scp -r .\homehub .\deploy .\pyproject.toml .\README.md .\LICENSE username@hostna
 ssh username@hostname "cd ~/homehub-starter && chmod +x deploy/install.sh deploy/uninstall.sh && ./deploy/install.sh"
 ```
 
-If `scp` reports `Permission denied` for one existing destination file, copy
-that file to a temporary name in your home directory, then install it over the
-blocked file with the correct owner. For example, to transfer the venv
-permission helper:
+If `scp` reports `Permission denied` for many existing destination files,
+some files in the checkout may be owned by root from an earlier copy. Repair
+ownership of the checkout only, then retry the transfer as your normal Pi
+login:
 
 ```powershell
-scp .\deploy\venv_permissions.sh username@hostname:~/venv_permissions.sh
-ssh -t username@hostname "sudo install -o username -g username -m 0644 /home/username/venv_permissions.sh /home/username/homehub-starter/deploy/venv_permissions.sh && rm /home/username/venv_permissions.sh"
+ssh -t username@hostname 'sudo chown -R -- "$USER:$(id -gn)" "$HOME/homehub-starter"'
 ```
 
-Then repeat the normal transfer command to ensure the rest of the files are
-current, and run the installer as `username` without `sudo`.
+Do not use `sudo scp` or run the installer with `sudo`. If the Pi reports
+`env: 'bash\r': No such file or directory`, the transferred shell scripts have
+Windows CRLF endings. Convert the deployment scripts on the Pi, then retry the
+installer:
+
+```sh
+cd ~/homehub-starter
+python3 -c 'from pathlib import Path; [p.write_bytes(p.read_bytes().replace(bytes((13, 10)), bytes((10,)))) for p in Path("deploy").glob("*.sh")]'
+chmod +x deploy/install.sh deploy/uninstall.sh
+./deploy/install.sh
+```
+
+The repository's `.gitattributes` keeps deployment shell scripts in Unix LF
+format in future Windows checkouts. Run the installer as your normal Pi login;
+it requests sudo only for system changes.
 
 The transfer includes only runtime files and deployment examples, not your
 Windows `.git` directory, virtual environment, database, or backups. The
