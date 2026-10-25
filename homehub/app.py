@@ -1644,6 +1644,14 @@ def create_app(test_config=None):
         household_feeds = db.execute(
             "SELECT * FROM rss_feeds WHERE scope='household' ORDER BY sort_order,id"
         ).fetchall()
+        refresh_status = {
+            row['feed_id']: row for row in db.execute(
+                'SELECT s.feed_id,s.attempted_at,s.succeeded_at,s.last_error,s.articles_added '
+                'FROM rss_feed_refresh s JOIN rss_feeds f ON f.id=s.feed_id '
+                "WHERE f.scope='household' OR f.owner_user_id=?",
+                (g.user['id'],),
+            ).fetchall()
+        }
         preference = db.execute(
             'SELECT ask_before_done_delete FROM rss_user_preferences WHERE user_id=?',
             (g.user['id'],),
@@ -1651,6 +1659,8 @@ def create_app(test_config=None):
         return render_template('rss.html', personal_feeds=personal_feeds,
                                household_feeds=household_feeds,
                                articles_by_feed=articles_by_feed,
+                               refresh_status=refresh_status,
+                               rss_outbound_enabled=setting(db, 'rss_outbound_enabled', 1),
                                favourite_articles=favourite_articles,
                                ask_before_done_delete=(preference[0] if preference else 1))
 
