@@ -390,3 +390,46 @@ def test_only_list_creator_or_admin_can_delete_list_and_items_cascade(client):
 
     token = csrf_token(client)
     assert client.post(f'/lists/{list_id}/delete', data={'_csrf': token}).status_code == HTTPStatus.NOT_FOUND
+
+
+def test_non_owner_cannot_delete_a_list_or_cascade_its_items(client):
+    sign_in(client)
+    db_path = client.application.config['DATABASE']
+    with sqlite3.connect(db_path) as db:
+        db.execute("INSERT INTO users(username,display_name,password_hash,role) "
+                   "VALUES('bob','Bob',?,'user')", (PH.hash('bob test password'),))
+        db.execute("INSERT INTO users(username,display_name,password_hash,role) "
+                   "VALUES('carol','Carol',?,'user')", (PH.hash('carol test password'),))
+        db.execute("INSERT INTO users(username,display_name,password_hash,role) "
+                   "VALUES('dave','Dave',?,'user')", (PH.hash('dave test password'),))
+        bob_id = db.execute("SELECT id FROM users WHERE username='bob'").fetchone()[0]
+        carol_id = db.execute("SELECT id FROM users WHERE username='carol'").fetchone()[0]
+        db.execute("INSERT INTO household_lists(kind,title,visibility,created_by) "
+                   "VALUES('shopping','Bob private list','private',?)", (bob_id,))
+        list_id = db.execute(
+            "SELECT id FROM household_lists WHERE title='Bob private list'"
+        ).fetchone()[0]
+        db.execute('INSERT INTO shopping_items(text,created_by,list_id) VALUES(?,?,?)',
+                   ('Keep this item', bob_id, list_id))
+        db.execute('INSERT INTO list_access(list_id,user_id) VALUES(?,?)',
+                   (list_id, carol_id))
+        item_id = db.execute('SELECT id FROM shopping_items WHERE list_id=?',
+                             (list_id,)).fetchone()[0]
+
+    dave = client.application.test_client()
+    sign_in_as(dave, 'dave', 'dave test password')
+    token = csrf_token(dave)
+    hidden = dave.post(f'/lists/{list_id}/delete', data={'_csrf': token})
+    assert hidden.status_code == HTTPStatus.NOT_FOUND
+
+    carol = client.application.test_client()
+    sign_in_as(carol, 'carol', 'carol test password')
+    token = csrf_token(carol)
+    response = carol.post(f'/lists/{list_id}/delete', data={'_csrf': token})
+
+    assert response.status_code == HTTPStatus.FORBIDDEN
+    with sqlite3.connect(db_path) as db:
+        assert db.execute('SELECT title FROM household_lists WHERE id=?',
+                          (list_id,)).fetchone() == ('Bob private list',)
+        assert db.execute('SELECT text FROM shopping_items WHERE id=?',
+                          (item_id,)).fetchone() == ('Keep this item',)

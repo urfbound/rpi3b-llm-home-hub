@@ -2968,9 +2968,7 @@ def create_app(test_config=None):
     @login_required
     def delete_list(list_id):
         db = get_db()
-        target = db.execute('SELECT * FROM household_lists WHERE id=?', (list_id,)).fetchone()
-        if not target:
-            abort(HTTPStatus.NOT_FOUND)
+        target = visible_list(db, g.user, list_id)
         if target['created_by'] != g.user['id'] and g.user['role'] != 'admin':
             abort(HTTPStatus.FORBIDDEN)
         kind = target['kind']
