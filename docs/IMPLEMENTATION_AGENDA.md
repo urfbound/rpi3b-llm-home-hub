@@ -34,6 +34,12 @@ to `main` only after the user approves the completed change.
 
 ## Shared foundations and Admin
 
+- Before Pi acceptance, add install/uninstall regression coverage for the
+  permission issues found on first deployment. Confirm that root-owned app and
+  virtualenv files remain readable and traversable by the service account,
+  repeated installs preserve a working venv and back up existing data, and
+  uninstall backs up first, removes services and scheduled jobs, and preserves
+  the repository, database, archives, and backups unless deletion is chosen.
 - Complete the Lists migration and test each supported upgrade path, including
   pre-upgrade backup creation, data preservation, rollback, and newer-schema
   refusal.

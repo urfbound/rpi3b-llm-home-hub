@@ -109,6 +109,7 @@ sudo install -o root -g root -m 0644 "$REPO_ROOT/pyproject.toml" "$INSTALL_ROOT/
 sudo install -o root -g root -m 0644 "$REPO_ROOT/README.md" "$INSTALL_ROOT/README.md"
 sudo install -o root -g root -m 0644 "$REPO_ROOT/LICENSE" "$INSTALL_ROOT/LICENSE"
 sudo chown -R root:root "$INSTALL_ROOT/homehub"
+sudo chmod -R a+rX -- "$INSTALL_ROOT/homehub"
 
 if [[ ! -x $INSTALL_ROOT/.venv/bin/python ]]; then
   sudo install -d -o root -g root -m 0755 "$INSTALL_ROOT/.venv"
@@ -117,6 +118,7 @@ fi
 sudo chown -R root:root "$INSTALL_ROOT/.venv"
 sudo "$INSTALL_ROOT/.venv/bin/python" -m pip install \
   --disable-pip-version-check "$INSTALL_ROOT"
+sudo chmod -R a+rX -- "$INSTALL_ROOT/.venv"
 
 database_path="$(as_homehub "$INSTALL_ROOT/.venv/bin/python" -c \
   'import os; from pathlib import Path; print(os.environ.get("HOMEHUB_DB", Path.home()/".local/share/homehub/homehub.sqlite3"))')"
