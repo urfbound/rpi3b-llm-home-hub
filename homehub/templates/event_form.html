@@ -1,0 +1,75 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="panel event-editor">
+  <p class="eyebrow">Household calendar</p>
+  <h1>{{ 'Edit event' if editing else 'Add event' }}</h1>
+  <form method="post" action="{{ url_for('edit_event', event_id=event['id']) if editing else url_for('add_event') }}">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <label>Event title<input name="title" maxlength="{{ limits.EVENT_TITLE_MAXIMUM }}" value="{{ event['title'] }}" required></label>
+    <input type="hidden" name="recipe_title_auto" value="{{ event['recipe_title_auto'] or 0 }}">
+    {% if recipes or event['recipe_id'] %}
+    <fieldset class="event-recipe-fields">
+      <legend>Recipe and meal prep</legend>
+      <label>Recipe<select name="recipe_id">
+        <option value="">No linked recipe</option>
+        {% if event['recipe_id'] and event['recipe_id'] not in recipes|map(attribute='id')|list %}<option value="{{ event['recipe_id'] }}" selected>Private recipe</option>{% endif %}
+        {% for recipe in recipes %}<option value="{{ recipe['id'] }}" {% if recipe['id']==event['recipe_id'] %}selected{% endif %}>{{ recipe['title'] }}</option>{% endfor %}
+      </select></label>
+      <label>Servings<input type="number" name="recipe_servings" min="{{ limits.RECIPE_SERVING_MINIMUM }}" max="{{ limits.RECIPE_SERVING_MAXIMUM }}" value="{{ event['recipe_servings'] or '' }}"></label>
+      <label class="event-all-day"><input type="checkbox" name="meal_prep" value="1" {% if event['meal_prep'] %}checked{% endif %}> Meal-prep event</label>
+      <label>Meal<select name="meal_slot"><option value="">No meal selected</option>{% for slot in ('breakfast','lunch','dinner') %}<option value="{{ slot }}" {% if event['meal_slot']==slot %}selected{% endif %}>{{ slot|capitalize }}</option>{% endfor %}</select></label>
+    </fieldset>
+    {% endif %}
+    <label>Date<input type="date" name="event_date" value="{{ event['event_date'] }}" required></label>
+    <label>Visibility<select name="visibility">
+      <option value="shared" {% if event['visibility']=='shared' %}selected{% endif %}>Shared with the household</option>
+      <option value="private" {% if event['visibility']=='private' %}selected{% endif %}>Private</option>
+    </select></label>
+    <label>People invited (optional)<select name="participant_ids" multiple size="4">
+      {% for user in users %}<option value="{{ user['id'] }}" {% if user['id'] in selected_participant_ids %}selected{% endif %}>{{ user['display_name'] }}{% if user['account_kind']=='house' %} (house-wide account){% endif %}</option>{% endfor %}
+    </select></label>
+    <small class="muted">Invitees can see event details. Only you and admins can edit it.</small>
+    <label>Description<textarea name="description" maxlength="{{ limits.EVENT_DESCRIPTION_MAXIMUM }}" rows="3" aria-describedby="event-description-count">{{ event['description'] }}</textarea></label>
+    <small id="event-description-count" class="muted">{{ limits.EVENT_DESCRIPTION_MAXIMUM - event['description']|length }} characters remaining ({{ limits.EVENT_DESCRIPTION_MAXIMUM }} maximum).</small>
+    <label class="event-all-day"><input type="checkbox" name="all_day" value="1" {% if event['all_day'] %}checked{% endif %}> All-day event</label>
+    <div id="event-time-fields" class="event-time-fields" {% if event['all_day'] %}hidden{% endif %}>
+      <label>Starts at<input type="time" name="start_time" value="{{ event['start_time'] or '' }}"></label>
+      <label>Ends at (optional)<input type="time" name="end_time" value="{{ event['end_time'] or '' }}"></label>
+    </div>
+    {% if not editing or event['series_id'] %}
+    <fieldset class="event-recurrence">
+      <legend>Repeat</legend>
+      <label>Frequency<select name="recurrence_frequency">
+        <option value="" {% if not event['recurrence_frequency'] %}selected{% endif %}>Does not repeat</option>
+        {% for frequency in ('daily','weekly','monthly','yearly') %}
+        <option value="{{ frequency }}" {% if event['recurrence_frequency']==frequency %}selected{% endif %}>{{ frequency|capitalize }}</option>
+        {% endfor %}
+      </select></label>
+      <label>Repeat through (optional)<input type="date" name="recurrence_until" value="{{ event['recurrence_until'] or '' }}"></label>
+      <small class="muted">If left blank, the series ends one year after its first date. The end date is included.</small>
+    </fieldset>
+    {% endif %}
+    {% if editing and event['series_id'] %}
+    <label>Apply changes to<select name="edit_scope">
+      <option value="occurrence">Only this occurrence</option>
+      <option value="series" selected>Entire series</option>
+    </select></label>
+    {% endif %}
+    <div class="actions"><a class="button" href="{{ url_for('index') }}#calendar">Cancel</a><button class="primary">{{ 'Save event' if editing else 'Add event' }}</button></div>
+  </form>
+</section>
+<script>
+const description = document.querySelector('[name="description"]');
+const descriptionCount = document.getElementById('event-description-count');
+const allDay = document.querySelector('[name="all_day"]');
+const timeFields = document.getElementById('event-time-fields');
+function updateDescriptionCount() {
+  descriptionCount.textContent = `${{ limits.EVENT_DESCRIPTION_MAXIMUM }} - description.value.length} characters remaining ({{ limits.EVENT_DESCRIPTION_MAXIMUM }} maximum).`;
+}
+description.addEventListener('input', updateDescriptionCount);
+allDay.addEventListener('change', () => { timeFields.hidden = allDay.checked; });
+const titleInput = document.querySelector('[name="title"]');
+const recipeAutoTitle = document.querySelector('[name="recipe_title_auto"]');
+titleInput.addEventListener('input', () => { recipeAutoTitle.value = '0'; });
+</script>
+{% endblock %}

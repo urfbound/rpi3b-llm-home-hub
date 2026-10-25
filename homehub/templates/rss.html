@@ -1,0 +1,177 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="page-heading">
+  <div><p class="eyebrow">Your reading shelf</p><h1>RSS</h1>
+  <p class="muted">Follow the feeds your household cares about.</p></div>
+</section>
+
+{% if current_user['account_kind'] == 'person' or current_user['role'] == 'admin' %}
+<div class="rss-top-actions">
+  <a class="button primary" href="#rss-add-heading">Add a feed</a>
+  <a class="button" href="#rss-manage">Manage feeds</a>
+</div>
+<section class="panel rss-manage" aria-labelledby="rss-add-heading">
+  <h2 id="rss-add-heading">Add a feed</h2>
+  <p class="muted">Use a public HTTP or HTTPS RSS or Atom feed URL.</p>
+  {% if current_user['account_kind'] == 'person' %}
+  <form method="post" action="{{ url_for('add_rss_feed') }}" class="rss-add-form">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <input type="hidden" name="scope" value="personal">
+    <label>Feed URL<input type="url" name="feed_url" maxlength="{{ limits.RSS_FEED_URL_MAXIMUM }}" required placeholder="https://example.com/feed.xml"></label>
+    <button class="primary">Add to my feeds</button>
+  </form>
+  {% endif %}
+  {% if current_user['role'] == 'admin' %}
+  <form method="post" action="{{ url_for('add_rss_feed') }}" class="rss-add-form">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <input type="hidden" name="scope" value="household">
+    <label>House-wide feed URL<input type="url" name="feed_url" maxlength="{{ limits.RSS_FEED_URL_MAXIMUM }}" required placeholder="https://example.com/feed.xml"></label>
+    <label class="rss-lan-approval"><input type="checkbox" name="allow_lan" value="1"> Allow trusted household LAN destination</label>
+    <button>Share with household</button>
+  </form>
+  <p class="muted">Up to three house-wide feeds. Only admins can remove or reorder them. Allow LAN only for a feed you trust.</p>
+  {% endif %}
+</section>
+{% endif %}
+
+{% if current_user['account_kind'] == 'person' %}
+<section class="panel rss-feed-section" aria-labelledby="personal-feeds-heading">
+  <h2 id="personal-feeds-heading">My feeds</h2>
+  {% if personal_feeds %}
+  <ul class="rss-feed-list">
+    {% for feed in personal_feeds %}
+    <li><div><strong>{{ feed['title'] }}</strong><small>{{ feed['normalized_url'] }}</small></div>
+    </li>
+    {% for article in articles_by_feed.get(feed['id'], []) %}
+    <li class="rss-article-row{% if article['is_read'] %} is-read{% endif %}">
+      <h3><a href="{{ url_for('open_rss_article', article_id=article['id']) }}">{{ article['title'] }}</a></h3>
+      <p class="rss-article-meta">{{ 'Read' if article['is_read'] else 'Unread' }}{% if article['published'] %} · {{ article['published'] }}{% endif %}</p>
+      {% if article['summary'] %}<p class="rss-article-summary">{{ article['summary'] }}</p>{% endif %}
+      {% if current_user['account_kind'] == 'person' %}<div class="rss-article-actions">
+        {% if not article['is_read'] %}<form method="post" action="{{ url_for('done_reading_rss_article', article_id=article['id']) }}" class="rss-done-form" data-ask="{{ ask_before_done_delete }}">
+          <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+          {% if not ask_before_done_delete %}<input type="hidden" name="confirmed" value="1"><input type="hidden" name="choice" value="delete">{% endif %}
+          <button>Done reading</button>
+        </form>{% endif %}
+        <form method="post" action="{{ url_for('favorite_rss_article', article_id=article['id']) }}">
+          <input type="hidden" name="_csrf" value="{{ csrf_token }}"><input type="hidden" name="favorite" value="{{ 0 if article['is_favorite'] else 1 }}">
+          <button aria-pressed="{{ 'true' if article['is_favorite'] else 'false' }}">{{ '★ Favourited' if article['is_favorite'] else '☆ Favourite' }}</button>
+        </form>
+        <form method="post" action="{{ url_for('delete_rss_article', article_id=article['id']) }}"{% if article['is_favorite'] %} class="rss-favourite-delete-form"{% endif %}>
+          <input type="hidden" name="_csrf" value="{{ csrf_token }}"><button>Delete</button>
+        </form>
+      </div>{% endif %}
+    </li>
+    {% endfor %}
+    {% endfor %}
+  </ul>
+  {% else %}<p class="muted">You have not added any personal feeds yet.</p>{% endif %}
+</section>
+{% endif %}
+
+<section class="panel rss-feed-section" aria-labelledby="house-feeds-heading">
+  <h2 id="house-feeds-heading">House-wide feeds</h2>
+  {% if household_feeds %}
+  <ul class="rss-feed-list">
+    {% for feed in household_feeds %}
+    <li><div><strong>{{ feed['title'] }}</strong>{% if feed['allow_lan'] and current_user['role'] == 'admin' %}<span class="chip amber">LAN approved</span>{% endif %}<small>{{ feed['normalized_url'] }}</small></div>
+    </li>
+    {% for article in articles_by_feed.get(feed['id'], []) %}
+    <li class="rss-article-row{% if article['is_read'] %} is-read{% endif %}">
+      <h3><a href="{{ url_for('open_rss_article', article_id=article['id']) }}">{{ article['title'] }}</a></h3>
+      <p class="rss-article-meta">{{ 'Read' if article['is_read'] else 'Unread' }}{% if article['published'] %} · {{ article['published'] }}{% endif %}</p>
+      {% if article['summary'] %}<p class="rss-article-summary">{{ article['summary'] }}</p>{% endif %}
+      {% if current_user['account_kind'] == 'person' %}<div class="rss-article-actions">
+        {% if not article['is_read'] %}<form method="post" action="{{ url_for('done_reading_rss_article', article_id=article['id']) }}" class="rss-done-form" data-ask="{{ ask_before_done_delete }}">
+          <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+          {% if not ask_before_done_delete %}<input type="hidden" name="confirmed" value="1"><input type="hidden" name="choice" value="delete">{% endif %}
+          <button>Done reading</button>
+        </form>{% endif %}
+        <form method="post" action="{{ url_for('favorite_rss_article', article_id=article['id']) }}">
+          <input type="hidden" name="_csrf" value="{{ csrf_token }}"><input type="hidden" name="favorite" value="{{ 0 if article['is_favorite'] else 1 }}">
+          <button aria-pressed="{{ 'true' if article['is_favorite'] else 'false' }}">{{ '★ Favourited' if article['is_favorite'] else '☆ Favourite' }}</button>
+        </form>
+        <form method="post" action="{{ url_for('delete_rss_article', article_id=article['id']) }}"{% if article['is_favorite'] %} class="rss-favourite-delete-form"{% endif %}>
+          <input type="hidden" name="_csrf" value="{{ csrf_token }}"><button>Delete</button>
+        </form>
+      </div>{% endif %}
+    </li>
+    {% endfor %}
+    {% endfor %}
+  </ul>
+  {% else %}<p class="muted">No house-wide feeds have been added.</p>{% endif %}
+</section>
+{% if current_user['account_kind'] == 'person' %}
+<details class="panel rss-feed-section rss-manage-preferences" id="rss-manage">
+  <summary>Manage feeds</summary>
+  <form method="post" action="{{ url_for('update_rss_done_reading_preference') }}">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <label><input type="checkbox" name="ask_before_done_delete" value="1"{% if ask_before_done_delete %} checked{% endif %}> Ask before deleting after Done reading</label>
+    <button>Save reading preference</button>
+  </form>
+  {% if personal_feeds %}<section><h3>My feeds</h3><ul class="rss-feed-list">
+    {% for feed in personal_feeds %}<li><div><strong>{{ feed['title'] }}</strong><small>{{ feed['normalized_url'] }}</small></div><div class="rss-feed-actions">
+      <form method="post" action="{{ url_for('move_rss_feed', feed_id=feed['id']) }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><input type="hidden" name="direction" value="up"><button aria-label="Move {{ feed['title'] }} up" {% if loop.first %}disabled{% endif %}>Up</button></form>
+      <form method="post" action="{{ url_for('move_rss_feed', feed_id=feed['id']) }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><input type="hidden" name="direction" value="down"><button aria-label="Move {{ feed['title'] }} down" {% if loop.last %}disabled{% endif %}>Down</button></form>
+      <form method="post" action="{{ url_for('delete_rss_feed', feed_id=feed['id']) }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><button>Remove</button></form>
+    </div></li>{% endfor %}
+  </ul></section>{% endif %}
+  {% if current_user['role'] == 'admin' and household_feeds %}<section><h3>House-wide feeds</h3><ul class="rss-feed-list">
+    {% for feed in household_feeds %}<li><div><strong>{{ feed['title'] }}</strong><small>{{ feed['normalized_url'] }}</small></div><div class="rss-feed-actions">
+      <form method="post" action="{{ url_for('move_rss_feed', feed_id=feed['id']) }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><input type="hidden" name="direction" value="up"><button aria-label="Move {{ feed['title'] }} up" {% if loop.first %}disabled{% endif %}>Up</button></form>
+      <form method="post" action="{{ url_for('move_rss_feed', feed_id=feed['id']) }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><input type="hidden" name="direction" value="down"><button aria-label="Move {{ feed['title'] }} down" {% if loop.last %}disabled{% endif %}>Down</button></form>
+      <form method="post" action="{{ url_for('delete_rss_feed', feed_id=feed['id']) }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><button>Remove</button></form>
+    </div></li>{% endfor %}
+  </ul></section>{% endif %}
+</details>
+<section class="panel rss-favourites" id="rss-favourites" aria-labelledby="rss-favourites-heading">
+  <div class="rss-favourites-heading"><h2 id="rss-favourites-heading">Favourites</h2><span>{{ favourite_articles|length }} / {{ limits.RSS_FAVORITES_MAXIMUM }}</span></div>
+  {% if favourite_articles %}<ul class="rss-favourites-list">
+    {% for article in favourite_articles %}<li>
+      <div><a href="{{ url_for('open_rss_article', article_id=article['id']) }}"><strong>{{ article['title'] }}</strong></a><small>{{ article['feed_title'] }}{% if article['published'] %} · {{ article['published'] }}{% endif %}</small></div>
+      <div class="rss-article-actions">
+        <form method="post" action="{{ url_for('favorite_rss_article', article_id=article['id']) }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><input type="hidden" name="favorite" value="0"><button>Remove favourite</button></form>
+        <form method="post" action="{{ url_for('delete_rss_article', article_id=article['id']) }}" class="rss-favourite-delete-form"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><button>Delete</button></form>
+      </div>
+    </li>{% endfor %}
+  </ul>{% else %}<p class="muted">Favourite an article to keep it here and protect it from automatic cleanup.</p>{% endif %}
+</section>
+<dialog id="rss-done-reading-dialog" class="rss-dialog">
+  <h2>Done reading?</h2><p>Delete this article after marking it read?</p>
+  <label><input type="checkbox" id="rss-dont-ask-again"> Don't ask me again</label>
+  <div class="rss-dialog-actions"><button type="button" data-done-choice="keep">Mark read only</button><button type="button" data-done-choice="delete" class="primary">Done reading and delete</button></div>
+</dialog>
+<dialog id="rss-delete-favourite-dialog" class="rss-dialog">
+  <h2>Delete favourite?</h2><p>This article is saved in your favourites. Delete it anyway?</p>
+  <div class="rss-dialog-actions"><button type="button" data-cancel-delete>Cancel</button><button type="button" data-confirm-delete class="danger">Delete favourite</button></div>
+</dialog>
+<script>
+let rssDoneForm = null;
+let rssFavoriteForm = null;
+const doneDialog = document.getElementById('rss-done-reading-dialog');
+const favoriteDialog = document.getElementById('rss-delete-favourite-dialog');
+document.querySelectorAll('.rss-done-form').forEach(form => form.addEventListener('submit', event => {
+  if (form.dataset.ask !== '1' || form.dataset.confirmed === '1') return;
+  event.preventDefault(); rssDoneForm = form; doneDialog.showModal();
+}));
+document.querySelectorAll('.rss-favourite-delete-form').forEach(form => form.addEventListener('submit', event => {
+  if (form.dataset.confirmed === '1') return;
+  event.preventDefault(); rssFavoriteForm = form; favoriteDialog.showModal();
+}));
+document.querySelectorAll('[data-done-choice]').forEach(button => button.addEventListener('click', () => {
+  if (!rssDoneForm) return;
+  [['confirmed', '1'], ['choice', button.dataset.doneChoice],
+   ['dont_ask_again', document.getElementById('rss-dont-ask-again').checked ? '1' : '0']].forEach(([name, value]) => {
+    const input = document.createElement('input'); input.type = 'hidden'; input.name = name; input.value = value; rssDoneForm.append(input);
+  });
+  rssDoneForm.dataset.confirmed = '1'; doneDialog.close(); rssDoneForm.requestSubmit();
+}));
+document.querySelector('[data-cancel-delete]').addEventListener('click', () => favoriteDialog.close());
+document.querySelector('[data-confirm-delete]').addEventListener('click', () => {
+  if (!rssFavoriteForm) return;
+  const input = document.createElement('input'); input.type = 'hidden'; input.name = 'confirmed'; input.value = '1'; rssFavoriteForm.append(input);
+  rssFavoriteForm.dataset.confirmed = '1'; favoriteDialog.close(); rssFavoriteForm.requestSubmit();
+});
+</script>
+{% endif %}
+{% endblock %}

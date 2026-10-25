@@ -1,0 +1,25 @@
+{% extends 'base.html' %}
+{% block content %}
+<article class="panel event-detail">
+  <div class="event-detail-actions"><a href="{{ url_for('index') }}#calendar">← Calendar</a>
+    {% if can_edit %}<div class="actions"><a class="button" href="{{ url_for('edit_event', event_id=event['id']) }}">Edit event</a><button type="button" class="danger" onclick="document.getElementById('delete-event-dialog').showModal()">Delete event</button></div>{% endif %}
+  </div>
+  <p class="eyebrow">{{ 'All day' if event['all_day'] else 'Timed event' }}</p>
+  <h1>{{ event['title'] if can_view_details else 'Busy' }}</h1>
+  <p><time datetime="{{ event['event_date'] }}">{{ event['event_date'] }}</time>
+    {% if not event['all_day'] %} · {{ start_label }}{% if end_label %}–{{ end_label }}{% endif %}{% endif %}</p>
+  {% if can_view_details %}
+    {% if event['description'] %}<p class="event-description">{{ event['description'] }}</p>{% else %}<p class="muted">No description.</p>{% endif %}
+    {% if recipe_label %}<p>Recipe: {% if recipe_url %}<a href="{{ recipe_url }}">{{ recipe_label }}</a>{% else %}{{ recipe_label }}{% endif %}{% if event['recipe_servings'] %} · {{ event['recipe_servings'] }} servings{% endif %}{% if event['meal_prep'] %} · Meal prep{% endif %}{% if event['meal_slot'] %} · {{ event['meal_slot']|capitalize }}{% endif %}</p>{% endif %}
+    {% if participants %}<p>Invited: {% for person in participants %}{{ person['display_name'] }}{% if not loop.last %}, {% endif %}{% endfor %}</p>{% endif %}
+  {% else %}<p class="muted">Private event details are visible to the creator, invitees, and admins.</p>{% endif %}
+</article>
+{% if can_edit %}
+<dialog id="delete-event-dialog"><form method="post" action="{{ url_for('delete_event', event_id=event['id']) }}" class="dialog-form">
+  <input type="hidden" name="_csrf" value="{{ csrf_token }}"><p class="eyebrow">Permanent removal</p><h2>Delete this event?</h2>
+  <p>{{ event['title'] }} will be removed from the household calendar.</p>
+  {% if recurring %}<label>Delete<select name="delete_scope"><option value="occurrence">Only this occurrence</option><option value="series">Entire series</option></select></label>{% endif %}
+  <div class="dialog-actions"><button type="button" onclick="this.closest('dialog').close()">Keep event</button><button class="danger">Delete event</button></div>
+</form></dialog>
+{% endif %}
+{% endblock %}

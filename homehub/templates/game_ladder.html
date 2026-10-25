@@ -1,0 +1,18 @@
+{% extends 'base.html' %}
+{% block content %}
+<style>.ladder-path{display:flex;gap:.5rem;flex-wrap:wrap;list-style:none;padding:0}.ladder-path li{padding:.6rem;border:1px solid currentColor;border-radius:.4rem;letter-spacing:.15em;font-weight:bold}.ladder-form{display:flex;gap:.5rem;align-items:center;flex-wrap:wrap}</style>
+<p><a href="{{ url_for('games.page') }}">← All games</a></p>
+<p class="eyebrow">{{ 'Practice' if practice else 'Daily challenge' }}</p><h1>Word Ladder</h1>
+<p>Change one letter at a time. Every step must be a listed four-letter word.</p>
+<section class="panel"><h2>{{ start }} → {{ target }}</h2><p>{{ day.isoformat() }} · {{ streak }}-day streak · {{ difficulty|title }} difficulty estimate</p>
+<ol class="ladder-path">{% for word in state['path'] %}<li>{{ word }}</li>{% endfor %}</ol>
+{% if state.get('hint') %}<p role="status">Hint: try {{ state['hint'] }} next.</p>{% endif %}
+{% if attempt and attempt['status'] != 'playing' %}<p role="status">{% if attempt['status'] == 'won' %}Solved! {{ attempt['points'] }} points{% elif attempt['status'] == 'lost' %}No steps left{% else %}Attempt expired{% endif %}.</p>
+<p>Shortest route: {{ shortest|join(' → ') }}</p>
+{% else %}<form class="ladder-form" method="post" action="{% if practice %}{{ url_for('games.ladder_practice_move', attempt_id=attempt['id']) }}{% else %}{{ url_for('games.ladder_move') }}{% endif %}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><label for="ladder-word">Next word</label><input id="ladder-word" name="word" maxlength="4" minlength="4" pattern="[A-Za-z]{4}" required autocomplete="off"><button class="button primary">Play word</button></form>
+<form method="post" action="{% if practice %}{{ url_for('games.ladder_practice_hint', attempt_id=attempt['id']) }}{% else %}{{ url_for('games.ladder_hint') }}{% endif %}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><button class="button" {% if attempt and attempt['hints'] >= 3 %}disabled{% endif %}>{{ 'Hint' if practice else 'Hint (−15 points)' }}</button></form>
+{% endif %}
+<form method="post" action="{{ url_for('games.ladder_practice_start') }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><button class="button">Start practice</button></form>
+</section>
+<aside class="panel"><h2>Household scoreboard</h2><h3>Today</h3>{% if scores %}<ol>{% for score in scores %}<li>{{ score['display_name'] }} · {{ score['points'] }} points</li>{% endfor %}</ol>{% else %}<p>No scored wins yet.</p>{% endif %}<h3>All-time</h3>{% if all_scores %}<ol>{% for score in all_scores %}<li>{{ score['display_name'] }} · {{ score['points'] }} points</li>{% endfor %}</ol>{% else %}<p>No scored wins yet.</p>{% endif %}</aside>
+{% endblock %}

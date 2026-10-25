@@ -11,6 +11,7 @@ dev = ["pytest>=8,<10"]
 [project.scripts]
 homehub = "homehub.app:main"
 homehub-backup = "homehub.backup_scheduler:main"
+homehub-rss-refresh = "homehub.rss_scheduler:main"
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -19,5 +20,10 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 include = ["homehub*"]
 
+[tool.setuptools.package-data]
+homehub = ["game_data/*.json", "game_data/*.jsonl", "game_data/*.md", "static/*", "static/**/*",  "templates/*", "templates/**/*"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-m 'not bank'"
+markers = ["bank: exhaustive validation of the large offline puzzle banks"]

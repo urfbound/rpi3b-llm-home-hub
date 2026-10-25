@@ -1,0 +1,37 @@
+{% extends 'base.html' %}
+{% block content %}
+<style>
+.puzzle-grid{display:grid;grid-template-columns:repeat({{ puzzle['size'] }},minmax(0,2.4rem));gap:.2rem;max-width:max-content;margin:1rem 0}
+.puzzle-cell{width:2.4rem;height:2.4rem;text-align:center;border:1px solid var(--line);border-radius:.25rem;background:var(--bg);color:inherit;font:700 1rem system-ui}
+.puzzle-cell.block{background:var(--button);border-color:transparent}.puzzle-cell.given{font-weight:900;background:var(--button)}
+.puzzle-clues{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}.puzzle-form-actions{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
+@media(max-width:550px){.puzzle-grid{grid-template-columns:repeat({{ puzzle['size'] }},minmax(0,1fr));width:100%}.puzzle-cell{width:100%;min-width:0;height:2.1rem;font-size:.85rem}.puzzle-clues{grid-template-columns:1fr}}
+</style>
+<p><a href="{{ url_for('games.page') }}">← All games</a></p>
+<p class="eyebrow">{{ 'Practice' if practice else 'Daily challenge' }}</p><h1>{{ puzzle['title'] }}</h1>
+<p>{{ day.isoformat() }} · {{ streak }}-day streak{% if game == 'crossword' %} · Edited by {{ puzzle['editor'] }}{% endif %}{% if puzzle['difficulty'] %} · {{ puzzle['difficulty'] }}{% if game == 'sudoku' %} estimate{% endif %}{% endif %}</p>
+{% if game == 'crossword' %}<p>Fill each open square from the across and down clues.</p>{% elif game == 'nonogram' %}<p>Mark every square filled or empty using the row and column clues.</p>{% else %}<p>Fill each row, column, and 3×3 box with the digits 1 through 9.</p>{% endif %}
+<section class="panel">
+{% if attempt and attempt['status'] != 'playing' %}<p role="status">{% if attempt['status'] == 'won' %}Completed! {{ attempt['points'] }} points{% else %}Attempt expired{% endif %}.</p>{% endif %}
+{% if state.get('feedback') and (not attempt or attempt['status'] == 'playing') %}<p role="status">{{ state['feedback'] }}</p>{% endif %}
+{% if attempt and attempt['status'] != 'playing' %}<pre aria-label="Solution">{% for row in range(puzzle['size']) %}{{ puzzle['answer'][row * puzzle['size']:(row + 1) * puzzle['size']] }}
+{% endfor %}</pre>{% endif %}
+<form method="post" action="{% if practice %}{{ url_for('games.grid_practice_submit', game=game, attempt_id=attempt['id']) }}{% else %}{{ url_for('games.grid_submit', game=game) }}{% endif %}">
+<input type="hidden" name="_csrf" value="{{ csrf_token }}">
+<div class="puzzle-grid" role="group" aria-label="{{ puzzle['title'] }} board">
+{% for cell in state['board'] %}{% set index = loop.index0 %}{% set given = puzzle['initial'][index] %}
+{% if given == '#' %}<span class="puzzle-cell block" aria-label="Block"></span><input type="hidden" name="cell{{ index }}" value="#">
+{% elif game == 'nonogram' %}<select class="puzzle-cell" name="cell{{ index }}" aria-label="Row {{ index // puzzle['size'] + 1 }}, column {{ index % puzzle['size'] + 1 }}" {% if attempt and attempt['status'] != 'playing' %}disabled{% endif %}><option value="." {% if cell == '.' %}selected{% endif %}>?</option><option value="#" {% if cell == '#' %}selected{% endif %}>■</option><option value="x" {% if cell == 'x' %}selected{% endif %}>×</option></select>
+{% elif game == 'sudoku' and given != '0' %}<span class="puzzle-cell given" aria-label="Row {{ index // 9 + 1 }}, column {{ index % 9 + 1 }}: {{ given }}">{{ given }}</span><input type="hidden" name="cell{{ index }}" value="{{ given }}">
+{% else %}<input class="puzzle-cell" name="cell{{ index }}" value="{{ '' if cell in ('.','0') else cell }}" maxlength="1" pattern="{% if game == 'sudoku' %}[1-9]{% else %}[A-Za-z]{% endif %}" aria-label="Row {{ index // puzzle['size'] + 1 }}, column {{ index % puzzle['size'] + 1 }}" {% if attempt and attempt['status'] != 'playing' %}disabled{% endif %}>
+{% endif %}{% endfor %}
+</div>
+{% if not attempt or attempt['status'] == 'playing' %}<div class="puzzle-form-actions"><button class="button primary">Check board</button></div>{% endif %}
+</form>
+{% if puzzle['clues'] %}<div class="puzzle-clues">{% for direction in ('Across','Down') %}<div><h2>{{ direction }}</h2><ol>{% for clue in puzzle['clues'] %}{% if clue[0] == direction %}<li>{{ clue[2] }}</li>{% endif %}{% endfor %}</ol></div>{% endfor %}</div>{% endif %}
+{% if game == 'nonogram' %}<div class="puzzle-clues"><div><h2>Rows</h2><ol>{% for clue in puzzle['row_clues'] %}<li>{{ clue|join(', ') }}</li>{% endfor %}</ol></div><div><h2>Columns</h2><ol>{% for clue in puzzle['col_clues'] %}<li>{{ clue|join(', ') }}</li>{% endfor %}</ol></div></div>{% endif %}
+{% if not attempt or attempt['status'] == 'playing' %}<form method="post" action="{% if practice %}{{ url_for('games.grid_practice_hint', game=game, attempt_id=attempt['id']) }}{% else %}{{ url_for('games.grid_hint', game=game) }}{% endif %}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><label>Hint row <input type="number" name="row" min="1" max="{{ puzzle['size'] }}" required></label><label>Column <input type="number" name="column" min="1" max="{{ puzzle['size'] }}" required></label><button class="button" {% if attempt and attempt['hints'] >= 3 %}disabled{% endif %}>{{ 'Reveal square' if practice else 'Reveal square (−15 points)' }}</button></form>{% endif %}
+<form method="post" action="{{ url_for('games.grid_practice_start', game=game) }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><button class="button">Start practice</button></form>
+</section>
+<aside class="panel"><h2>Household scoreboard</h2><h3>Today</h3>{% if scores %}<ol>{% for score in scores %}<li>{{ score['display_name'] }} · {{ score['points'] }} points</li>{% endfor %}</ol>{% else %}<p>No scored wins yet.</p>{% endif %}<h3>All-time</h3>{% if all_scores %}<ol>{% for score in all_scores %}<li>{{ score['display_name'] }} · {{ score['points'] }} points</li>{% endfor %}</ol>{% else %}<p>No scored wins yet.</p>{% endif %}</aside>
+{% endblock %}

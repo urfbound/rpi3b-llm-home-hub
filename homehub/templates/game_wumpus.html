@@ -1,0 +1,39 @@
+{% extends 'base.html' %}
+{% block content %}
+<style>
+.cave-exits{display:flex;gap:.5rem;flex-wrap:wrap}.cave-exits button{min-width:4rem}
+.cave-actions{display:grid;gap:1rem;grid-template-columns:repeat(2,minmax(0,1fr))}
+.wumpus-map-wrap{margin:0 0 1.5rem}.wumpus-map-wrap>input{width:1rem;height:1rem;display:inline-block;vertical-align:middle;margin-right:.35rem}
+.wumpus-map-toggle{display:inline-block}.wumpus-map-panel{margin-top:.75rem}
+#hide-wumpus-map:checked~.wumpus-map-panel{display:none}
+.wumpus-map{width:100%;max-width:540px;height:auto;display:block;touch-action:none;cursor:grab;user-select:none;-webkit-user-select:none}
+.wumpus-map:active{cursor:grabbing}.wumpus-map text{user-select:none;-webkit-user-select:none}
+.wumpus-corridor{stroke:var(--muted);stroke-width:2;opacity:.55}.wumpus-corridor.dashed{stroke-dasharray:5 5}
+.wumpus-room circle{fill:var(--panel);stroke:var(--muted);stroke-width:2}
+.wumpus-room.unseen circle{fill:var(--muted);stroke:var(--muted)}
+.wumpus-room.seen circle{stroke:var(--accent);stroke-width:3}.wumpus-room.current circle{stroke:var(--ink);stroke-width:4}
+.wumpus-room text{fill:var(--ink);dominant-baseline:middle;text-anchor:middle;pointer-events:none}
+.wumpus-room .wumpus-clue{font-family:"Segoe UI Emoji","Apple Color Emoji","Noto Color Emoji",sans-serif;font-size:15px}
+.wumpus-room .wumpus-room-number{text-anchor:start;font-size:13px;font-weight:700}
+.wumpus-map-legend{font-size:.9rem}@media(max-width:650px){.cave-actions{grid-template-columns:1fr}}
+</style>
+<p><a href="{{ url_for('games.page') }}">← All games</a></p>
+<p class="eyebrow">{{ 'Practice' if practice else 'Daily challenge' }}</p><h1>Hunt the Wumpus</h1>
+<p>Explore the 20-room cave. You have five arrows. Pits and the Wumpus end your attempt; bats carry you away.</p>
+<section class="panel"><div class="wumpus-map-wrap">
+<p>Drag to rotate the cave. Numbered rooms have been visited; dashed corridors lead to unvisited rooms. The current room has a bold outline.</p>
+<input id="hide-wumpus-map" type="checkbox"><label for="hide-wumpus-map" class="wumpus-map-toggle">Hide map</label>
+<div class="wumpus-map-panel"><svg id="wumpus-map" class="wumpus-map" viewBox="0 0 540 540" role="img" aria-label="Cave map with 20 rooms and connected corridors. Drag to rotate." tabindex="0">
+{% for a, b in map_edges %}{% set first = map_rooms[a - 1] %}{% set second = map_rooms[b - 1] %}<line class="wumpus-corridor{{ ' dashed' if not first.seen or not second.seen else '' }}" data-a="{{ a }}" data-b="{{ b }}" x1="{{ 270 + first.x * 185 }}" y1="{{ 270 - first.y * 185 }}" x2="{{ 270 + second.x * 185 }}" y2="{{ 270 - second.y * 185 }}" />{% endfor %}
+{% for room in map_rooms %}<g class="wumpus-room{{ ' seen' if room.seen else ' unseen' }}{{ ' current' if room.number == state['room'] else '' }}" id="wumpus-room-{{ room.number }}" data-room="{{ room.number }}" data-clues="{{ room.clues | join(', ') }}" data-x="{{ room.x }}" data-y="{{ room.y }}" data-z="{{ room.z }}" transform="translate({{ 270 + room.x * 185 }} {{ 270 - room.y * 185 }})"><title>{% if room.seen %}Room {{ room.number }}: {{ room.clues | join(', ') if room.clues else 'no nearby clues' }}{% else %}Unvisited room{% endif %}</title><circle r="25"/>{% for marker in room.markers %}<text class="wumpus-clue {{ marker.kind }}" x="{{ marker.x }}" y="{{ marker.y }}">{{ marker.symbol }}</text>{% endfor %}{% if room.seen %}<text class="wumpus-room-number" x="30">{{ room.number }}</text>{% endif %}</g>{% endfor %}
+</svg><p class="wumpus-map-legend">🍃 draft · 🦇 bats · 🐲 Wumpus nearby · 🍽️ eaten · ⬇️ fell into a pit</p></div></div><script defer src="{{ url_for('static', filename='wumpus-map.js', v=3) }}"></script>
+<h2>Room {{ state['room'] }}</h2><p>{{ day.isoformat() }} · {{ streak }}-day streak · {{ state['arrows'] }} arrows left</p><p>Seed: <code>{{ game['seed'] }}</code></p>
+{% if warnings %}<ul>{% for warning in warnings %}<li>{{ warning }}</li>{% endfor %}</ul>{% else %}<p>The nearby rooms seem quiet.</p>{% endif %}
+{% if attempt and attempt['status'] != 'playing' %}<p role="status">{% if attempt['status'] == 'won' %}You found the Wumpus! {{ attempt['points'] }} points{% elif attempt['status'] == 'lost' %}The hunt is over{% else %}Attempt expired{% endif %}. The Wumpus was in room {{ game['placements'][1] }}.</p>{% endif %}
+{% if not attempt or attempt['status'] == 'playing' %}<div class="cave-actions"><div><h3>Move</h3><p>Connected rooms:</p><div class="cave-exits">{% for room in exits %}<form method="post" action="{% if practice %}{{ url_for('games.wumpus_practice_action', attempt_id=attempt['id']) }}{% else %}{{ url_for('games.wumpus_action') }}{% endif %}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><input type="hidden" name="action" value="move"><input type="hidden" name="rooms" value="{{ room }}"><button class="button">{{ room }}</button></form>{% endfor %}</div></div>
+<div><h3>Shoot</h3><p>Enter a path of one to five connected rooms, separated by commas. A missed shot uses an arrow.</p><form method="post" action="{% if practice %}{{ url_for('games.wumpus_practice_action', attempt_id=attempt['id']) }}{% else %}{{ url_for('games.wumpus_action') }}{% endif %}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><input type="hidden" name="action" value="shoot"><label for="arrow-path">Arrow path</label><input id="arrow-path" name="rooms" required placeholder="2, 3"><button class="button primary">Shoot</button></form></div></div>{% endif %}
+{% if state['history'] %}<h3>Your moves</h3><ol>{% for event in state['history'] %}<li>{{ event }}</li>{% endfor %}</ol>{% endif %}
+<form method="post" action="{{ url_for('games.wumpus_practice_start') }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><label for="practice-seed">Practice seed (optional)</label><input id="practice-seed" name="seed" inputmode="numeric" placeholder="Random if blank"><button class="button">Start practice</button></form>
+</section>
+<aside class="panel"><h2>Household scoreboard</h2><h3>Today</h3>{% if scores %}<ol>{% for score in scores %}<li>{{ score['display_name'] }} · {{ score['points'] }} points</li>{% endfor %}</ol>{% else %}<p>No scored wins yet.</p>{% endif %}<h3>All-time</h3>{% if all_scores %}<ol>{% for score in all_scores %}<li>{{ score['display_name'] }} · {{ score['points'] }} points</li>{% endfor %}</ol>{% else %}<p>No scored wins yet.</p>{% endif %}</aside>
+{% endblock %}

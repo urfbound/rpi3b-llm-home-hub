@@ -1,0 +1,52 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="panel">
+  <p><a href="{{ url_for('recipe_detail', recipe_id=recipe['id']) }}">← Back to recipe</a></p>
+  <p class="eyebrow">Your recipe book</p><h1>Edit recipe</h1>
+  <form method="post" action="{{ url_for('edit_recipe', recipe_id=recipe['id']) }}" class="recipe-create">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <label>Name<input name="title" maxlength="{{ limits.RECIPE_TITLE_MAXIMUM }}" value="{{ recipe['title'] }}" required></label>
+    <label>Description<input name="description" maxlength="{{ limits.RECIPE_DESCRIPTION_MAXIMUM }}" value="{{ recipe['description'] }}"></label>
+    <label>Default servings<input name="default_servings" type="number" min="1" max="99" value="{{ recipe['default_servings'] }}" required></label>
+    <label>Sharing<select name="visibility"><option value="shared" {% if recipe['visibility'] == 'shared' %}selected{% endif %}>Shared with household</option><option value="private" {% if recipe['visibility'] == 'private' %}selected{% endif %}>Private</option></select></label>
+    <label>Private recipe viewers<select name="allowed_user_ids" multiple size="4">{% for user in sharing_users %}<option value="{{ user['id'] }}" {% if user['id'] in access_ids %}selected{% endif %}>{{ user['display_name'] or user['username'] }}</option>{% endfor %}</select></label>
+    <h2>Ingredients</h2>
+    <div id="recipe-ingredients">
+      {% for ingredient in ingredients %}
+      <div class="recipe-ingredient-row">
+        <input name="ingredient_quantity" maxlength="{{ limits.RECIPE_INGREDIENT_QUANTITY_MAXIMUM }}" aria-label="Ingredient quantity" placeholder="Quantity" value="{{ ingredient['quantity'] }}">
+        <input name="ingredient_unit" maxlength="{{ limits.RECIPE_INGREDIENT_UNIT_MAXIMUM }}" aria-label="Ingredient unit" placeholder="Unit" value="{{ ingredient['unit'] }}">
+        <input name="ingredient_name" maxlength="{{ limits.RECIPE_INGREDIENT_NAME_MAXIMUM }}" aria-label="Ingredient name" placeholder="Ingredient" value="{{ ingredient['name'] }}" required>
+        <input name="ingredient_note" maxlength="{{ limits.RECIPE_INGREDIENT_NOTE_MAXIMUM }}" aria-label="Ingredient note" placeholder="Note" value="{{ ingredient['note'] }}">
+        {% if not loop.first %}<button type="button" aria-label="Remove ingredient" onclick="this.closest('.recipe-ingredient-row').remove()">Remove</button>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    <button type="button" id="add-recipe-ingredient">Add ingredient</button>
+    <h2>Method</h2>
+    <div id="recipe-steps">
+      {% for step in steps %}
+      <div class="recipe-step-row"><textarea name="step" maxlength="{{ limits.RECIPE_STEP_TEXT_MAXIMUM }}" aria-label="Method step" required>{{ step['text'] }}</textarea>{% if not loop.first %}<button type="button" aria-label="Remove step" onclick="this.closest('.recipe-step-row').remove()">Remove</button>{% endif %}</div>
+      {% endfor %}
+    </div>
+    <button type="button" id="add-recipe-step">Add step</button>
+    <div class="actions"><a class="button" href="{{ url_for('recipe_detail', recipe_id=recipe['id']) }}">Cancel</a><button class="primary">Save recipe</button></div>
+  </form>
+</section>
+<script>
+const ingredientRows=document.getElementById('recipe-ingredients');
+document.getElementById('add-recipe-ingredient').addEventListener('click',()=>{
+  if(ingredientRows.children.length>=64)return;
+  const row=document.createElement('div');row.className='recipe-ingredient-row';
+  row.innerHTML='<input name="ingredient_quantity" maxlength="{{ limits.RECIPE_INGREDIENT_QUANTITY_MAXIMUM }}" aria-label="Ingredient quantity" placeholder="Quantity"><input name="ingredient_unit" maxlength="{{ limits.RECIPE_INGREDIENT_UNIT_MAXIMUM }}" aria-label="Ingredient unit" placeholder="Unit"><input name="ingredient_name" maxlength="{{ limits.RECIPE_INGREDIENT_NAME_MAXIMUM }}" aria-label="Ingredient name" placeholder="Ingredient" required><input name="ingredient_note" maxlength="{{ limits.RECIPE_INGREDIENT_NOTE_MAXIMUM }}" aria-label="Ingredient note" placeholder="Note"><button type="button" aria-label="Remove ingredient">Remove</button>';
+  row.querySelector('button').addEventListener('click',()=>row.remove());ingredientRows.append(row);
+});
+const recipeSteps=document.getElementById('recipe-steps');
+document.getElementById('add-recipe-step').addEventListener('click',()=>{
+  if(recipeSteps.children.length>=64)return;
+  const row=document.createElement('div');row.className='recipe-step-row';
+  row.innerHTML='<textarea name="step" maxlength="{{ limits.RECIPE_STEP_TEXT_MAXIMUM }}" aria-label="Method step" required></textarea><button type="button" aria-label="Remove step">Remove</button>';
+  row.querySelector('button').addEventListener('click',()=>row.remove());recipeSteps.append(row);
+});
+</script>
+{% endblock %}

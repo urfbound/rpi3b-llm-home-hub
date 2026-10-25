@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#faf7f1">
+  <title>Offline shopping list · Home Hub</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script>document.documentElement.dataset.theme=localStorage.getItem('theme')||'light';</script>
+  <script src="/static/away-mode.js" defer></script>
+</head>
+<body>
+  <main class="offline-page" id="away-offline">
+    <p class="eyebrow">Home Hub · Away mode</p>
+    <h1>Your shopping list</h1>
+    <p class="muted" data-offline-message>Loading the last list saved on this phone…</p>
+    <ul class="checks" data-offline-items></ul>
+    <p class="muted">Checkbox changes stay on this phone until you reconnect and sign in. Browser storage is best effort and can be cleared by the browser.</p>
+    <a class="button primary" href="/?kind=shopping">Reconnect to Home Hub</a>
+  </main>
+</body>
+</html>

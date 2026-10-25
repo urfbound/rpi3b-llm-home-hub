@@ -160,7 +160,7 @@ initial model-only Raspberry Pi 3B benchmarks support an optional feature.
 - Limit each user to 128 recipes, each recipe to 64 structured ingredients and
   64 ordered steps, and each step to 256 characters. Give each user at most
   one attributed note per recipe, editable or removable by that user and
-  limited to 256 characters. Show notes as text by default; provide Edit
+  limited to 128 characters. Show notes as text by default; provide Edit
   and Delete controls with at least 44 px touch targets beside a user's own
   note and reveal the editor beneath it only when requested. Confirm before
   deleting a note. Recipe viewers can read the notes. When sharing
@@ -171,9 +171,10 @@ initial model-only Raspberry Pi 3B benchmarks support an optional feature.
   note to 32, 16, 128, and 128 characters respectively.
   At 32 users filling every recipe, ingredient, step, and note slot, this is
   4,096 recipes, 262,144 ingredients, 262,144 steps, and up to 131,072 notes.
-  A SQLite layout with these text caps is roughly 200–220 MiB for one-byte
-  UTF-8 text, or around 715–765 MiB if text fills every field with four-byte
-  UTF-8 characters. This estimate excludes images, other features, backups,
+  With the agreed 128-character note limit, a SQLite layout with these text
+  caps is roughly 184–204 MiB for one-byte UTF-8 text, or around 651–701 MiB
+  if text fills every field with four-byte UTF-8 characters. This estimate
+  excludes images, other features, backups,
   and SQLite WAL files.
 - A deliberate **Add to list** action copies recipe ingredients into an
   editable shopping-list snapshot. Combine matching ingredient names only
@@ -287,7 +288,8 @@ initial model-only Raspberry Pi 3B benchmarks support an optional feature.
 - Users manage personal RSS feeds; admins manage feeds for the house-wide
   account. Group articles by feed, with a personal user's own feeds first and
   house-wide feeds below them. A separate Manage feeds view lets users remove
-  and reorder their own feeds; admins do the same for house-wide feeds. Adding
+  and reorder their own feeds; only admins can delete or reorder house-wide
+  feeds. Limit the house-wide feed list to three feeds. Adding
   a feed should be easy. Reject a personal subscription when its feed URL is
   already in the house-wide list, as well as duplicate subscriptions within
   the same list. Normalize URLs for duplicate checks and test this rule again
@@ -302,7 +304,10 @@ initial model-only Raspberry Pi 3B benchmarks support an optional feature.
   after DNS resolution and redirects. Block loopback and other unsafe
   addresses. Only an admin can explicitly approve a LAN destination.
 - Track read/unread, favourites, and article deletion per user, including for
-  house-wide feeds, so one person's actions do not change another's shelf.
+  house-wide feeds when straightforward, so one person's actions do not change
+  another's shelf. If per-user tracking proves too costly, house-wide read
+  state may be ignored. Keep house-wide articles for no more than three days;
+  personal article retention follows the existing 90-day/64 MB per-user cap.
   Provide a deliberate Done reading action that marks an article read and
   prompts whether to keep or delete it. The prompt has a Don't ask me again
   option that repeats the chosen action; users can restore prompting in
@@ -330,6 +335,9 @@ initial model-only Raspberry Pi 3B benchmarks support an optional feature.
 
 ## Games
 
+- Before beginning any Games implementation, stop and ask the user to confirm
+  they are ready to start that work. The user plans to use a heavier model for
+  Games; defer it until the end of the implementation agenda if practical.
 - First release games: an original Wordle-style word game, mini crosswords,
   Hunt the Wumpus, word ladders, mini nonograms, and Sudoku.
 - Word guessing uses five-letter answers and six guesses, with correct

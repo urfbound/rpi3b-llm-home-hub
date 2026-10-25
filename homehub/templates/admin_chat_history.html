@@ -1,0 +1,10 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="crumb"><a href="{{ url_for('accounts') }}#chat-settings-section">Admin</a> / <strong>Chat histories</strong></div>
+<div class="page-heading"><div><p class="eyebrow">Admin access</p><h1>Chat histories</h1><p class="muted">Admins can view and delete all conversations. Users are told about this access in Chat.</p></div></div>
+<section class="panel">
+  {% if conversations %}<ul class="chat-list">
+    {% for conversation in conversations %}<li><div><a class="chat-list-title" href="{{ url_for('view_chat', conversation_id=conversation.id) }}">{{ conversation.title }}</a><small>{{ conversation.display_name }} · {{ conversation.username }} · updated {{ conversation.updated_at }}</small></div><form method="post" action="{{ url_for('admin_delete_chat', conversation_id=conversation.id) }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><button class="quiet">Delete</button></form></li>{% endfor %}
+  </ul>{% else %}<p class="empty-state">No conversations have been saved.</p>{% endif %}
+</section>
+{% endblock %}

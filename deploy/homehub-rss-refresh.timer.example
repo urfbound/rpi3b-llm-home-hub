@@ -1,0 +1,12 @@
+[Unit]
+Description=Check whether Home Hub RSS feeds need refreshing
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=10min
+AccuracySec=1min
+Persistent=true
+Unit=homehub-rss-refresh.service
+
+[Install]
+WantedBy=timers.target

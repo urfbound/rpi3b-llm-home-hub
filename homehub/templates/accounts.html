@@ -2,13 +2,14 @@
 {% block content %}
 <div class="crumb">Admin / <strong>Accounts</strong></div>
 <div class="page-heading"><div><p class="eyebrow">Your household</p><h1>People at home</h1><p class="muted">Give each person their own space, and manage access to the shared home.</p></div><button class="primary" type="button" onclick="document.getElementById('create-dialog').showModal()">+ Add account</button></div>
+<nav class="admin-jumps" aria-label="Jump to admin section"><a href="#accounts-section">Accounts</a><a href="#access-section">Access</a><a href="#calendar-limits-section">Calendar limits</a><a href="#calendar-retention-section">Calendar retention</a><a href="#weather-settings-section">Weather</a><a href="#rss-settings-section">RSS</a><a href="#chat-settings-section">Chat</a><a href="#system-status-settings-section">System status</a><a href="#backup-restore-section">Backup and restore</a><a href="#house-wide-section">House-wide access</a></nav>
 <section class="stats" aria-label="Account counts">
   <div class="stat"><strong>{{ counts.users }} <small>/ 32</small></strong><span>Accounts</span></div>
   <div class="stat"><strong>{{ counts.admins }} <small>/ 4</small></strong><span>Admins</span></div>
   <div class="stat"><strong>{{ counts.house }}</strong><span>House-wide login</span></div>
 </section>
 <div class="account-grid">
-  <section class="panel account-list"><h2>Accounts</h2><p class="muted">Only admins can create, reset, or remove accounts.</p>
+  <section class="panel account-list" id="accounts-section"><h2>Accounts</h2><p class="muted">Only admins can create, reset, or remove accounts.</p>
     <label class="search-label">Find a person<input type="search" id="account-search" placeholder="Find a person" oninput="filterAccounts(this.value)"></label>
     {% for user in users %}<div class="person" data-search="{{ (user['display_name'] ~ ' ' ~ user['username'])|lower }}">
       <span class="avatar">{{ '⌂' if user['account_kind'] == 'house' else user['display_name'][:2]|upper }}</span>
@@ -20,10 +21,107 @@
       </div>
     </div>{% endfor %}
   </section>
-  <aside class="account-side"><section class="panel"><p class="eyebrow">Access</p><h2>Passwords & sessions</h2><p>People can change their own passwords. Admin resets issue a one-time password and sign that person out.</p><form method="post" action="{{ url_for('update_session_settings') }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><label>Idle session limit (hours)<input type="number" name="idle_hours" min="1" max="168" value="{{ idle_hours }}" required></label><label>Absolute session limit (days)<input type="number" name="absolute_days" min="1" max="30" value="{{ absolute_days }}" required></label><button>Save session settings</button></form></section>
-    <section class="panel"><p class="eyebrow">Shared display</p><h2>House-wide access</h2><p>The house-wide login can see shared content and play games. Its scores stay off leaderboards.</p><p class="callout"><strong>Privacy note</strong><br>Admins can view all household content, including private chats.</p></section>
+  <aside class="account-side"><section class="panel" id="access-section"><p class="eyebrow">Access</p><h2>Passwords & sessions</h2><p>People can change their own passwords. Admin resets issue a one-time password and sign that person out.</p><form method="post" action="{{ url_for('update_session_settings') }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><label>Idle session limit (hours)<input type="number" name="idle_hours" min="1" max="168" value="{{ idle_hours }}" required></label><label>Absolute session limit (days)<input type="number" name="absolute_days" min="1" max="30" value="{{ absolute_days }}" required></label><button>Save session settings</button></form></section>
+    <section class="panel" id="house-wide-section"><p class="eyebrow">Shared display</p><h2>House-wide access</h2><p>The house-wide login can see shared content and play games. Its scores stay off leaderboards.</p><p class="callout"><strong>Privacy note</strong><br>Admins can view all household content, including private chats.</p></section>
   </aside>
 </div>
+<section class="panel" id="calendar-limits-section"><p class="eyebrow">Event budgets</p><h2>Calendar limits</h2>
+  <form method="post" action="{{ url_for('update_calendar_limits') }}" class="calendar-limits-form">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <label>Events per user per day<input type="number" name="events_per_day" min="1" value="{{ events_per_day }}" required></label>
+    <label>Events per user per month<input type="number" name="events_per_month" min="7" max="512" value="{{ events_per_month }}" required></label>
+    <p class="muted">Monthly limits can be set from 7 to 512. Repeating occurrences count toward both limits.</p>
+    <button class="button small">Save limits</button>
+  </form>
+</section>
+<section class="panel" id="calendar-retention-section"><p class="eyebrow">Calendar</p><h2>Calendar retention</h2>
+  <p class="muted">Keep the current calendar year and up to ten previous years available for browsing.</p>
+  <form method="post" action="{{ url_for('update_calendar_retention') }}" class="calendar-retention-form">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <label>Previous years to keep <select name="previous_years" aria-label="Previous calendar years to keep">
+      {% for years in range(0, 11) %}<option value="{{ years }}" {% if years == calendar_previous_years %}selected{% endif %}>{{ years }}</option>{% endfor %}
+    </select></label>
+    <p class="callout">Current year plus {{ calendar_previous_years }} previous year{{ '' if calendar_previous_years == 1 else 's' }} retained.</p>
+    <label>When a year leaves the active calendar <select name="expiry_action" aria-label="Expired calendar action">
+      <option value="archive" {% if calendar_expiry_action == 'archive' %}selected{% endif %}>Archive to ICS first</option>
+      <option value="delete" {% if calendar_expiry_action == 'delete' %}selected{% endif %}>Delete without archive</option>
+    </select></label>
+    <p class="muted">Calendar time zone: {{ calendar_timezone }}. This follows the selected household weather location; if no location is set, the server's local time zone is used.</p>
+    <p class="muted">Reducing retention always attempts an ICS export first. If an export fails, its events remain in the database. The selected action is for automatic age cleanup.</p>
+    <p class="archive-path"><strong>Archive folder</strong><code>{{ calendar_archive_folder }}</code></p>
+    <button class="button small">Save retention</button>
+  </form>
+  <h3>Calendar archives</h3>
+  {% if calendar_archive_failures %}<ul class="calendar-archive-failures">
+    {% for failure in calendar_archive_failures %}<li><strong>{{ failure.year }} was not archived.</strong> Events remain in the database. Last error: {{ failure.error }}</li>{% endfor %}
+  </ul>{% endif %}
+  {% if calendar_archives %}<ul class="calendar-archive-list">
+    {% for archive in calendar_archives %}<li><div><strong>{{ archive.year }}</strong><small>{{ archive.event_count }} events · {{ archive.size_bytes|filesizeformat(true) }} · {{ archive.archived_at }}</small></div><a class="button" href="{{ url_for('download_calendar_archive', filename=archive.file_name) }}">Download ICS</a></li>{% endfor %}
+  </ul>{% else %}<p class="muted">No calendar archives yet.</p>{% endif %}
+</section>
+<section class="panel weather-admin" id="weather-settings-section"><p class="eyebrow">Household forecast</p><h2>Weather settings</h2>
+  <p class="muted">{% if weather_location_name %}Current location: <strong>{{ weather_location_name }}</strong>{% else %}No household location selected{% endif %}</p>
+  <form method="post" action="{{ url_for('search_weather_locations') }}" class="weather-location-search">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <label>Town or postcode<input name="location_query" maxlength="{{ limits.LOCATION_QUERY_MAXIMUM }}" value="{{ weather_location_query }}" placeholder="Town or postal code" required></label>
+    <button {% if not weather_outbound_enabled %}disabled{% endif %}>Search locations</button>
+  </form>
+  {% if weather_location_candidates %}
+  <p class="muted">Choose the matching location to save it for the household.</p>
+  <div class="weather-location-candidates">
+    {% for candidate in weather_location_candidates %}
+    <form method="post" action="{{ url_for('select_weather_location') }}">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <input type="hidden" name="candidate_index" value="{{ loop.index0 }}">
+      <button class="button">{{ candidate['label'] }}</button>
+    </form>
+    {% endfor %}
+  </div>
+  {% endif %}
+  <form method="post" action="{{ url_for('update_weather_settings') }}" class="weather-preferences">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <label>Forecast length (days)<input type="number" name="forecast_days" min="1" max="15" value="{{ weather_forecast_days }}" required></label>
+    <label>Units<select name="units"><option value="metric" {% if weather_units == 'metric' %}selected{% endif %}>Metric (°C, km/h, mm)</option><option value="imperial" {% if weather_units == 'imperial' %}selected{% endif %}>Imperial (°F, mph, in)</option></select></label>
+    <label class="weather-outbound"><input type="checkbox" name="outbound_enabled" value="1" {% if weather_outbound_enabled %}checked{% endif %}> Allow outbound access for weather</label>
+    <p class="muted">Open-Meteo provides the forecast and location search. Weather data is shared and cached locally for up to 30 minutes.</p>
+    <button class="primary">Save weather settings</button>
+  </form>
+</section>
+<section class="panel" id="rss-settings-section"><p class="eyebrow">Reading shelf</p><h2>RSS settings</h2>
+  <form method="post" action="{{ url_for('update_rss_settings') }}" class="rss-settings-form">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <label>Refresh interval (minutes)<input type="number" name="refresh_minutes" min="{{ rss_refresh_minimum }}" max="{{ rss_refresh_maximum }}" value="{{ rss_refresh_minutes }}" required></label>
+    <label class="system-status-check"><input type="checkbox" name="outbound_enabled" value="1" {% if rss_outbound_enabled %}checked{% endif %}> Allow outbound RSS access</label>
+    <p class="muted">When outbound access is off, the RSS tab shows cached articles and their last refresh time.</p>
+    <button class="primary">Save RSS settings</button>
+  </form>
+</section>
+<section class="panel" id="chat-settings-section"><p class="eyebrow">Optional local assistant</p><h2>Chat settings</h2>
+  <form method="post" action="{{ url_for('update_chat_settings') }}" class="chat-settings-form">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <label class="system-status-check"><input type="checkbox" name="chat_enabled" value="1" {% if chat_enabled %}checked{% endif %}> Enable Chat</label>
+    <label class="system-status-check"><input type="checkbox" name="chat_data_tools_enabled" value="1" {% if chat_data_tools_enabled %}checked{% endif %}> Allow read-only list and calendar context</label>
+    <label>Installed local model<select name="model" aria-label="Installed local model">
+      {% if not chat_models %}<option value="">No installed models found</option>{% endif %}
+      {% for model_name in chat_models %}<option value="{{ model_name }}" {% if model_name == chat_model or (not chat_model and loop.first) %}selected{% endif %}>{{ model_name }}</option>{% endfor %}
+    </select></label>
+    {% if chat_models_error %}<p class="muted">{{ chat_models_error }} Ollama must be available on this device to enable Chat.</p>{% endif %}
+    <label>Maximum waiting requests<input type="number" name="max_queue_depth" min="{{ limits.CHAT_MAX_QUEUE_DEPTH_MINIMUM }}" max="{{ limits.CHAT_MAX_QUEUE_DEPTH_MAXIMUM }}" value="{{ chat_max_queue_depth }}" required></label>
+    <label>Prompt-and-response pairs per chat<input type="number" name="pairs_per_chat" min="{{ limits.CHAT_PAIRS_PER_CHAT_MINIMUM }}" max="{{ limits.CHAT_PAIRS_PER_CHAT_MAXIMUM }}" value="{{ chat_pairs_per_chat }}" required></label>
+    <p class="muted">Chat stays hidden until enabled. Read-only data access is off by default; when enabled, Chat can read only lists and events visible to the requesting user. Each request is limited to 3 tool calls, 100 rows and 16 KiB per result. Keep this off until its resource budget is verified on a Raspberry Pi. No data can be changed through Chat. Only local Ollama models are selectable; the model service remains on loopback. Remote providers are not enabled.</p>
+    <p><a href="{{ url_for('admin_chat_history') }}">View and manage all chat histories</a></p>
+    <button class="primary">Save Chat settings</button>
+  </form>
+</section>
+<section class="panel" id="system-status-settings-section"><p class="eyebrow">Dashboard visibility</p><h2>System status</h2>
+  <form method="post" action="{{ url_for('update_system_status_settings') }}" class="system-status-settings">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <label class="system-status-check"><input type="checkbox" name="visible_to_all" value="1" {% if system_metrics_visible_to_all %}checked{% endif %}> Show performance data to everyone</label>
+    <label class="system-status-check"><input type="checkbox" name="house_account_enabled" value="1" {% if system_metrics_house_account %}checked{% endif %}> When hidden, allow the house-wide account to see it</label>
+    <p class="muted">Admins can always view system performance data. CPU history is normalized to 0–100% across all cores.</p>
+    <button class="primary">Save visibility</button>
+  </form>
+</section>
 <section class="backup-admin" id="backup-restore-section" aria-label="Backup and restore">
   <section class="panel">
     <h2>Backup settings</h2>
@@ -31,7 +129,7 @@
     <form method="post" action="{{ url_for('update_backup_settings') }}">
       <input type="hidden" name="_csrf" value="{{ csrf_token }}">
       <label class="backup-check"><input id="backups-off" type="checkbox" name="backups_off" onchange="toggleBackupSettings()" {% if backup_frequency == 0 %}checked{% endif %}> Turn automatic backups off</label>
-      <label>Backup folder<input type="text" name="backup_folder" value="{{ backup_folder }}" maxlength="4096" required></label>
+      <label>Backup folder<input type="text" name="backup_folder" value="{{ backup_folder }}" maxlength="{{ limits.BACKUP_FOLDER_PATH_MAXIMUM }}" required></label>
       <p class="backup-folder-status {{ 'available' if backup_folder_available else 'unavailable' }}" role="status">{% if backup_folder_available %}✓ Backup folder available{% else %}⚠ Backup folder unavailable or not writable{% endif %}</p>
       <label>Automatic backup interval (days)<input id="backup-frequency" type="number" name="backup_frequency" min="1" max="31" value="{{ backup_frequency if backup_frequency else 1 }}" required {% if backup_frequency == 0 %}disabled{% endif %}></label>
       <label>Keep most recent backups<input id="backup-retention" type="number" name="backup_retention" min="1" max="365" value="{{ backup_retention }}" required {% if backup_frequency == 0 %}disabled{% endif %}></label>
@@ -62,7 +160,7 @@
     {% endif %}
   </section>
 </section>
-<dialog id="create-dialog"><form method="post" action="{{ url_for('create_account') }}" class="dialog-form"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><p class="eyebrow">New person</p><h2>Add an account</h2><p>Each person gets their own login and private space.</p><label>Display name<input name="display_name" maxlength="80" required></label><label>Username<input name="username" minlength="3" maxlength="32" pattern="[A-Za-z0-9_]+" required></label><label>Role<select name="role"><option value="user">Household member</option><option value="admin">Admin</option></select></label><label>Account type<select name="account_kind"><option value="person">Person</option><option value="house">House-wide display</option></select></label><p class="callout">A temporary password will appear once after creation. Each person must change it at first login.</p><div class="dialog-actions"><button type="button" onclick="this.closest('dialog').close()">Cancel</button><button class="primary">Create account</button></div></form></dialog>
+<dialog id="create-dialog"><form method="post" action="{{ url_for('create_account') }}" class="dialog-form"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><p class="eyebrow">New person</p><h2>Add an account</h2><p>Each person gets their own login and private space.</p><label>Display name<input name="display_name" maxlength="{{ limits.DISPLAY_NAME_MAXIMUM }}" required></label><label>Username<input name="username" minlength="{{ limits.USERNAME_MINIMUM }}" maxlength="{{ limits.USERNAME_MAXIMUM }}" pattern="[A-Za-z0-9_]+" required></label><label>Role<select name="role"><option value="user">Household member</option><option value="admin">Admin</option></select></label><label>Account type<select name="account_kind"><option value="person">Person</option><option value="house">House-wide display</option></select></label><p class="callout">A temporary password will appear once after creation. Each person must change it at first login.</p><div class="dialog-actions"><button type="button" onclick="this.closest('dialog').close()">Cancel</button><button class="primary">Create account</button></div></form></dialog>
 <dialog id="reset-dialog"><form method="post" id="reset-form" class="dialog-form"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><p class="eyebrow">Account access</p><h2 id="reset-title">Reset password</h2><p>Resetting signs this account out everywhere. A one-time temporary password will appear once.</p><p class="callout">Share the temporary password directly. It will not be shown again after you leave the result page.</p><div class="dialog-actions"><button type="button" onclick="this.closest('dialog').close()">Cancel</button><button class="primary">Reset password</button></div></form></dialog>
 <dialog id="delete-dialog"><form method="post" id="delete-form" class="dialog-form"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><p class="eyebrow">Permanent removal</p><h2 id="delete-title">Remove account?</h2><p>Choose what happens to this person's items, recipes, and events. This cannot be undone.</p><p class="danger-box" id="delete-counts"></p><label class="radio-line"><input type="radio" name="content_choice" value="transfer" checked>Transfer all owned content to another person</label><label>Transfer to<select name="transfer_to" required>{% for user in users if user['account_kind'] == 'person' %}<option value="{{ user['id'] }}">{{ user['display_name'] }} ({{ user['username'] }})</option>{% endfor %}</select></label><label class="radio-line"><input type="radio" name="content_choice" value="delete">Delete all owned content, including items by others in this person's lists</label><label id="confirm-label">Type username to confirm<input name="confirm_username" id="confirm-username" required autocomplete="off"></label><div class="dialog-actions"><button type="button" onclick="this.closest('dialog').close()">Cancel</button><button class="danger">Remove account</button></div></form></dialog>
 <dialog id="backup-action-dialog"><form method="post" id="backup-action-form" class="dialog-form"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><p class="eyebrow">Admin · Backups</p><h2 id="backup-action-title">Restore backup?</h2><p id="backup-action-copy"></p><div class="dialog-actions"><button type="button" onclick="this.closest('dialog').close()">Cancel</button><button class="danger" id="backup-action-submit">Restore backup</button></div></form></dialog>

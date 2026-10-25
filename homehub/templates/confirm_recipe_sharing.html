@@ -1,0 +1,15 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="panel sharing-confirm">
+  <p class="eyebrow">Review recipe privacy change</p>
+  <h1>Some recipe notes will be removed</h1>
+  <p>These people will lose access to <strong>{{ recipe['title'] }}</strong>. Their notes will be deleted when you make this recipe private.</p>
+  <ul>{% for note in losing_notes %}<li>{{ note['display_name'] or note['username'] }}'s note</li>{% endfor %}</ul>
+  <p>Notes from the recipe owner and selected viewers will stay.</p>
+  <form method="post" action="{{ url_for('edit_recipe', recipe_id=recipe['id']) }}" class="dialog-form">
+    {% for key in fields.keys() %}{% for value in fields.getlist(key) %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endfor %}{% endfor %}
+    <input type="hidden" name="confirm_note_removal" value="yes">
+    <div class="dialog-actions"><a class="button" href="{{ url_for('edit_recipe', recipe_id=recipe['id']) }}">Cancel</a><button class="danger">Make privacy change and remove notes</button></div>
+  </form>
+</section>
+{% endblock %}

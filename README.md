@@ -34,37 +34,80 @@ users are signed out. The default backup folder is `backups` beside the
 configured database; choose a protected folder with enough free space.
 Backups contain account hashes and private household data.
 
-## Run on the Pi
+## Install on Raspberry Pi OS
 
-Install a minimal Raspberry Pi OS (Python 3.11+), create a Python virtual
-environment, install the app using `pip install .`, and configure a systemd
-service with `HOMEHUB_SECRET_KEY`, `HOMEHUB_DB` and `HOMEHUB_BIND`.
-`deploy/homehub.service.example` keeps Waitress on loopback for the Caddy
-reverse proxy. See [the TLS guide](docs/TLS_DEPLOYMENT.md) before household
-use. For routine backups, install `deploy/homehub-backup.service.example`
-and `deploy/homehub-backup.timer.example`, then run
-`sudo systemctl daemon-reload` and
-`sudo systemctl enable --now homehub.service homehub-backup.timer`. The timer
-catches up after downtime and checks the Admin-configured interval. If you
-choose a backup folder outside `/var/lib/homehub`, allow it in `ReadWritePaths=`
-in both service units. Do not open a router port to this service; restrict
-HTTPS to the household LAN with the firewall.
+The supported installer targets a Raspberry Pi running 64-bit Raspberry Pi
+OS with Python 3.11 or newer and `sudo` access. It installs the service under
+`/opt/homehub`, keeps the database and calendar archives under
+`/var/lib/homehub`, and creates a root-owned configuration file at
+`/etc/homehub/homehub.env`. It creates a dedicated `homehub` service account,
+installs the web service and systemd backup timer, and prompts to install
+`python3-venv` if needed. Run it as your normal Pi login; do not prefix it
+with `sudo`. The app listens on loopback only.
 
-## Uninstall from the Pi
+### Transfer files from Windows
 
-Disable and remove both the web service and backup timer before uninstalling
-the Python package. Replace these paths if you installed the unit files
-elsewhere:
+Open PowerShell in the project folder on Windows. Replace `username` and
+`hostname` in the commands with your Pi login and SSH host name or alias.
+Windows OpenSSH's `ssh` and `scp` utilities are used.
 
-```sh
-sudo systemctl disable --now homehub-backup.timer homehub.service
-sudo rm -f /etc/systemd/system/homehub-backup.timer /etc/systemd/system/homehub-backup.service /etc/systemd/system/homehub.service
-sudo systemctl daemon-reload
-sudo systemctl reset-failed
+```powershell
+ssh username@hostname "mkdir -p ~/homehub-starter"
+scp -r .\homehub .\deploy .\pyproject.toml .\README.md .\LICENSE username@hostname:~/homehub-starter/
+ssh username@hostname "cd ~/homehub-starter && chmod +x deploy/install.sh deploy/uninstall.sh && ./deploy/install.sh"
 ```
 
-This removes scheduled work while leaving the database and backup files in
-place for manual recovery or a later reinstall.
+If `scp` reports `Permission denied` for one existing destination file, copy
+that file to a temporary name in your home directory, then install it over the
+blocked file with the correct owner. For example, to transfer the venv
+permission helper:
+
+```powershell
+scp .\deploy\venv_permissions.sh username@hostname:~/venv_permissions.sh
+ssh -t username@hostname "sudo install -o username -g username -m 0644 /home/username/venv_permissions.sh /home/username/homehub-starter/deploy/venv_permissions.sh && rm /home/username/venv_permissions.sh"
+```
+
+Then repeat the normal transfer command to ensure the rest of the files are
+current, and run the installer as `username` without `sudo`.
+
+The transfer includes only runtime files and deployment examples, not your
+Windows `.git` directory, virtual environment, database, or backups. The
+installer copies the application into `/opt/homehub`; it leaves the transferred
+repository in your Pi home directory. To update later, repeat the same `scp`
+command and run `./deploy/install.sh` again from `~/homehub-starter`. An
+existing database is backed up and verified before the new service starts.
+Keep `/etc/homehub/homehub.env` private and persistent; it contains the
+session-signing secret.
+
+For first-time setup, the installer prompts you to create the first admin if
+the database has no active admin. Create a tunnel from another PowerShell
+window, leaving it open while using the app:
+
+```powershell
+ssh -N -L 8080:127.0.0.1:8080 username@hostname
+```
+
+Then open <http://127.0.0.1:8080> on the Windows PC. Stop the tunnel with
+Ctrl+C. For access from other household devices, follow
+[the TLS guide](docs/TLS_DEPLOYMENT.md) and keep access restricted to the
+household LAN; do not expose the service through a router port.
+
+## Uninstall from Raspberry Pi OS
+
+Run the uninstaller as your regular Pi login from the transferred repository:
+
+```powershell
+ssh -t username@hostname "cd ~/homehub-starter && ./deploy/uninstall.sh"
+```
+
+It creates an immediate verified database backup first. If that backup fails,
+uninstallation stops before removing services or files. It then disables and
+removes the backup timer and web service, removes Home Hub's cron entries,
+installed application and configuration, and deletes the dedicated service
+account. It preserves your repository, database, calendar archives, and backup
+files. The script asks before deleting recognized Home Hub backup files; it
+never removes the repository. Preserved files under `/var/lib/homehub` become
+root-owned and are assigned back to the service account if you reinstall.
 ## Important limitations / follow-up work
 
 - Admins can now create and remove accounts, reset passwords, and configure session limits. Account deletion can transfer or remove owned prototype content.
