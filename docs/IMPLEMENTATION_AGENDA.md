@@ -41,7 +41,7 @@ to `main` only after the user approves the completed change.
   migration, one valid
   systemd/cron schedule after repeated installs, and all retained data/config
   ownership boundaries. Manually verify repeat install and uninstall prompts
-  using the regular-user/sudo flow on `brigus`.
+  using the regular-user/sudo flow on the target hostname.
 - Complete the Lists migration and test each supported upgrade path, including
   pre-upgrade backup creation, data preservation, rollback, and newer-schema
   refusal.
