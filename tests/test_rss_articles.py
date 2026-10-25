@@ -4,7 +4,7 @@ import sqlite3
 import pytest
 
 from homehub.app import PH, create_app
-from homehub.rss_store import store_feed_articles
+from homehub.rss_store import set_article_state, store_feed_articles
 
 
 @pytest.fixture
@@ -74,4 +74,20 @@ def test_house_wide_account_never_sees_personal_articles(app):
     assert b'House story' in page.data
     assert b'Private story' not in page.data
     assert b'Private feed' not in page.data
+
+
+def test_favourites_appear_in_a_dedicated_card_at_the_bottom(app):
+    client = signed_in(app, 'reader', 'reader password')
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        db.row_factory = sqlite3.Row
+        article_id = db.execute("SELECT id FROM rss_articles WHERE title='House story'").fetchone()['id']
+        set_article_state(db, 2, article_id, is_favorite=True)
+
+    page = client.get('/rss').data
+    favourites = page.index(b'id="rss-favourites"')
+    manager = page.index(b'id="rss-manage"')
+
+    assert favourites > manager
+    assert b'Favourites' in page[favourites:]
+    assert b'House story' in page[favourites:]
 

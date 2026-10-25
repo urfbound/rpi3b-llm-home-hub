@@ -96,3 +96,22 @@ def test_deleting_a_favourite_requires_confirmation(app):
     with sqlite3.connect(app.config['DATABASE']) as db:
         assert db.execute('SELECT deleted_at IS NOT NULL FROM rss_article_states '
                           'WHERE article_id=? AND user_id=1', (article_id,)).fetchone() == (1,)
+
+
+def test_favourite_limit_is_enforced_per_user(app, monkeypatch):
+    monkeypatch.setattr('homehub.constants.RSS_FAVORITES_MAXIMUM', 1)
+    client = signed_in(app)
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        article_ids = [row[0] for row in db.execute('SELECT id FROM rss_articles ORDER BY id')]
+
+    first = client.post(f'/rss/articles/{article_ids[0]}/favorite', data={
+        '_csrf': csrf(client), 'favorite': '1',
+    })
+    second = client.post(f'/rss/articles/{article_ids[1]}/favorite', data={
+        '_csrf': csrf(client), 'favorite': '1',
+    })
+
+    assert first.status_code == second.status_code == HTTPStatus.FOUND
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        assert db.execute('SELECT article_id FROM rss_article_states '
+                          'WHERE user_id=1 AND is_favorite=1').fetchall() == [(article_ids[0],)]

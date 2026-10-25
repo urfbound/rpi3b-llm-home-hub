@@ -124,6 +124,18 @@
     </div></li>{% endfor %}
   </ul></section>{% endif %}
 </details>
+<section class="panel rss-favourites" id="rss-favourites" aria-labelledby="rss-favourites-heading">
+  <div class="rss-favourites-heading"><h2 id="rss-favourites-heading">Favourites</h2><span>{{ favourite_articles|length }} / {{ limits.RSS_FAVORITES_MAXIMUM }}</span></div>
+  {% if favourite_articles %}<ul class="rss-favourites-list">
+    {% for article in favourite_articles %}<li>
+      <div><a href="{{ url_for('open_rss_article', article_id=article['id']) }}"><strong>{{ article['title'] }}</strong></a><small>{{ article['feed_title'] }}{% if article['published'] %} · {{ article['published'] }}{% endif %}</small></div>
+      <div class="rss-article-actions">
+        <form method="post" action="{{ url_for('favorite_rss_article', article_id=article['id']) }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><input type="hidden" name="favorite" value="0"><button>Remove favourite</button></form>
+        <form method="post" action="{{ url_for('delete_rss_article', article_id=article['id']) }}" class="rss-favourite-delete-form"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><button>Delete</button></form>
+      </div>
+    </li>{% endfor %}
+  </ul>{% else %}<p class="muted">Favourite an article to keep it here and protect it from automatic cleanup.</p>{% endif %}
+</section>
 <dialog id="rss-done-reading-dialog" class="rss-dialog">
   <h2>Done reading?</h2><p>Delete this article after marking it read?</p>
   <label><input type="checkbox" id="rss-dont-ask-again"> Don't ask me again</label>

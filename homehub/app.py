@@ -1629,6 +1629,11 @@ def create_app(test_config=None):
         articles_by_feed = {}
         for article in articles_for_user(db, g.user['id']):
             articles_by_feed.setdefault(article['feed_id'], []).append(article)
+        favourite_articles = sorted(
+            (article for rows in articles_by_feed.values() for article in rows
+             if article['is_favorite']),
+            key=lambda article: (article['first_seen_at'], article['id']), reverse=True,
+        )
         personal_feeds = []
         if g.user['account_kind'] == 'person':
             personal_feeds = db.execute(
@@ -1645,6 +1650,7 @@ def create_app(test_config=None):
         return render_template('rss.html', personal_feeds=personal_feeds,
                                household_feeds=household_feeds,
                                articles_by_feed=articles_by_feed,
+                               favourite_articles=favourite_articles,
                                ask_before_done_delete=(preference[0] if preference else 1))
 
     @app.get('/rss/articles/<int:article_id>/open')

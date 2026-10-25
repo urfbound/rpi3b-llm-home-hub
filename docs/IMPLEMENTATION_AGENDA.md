@@ -156,13 +156,13 @@ to `main` only after the user approves the completed change.
   refresh selection now respects the outbound toggle and records per-feed
   success or failure. A short-lived systemd timer invokes the refresh runner
   every ten minutes; the runner applies the admin-configured 10–240-minute
-  interval and outbound toggle. Article serving while outbound access is
-  disabled remains.
+  interval and outbound toggle. Saved articles continue to display while
+  outbound access is disabled.
 - Article persistence now stores feed content once and keeps read, favourite,
   and delete state per user; personal-feed visibility is owner-only. Article
   open tracking, feed-grouped display, Done reading with its configurable
   deletion prompt, favourite-deletion confirmation, and centralized Manage
-  feeds controls are implemented. The bottom favourites card remains. Cleanup
+  feeds controls, and the bottom favourites card are implemented. Cleanup
   expires household articles after three days and personal articles after 90;
   personal storage evicts oldest unread, then oldest read until within 64 MB,
   while favourites remain protected.
