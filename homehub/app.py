@@ -405,6 +405,38 @@ CREATE TABLE IF NOT EXISTS rss_feeds (
 );
 CREATE INDEX IF NOT EXISTS rss_feeds_owner_order
  ON rss_feeds(scope,owner_user_id,sort_order,id);
+CREATE TABLE IF NOT EXISTS rss_articles (
+ id INTEGER PRIMARY KEY,
+ feed_id INTEGER NOT NULL REFERENCES rss_feeds(id) ON DELETE CASCADE,
+ article_key TEXT NOT NULL CHECK(length(article_key)=64),
+ title TEXT NOT NULL CHECK(length(title)<={limits.RSS_ARTICLE_TITLE_MAXIMUM}),
+ url TEXT CHECK(url IS NULL OR length(url)<={limits.RSS_ARTICLE_URL_MAXIMUM}),
+ summary TEXT NOT NULL CHECK(length(summary)<={limits.RSS_ARTICLE_BODY_MAXIMUM}),
+ published TEXT NOT NULL CHECK(length(published)<={limits.RSS_ARTICLE_DATE_MAXIMUM}),
+ first_seen_at TEXT NOT NULL,
+ content_bytes INTEGER NOT NULL CHECK(content_bytes>=0),
+ UNIQUE(feed_id,article_key)
+);
+CREATE INDEX IF NOT EXISTS rss_articles_feed_recent
+ ON rss_articles(feed_id,first_seen_at DESC,id DESC);
+CREATE TABLE IF NOT EXISTS rss_article_states (
+ article_id INTEGER NOT NULL REFERENCES rss_articles(id) ON DELETE CASCADE,
+ user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ is_read INTEGER NOT NULL DEFAULT 0 CHECK(is_read IN (0,1)),
+ read_at TEXT,
+ is_favorite INTEGER NOT NULL DEFAULT 0 CHECK(is_favorite IN (0,1)),
+ deleted_at TEXT,
+ PRIMARY KEY(article_id,user_id)
+);
+CREATE INDEX IF NOT EXISTS rss_article_states_user_recent
+ ON rss_article_states(user_id,is_read,is_favorite,article_id);
+CREATE TABLE IF NOT EXISTS rss_feed_refresh (
+ feed_id INTEGER PRIMARY KEY REFERENCES rss_feeds(id) ON DELETE CASCADE,
+ attempted_at TEXT NOT NULL,
+ succeeded_at TEXT,
+ last_error TEXT CHECK(last_error IS NULL OR length(last_error)<={limits.ERROR_TEXT_MAXIMUM}),
+ articles_added INTEGER NOT NULL DEFAULT 0 CHECK(articles_added>=0)
+);
 CREATE TABLE IF NOT EXISTS system_metrics (
  sampled_at TEXT PRIMARY KEY,
  cpu_percent REAL,
