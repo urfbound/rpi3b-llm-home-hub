@@ -160,12 +160,14 @@ to `main` only after the user approves the completed change.
 - Bounded HTTP fetching now pins connections to DNS-validated public addresses,
   rechecks every redirect, enforces time/size/redirect limits, and supports an
   explicit admin approval for a private household feed host. LAN approval does
-  not permit loopback or redirects to another private host. Fetch scheduling,
-  and refresh execution remain. Admin can now set a 10–240-minute RSS interval
-  (default 30) and turn outbound RSS access off; the fetch path still needs to
-  enforce the toggle and serve cached articles while disabled.
-- Store shared article bodies once with separate per-user read, favourite,
-  and delete state. Implement article-open read tracking, Done reading
+  not permit loopback or redirects to another private host. Interval-aware
+  refresh selection now respects the outbound toggle and records per-feed
+  success or failure. The short-lived systemd timer integration and article
+  serving while outbound access is disabled remain. Admin can set a
+  10–240-minute RSS interval (default 30).
+- Article persistence now stores feed content once and keeps read, favourite,
+  and delete state per user; personal-feed visibility is owner-only. Implement
+  article-open read tracking, Done reading
   behavior, prompt preference, favourite confirmation, and the bottom
   favourites card. Keep house-wide articles for at most three days; track
   their read state per user when practical, otherwise ignore it. Personal
