@@ -169,6 +169,25 @@ def test_ladder_has_thirty_distinct_solvable_daily_puzzles():
     assert all(3 <= len(shortest_path(start, target)) <= 8 for start, target in puzzles)
 
 
+def test_ladder_daily_page_displays_its_estimated_difficulty(game_app):
+    from homehub.game_ladder import daily_puzzle, puzzle_difficulty
+
+    alex = sign_in(game_app, 'alex')
+    pair = daily_puzzle(date(2026, 10, 24))
+    difficulty = puzzle_difficulty(*pair).title()
+
+    assert difficulty.encode() in alex.get('/games/ladder').data
+
+
+def test_sudoku_page_displays_its_estimated_difficulty(game_app):
+    from homehub.game_grids import daily_puzzle
+
+    alex = sign_in(game_app, 'alex')
+    puzzle = daily_puzzle('sudoku', date(2026, 10, 24))
+
+    assert f"{puzzle['difficulty']} estimate".encode() in alex.get('/games/sudoku').data
+
+
 def test_ladder_validates_steps_and_scores_shortest_win(game_app):
     from homehub.game_ladder import daily_puzzle, shortest_path
     alex = sign_in(game_app, 'alex')

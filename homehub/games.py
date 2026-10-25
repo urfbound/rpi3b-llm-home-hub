@@ -356,6 +356,7 @@ def _ladder_render(db, today, attempt, practice=False):
         state = {'path': [start]}
     return render_template('game_ladder.html', day=today, attempt=attempt, state=state,
                            start=start, target=target, practice=practice,
+                           difficulty=game_ladder.puzzle_difficulty(start, target),
                            shortest=game_ladder.shortest_path(start, target),
                            scores=_scoreboard(db, today, 'ladder'), all_scores=_scoreboard(db, game='ladder'),
                            streak=_streak(db, g.user['id'], today, game='ladder'))

@@ -181,6 +181,14 @@ to `main` only after the user approves the completed change.
   offline puzzles, and Wumpus has 365 nonrepeating seeded maps. Practice uses
   past puzzles for the word and grid games; Wumpus offers a chosen or random
   seed. A v17 upgrade preserves v16 Word Garden attempts.
+- Expanded offline content banks now include 5,000 word ladders, 5,000 unique
+  8 × 8 nonograms, and 5,000 unique 9 × 9 Sudoku puzzles. Ladder estimates use
+  shortest-path length; Sudoku estimates use clue counts and are labeled as
+  coarse rather than formal human-technique ratings. Unit tests check puzzle
+  constraints, solvability, broad difficulty coverage, and daily selection
+  across the full banks. These exhaustive checks are marked `bank` and skipped
+  by default; run them on request with `pytest -m bank`. Mini Crossword bank
+  expansion remains for its separate prompt.
 - Private resumable attempts, midnight expiry, per-game streaks, score floors,
   optional hints where approved, daily and all-time scoreboards, timed-game
   tie breaking, and next-day solution visibility are implemented and tested.
@@ -196,7 +204,8 @@ to `main` only after the user approves the completed change.
   through its server-rendered form without JavaScript. Pi resource profiling
   and broader household playtesting remain before release.
 - Deferred game work: more than one daily puzzle per game and Pi-generated
-  puzzle content. Sudoku generation/difficulty rating is a later benchmark.
+  puzzle content. Broader playtesting should assess whether the Sudoku
+  difficulty estimate matches household experience.
 
 ### Home
 
@@ -252,6 +261,6 @@ to `main` only after the user approves the completed change.
   mode, check items, then reconnect and test login expiry, concurrent changes,
   deleted items, and list access changes. Pending changes must remain visible
   until they are synced or explicitly discarded.
-- Profile the Pi deployment, backup/restore and recovery, TLS and LAN-only
+- Profile deployment, backup/restore and recovery, TLS and LAN-only
   exposure, and the LLM separately and alongside the app. Do not release until
   account, data, resource, and upgrade checks pass.

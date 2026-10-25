@@ -4,7 +4,7 @@
 <p><a href="{{ url_for('games.page') }}">← All games</a></p>
 <p class="eyebrow">{{ 'Practice' if practice else 'Daily challenge' }}</p><h1>Word Ladder</h1>
 <p>Change one letter at a time. Every step must be a listed four-letter word.</p>
-<section class="panel"><h2>{{ start }} → {{ target }}</h2><p>{{ day.isoformat() }} · {{ streak }}-day streak</p>
+<section class="panel"><h2>{{ start }} → {{ target }}</h2><p>{{ day.isoformat() }} · {{ streak }}-day streak · {{ difficulty|title }} difficulty estimate</p>
 <ol class="ladder-path">{% for word in state['path'] %}<li>{{ word }}</li>{% endfor %}</ol>
 {% if state.get('hint') %}<p role="status">Hint: try {{ state['hint'] }} next.</p>{% endif %}
 {% if attempt and attempt['status'] != 'playing' %}<p role="status">{% if attempt['status'] == 'won' %}Solved! {{ attempt['points'] }} points{% elif attempt['status'] == 'lost' %}No steps left{% else %}Attempt expired{% endif %}.</p>
