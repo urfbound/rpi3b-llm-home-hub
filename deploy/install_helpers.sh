@@ -49,3 +49,9 @@ homehub_replace_runtime_tree() {
     cp -a "$source_tree/." "$destination/"
   fi
 }
+
+homehub_filter_legacy_backup_crontab() {
+  awk '
+    index($0, "homehub-backup") == 0 && index($0, "backup_scheduler") == 0
+  '
+}

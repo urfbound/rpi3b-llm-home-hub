@@ -37,11 +37,11 @@ to `main` only after the user approves the completed change.
 - Finish Raspberry Pi install/uninstall hardening. Tests now cover venv
   permissions, private environment-file mode and preservation, repeated runtime
   replacement without touching the checkout/database/backups, and uninstall's
-  file-deletion boundary. Still verify backup-before-service-start/schema
-  migration, one valid
-  systemd/cron schedule after repeated installs, and all retained data/config
-  ownership boundaries. Manually verify repeat install and uninstall prompts
-  using the regular-user/sudo flow on the target hostname.
+  file-deletion boundary. Tests also verify that a database backup precedes
+  service activation and that repeated legacy-cron cleanup preserves unrelated
+  jobs. Manually verify repeat install and uninstall prompts, the systemd
+  timers, and retained data/config ownership on a Pi using the regular-user/sudo
+  flow on the target hostname.
 - Complete the Lists migration and test each supported upgrade path, including
   pre-upgrade backup creation, data preservation, rollback, and newer-schema
   refusal.
