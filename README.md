@@ -58,17 +58,18 @@ ssh username@hostname "mkdir -p ~/homehub-release"
 if ($LASTEXITCODE -ne 0) { throw "Could not create the Pi staging directory." }
 scp "$env:TEMP\homehub-transfer.tar.gz" username@hostname:~/homehub-release/
 if ($LASTEXITCODE -ne 0) { throw "Transfer failed; do not run the installer." }
-ssh username@hostname "cd ~/homehub-release && tar -xzf homehub-transfer.tar.gz && rm homehub-transfer.tar.gz"
+$extract = 'cd ~/homehub-release && mkdir -p source && tar -tzf homehub-transfer.tar.gz | while IFS= read -r p; do case "$p" in */) mkdir -p "source/$p";; */*) mkdir -p "source/${p%/*}";; esac; done && find source -type d -exec chmod u+rwx {} + && tar --no-same-owner --no-same-permissions --no-overwrite-dir -xzf homehub-transfer.tar.gz -C source && rm homehub-transfer.tar.gz'
+ssh username@hostname $extract
 if ($LASTEXITCODE -ne 0) { throw "Could not unpack the transfer on the Pi." }
-ssh -t username@hostname "cd ~/homehub-release && chmod +x deploy/install.sh deploy/uninstall.sh && ./deploy/install.sh"
+ssh -t username@hostname "cd ~/homehub-release/source && chmod +x deploy/install.sh deploy/uninstall.sh && ./deploy/install.sh"
 ```
 
-This transfers source and deployment files in a clean archive, excluding
-Python bytecode caches. It unpacks to a new, user-owned `~/homehub-release`
-directory rather than overwriting an older checkout with stale ownership.
-Reuse this staging directory for later updates; run the archive, transfer,
-unpack, and installer commands again. Do not use `sudo scp` or run the
-installer with `sudo`.
+This transfers source and deployment files in an archive, excluding Python
+bytecode caches. Before extracting, the Pi creates the archive's directory
+tree with your account's write permission, then tells GNU tar to preserve those
+permissions while extracting. This handles read-only permission bits that
+Windows may have stored in the archive and permits retrying after a partial
+extraction. Do not use `sudo scp` or run the installer with `sudo`.
 
 If a previous direct `scp` transfer left CRLF endings, convert those scripts
 before retrying that older checkout's installer:
