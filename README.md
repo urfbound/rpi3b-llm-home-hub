@@ -63,12 +63,12 @@ blocked file with the correct owner. For example, to transfer the venv
 permission helper:
 
 ```powershell
-scp .\deploy\venv_permissions.sh jake@brigus:~/venv_permissions.sh
-ssh -t jake@brigus "sudo install -o jake -g jake -m 0644 /home/jake/venv_permissions.sh /home/jake/homehub-starter/deploy/venv_permissions.sh && rm /home/jake/venv_permissions.sh"
+scp .\deploy\venv_permissions.sh username@hostname:~/venv_permissions.sh
+ssh -t username@hostname "sudo install -o username -g username -m 0644 /home/username/venv_permissions.sh /home/username/homehub-starter/deploy/venv_permissions.sh && rm /home/username/venv_permissions.sh"
 ```
 
 Then repeat the normal transfer command to ensure the rest of the files are
-current, and run the installer as `jake` without `sudo`.
+current, and run the installer as `username` without `sudo`.
 
 The transfer includes only runtime files and deployment examples, not your
 Windows `.git` directory, virtual environment, database, or backups. The
