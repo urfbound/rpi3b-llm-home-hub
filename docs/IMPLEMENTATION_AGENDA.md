@@ -177,7 +177,8 @@ to `main` only after the user approves the completed change.
 
 ### Games
 
-- All six first-release games are playable on the Games branch: Word Garden,
+- All six first-release games are playable from the Games tab in main
+  navigation: Word Garden,
   Mini Crossword, Hunt the Wumpus, Word Ladder, Mini Nonogram, and Mini Sudoku.
   Daily puzzles share the household date; each game has at least 30 distinct
   offline puzzles, and Wumpus has 365 nonrepeating seeded maps. Practice uses

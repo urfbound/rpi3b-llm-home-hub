@@ -54,6 +54,18 @@ def test_games_page_requires_login_and_keeps_solution_private(game_app):
     assert daily_answer(date(2026, 10, 24)).encode() not in page.data
 
 
+def test_games_hub_is_reachable_from_main_navigation_and_stays_active_on_game_pages(game_app):
+    alex = sign_in(game_app, 'alex')
+
+    home = alex.get('/')
+    hub = alex.get('/games')
+    sudoku = alex.get('/games/sudoku')
+
+    assert b'href="/games"' in home.data
+    assert b'<a href="/games" aria-current="page">Games</a>' in hub.data
+    assert b'<a href="/games" aria-current="page">Games</a>' in sudoku.data
+
+
 def test_word_bank_covers_thirty_distinct_days():
     from homehub.games import daily_answer
     start = date(2026, 10, 1)
