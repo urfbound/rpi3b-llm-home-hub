@@ -1,8 +1,8 @@
 # Chat feasibility benchmark: Raspberry Pi 3B
 
-This record captures the initial Ollama benchmarks on the minimum supported
-hardware. The results support an optional Chat feature, but do not yet establish
-memory headroom with Home Hub running or evaluate answer quality.
+This record captures model-only and combined Home Hub/Ollama measurements on
+the minimum supported hardware. The results support optional Chat with
+model-specific limits; answer quality still needs household review.
 
 ## Test host and conditions
 
@@ -44,14 +44,10 @@ body was not captured. Other first-request cold-start tests ranged from about
   hidden until enabled, use one selected model and one active request, and keep
   the approved admin-priority queue and limits.
 - SmolLM2 135m and Gemma3 270m are the lighter, faster warm candidates for
-  ordinary chat. The supplied Ollama model metadata lists tool capability for
-  Qwen2.5 0.5b, which is the warm-tested candidate for the approved read-only
-  database tools; it is slower and leaves 283 MiB available before Home Hub is
-  included.
-- These measurements do not include Home Hub's memory use. Profile the app and
-  selected model together before enabling Chat on a running household Pi. Keep
-  database tools disabled until their approved RAM and CPU budget is verified
-  in that combined profile.
+  ordinary chat without database tools. Ollama metadata lists tool capability
+  for Qwen2.5 0.5b and Qwen3 0.6b. The combined profile below makes Qwen2.5 the
+  practical Pi 3B choice for the approved read-only database tools; Qwen3's
+  memory use leaves too little headroom on 1 GB hardware.
 - The benchmark measures latency and memory only, not answer quality. Review
   representative responses before recommending a model to household users.
 - Continue to use a bounded context and a response token cap. Recheck memory
@@ -81,3 +77,30 @@ system memory accounting. Include model, context size, response cap, ambient
 temperature, and whether other household activity was occurring when sharing
 results. The tool requires Linux `/proc` and must be run on the Pi; it does not
 make requests or change server settings itself.
+
+### Combined profile results
+
+Captured on the Raspberry Pi 3B with Home Hub's web Chat path, a 2,048-token
+context, and database tools enabled for models that support tool calling.
+The profiler sampled for 180 seconds at 0.5-second intervals. Both runs
+reached 100% whole-system CPU during generation, which is expected for this
+CPU-only workload; the approved queue keeps requests sequential and users can
+wait minutes for a response.
+
+| Model | Home Hub peak RSS | Ollama peak RSS | Runner peak RSS | Minimum `MemAvailable` | Peak CPU |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `qwen3:0.6b` | 17 MiB | 25 MiB | 602 MiB | 32 MiB | 100% |
+| `qwen2.5:0.5b` | 19 MiB | 25 MiB | 490 MiB | 244 MiB | 100% |
+
+`qwen3:0.6b` leaves only 32 MiB available at its observed low point, so it is
+not recommended on the minimum 1 GB Pi 3B. `qwen2.5:0.5b` leaves 244 MiB
+available while the app and model run; this is the better Pi 3B choice for
+read-only database tools, with modest headroom if other household work occurs
+at the same time. Home Hub itself stayed around 17–19 MiB RSS in these runs,
+well below the 256 MiB application target. RSS values can include shared pages;
+use `MemAvailable` as the primary system-level headroom measure.
+
+The profile confirms resource use, not answer quality or every tool result.
+Review representative responses and verify the supported read-only tools
+before enabling Chat for household use. Keep the more memory-intensive Qwen3
+off the Pi 3B recommendation list; larger Pi models may have more headroom.

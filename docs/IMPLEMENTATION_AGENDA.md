@@ -13,8 +13,8 @@ to `main` only after the user approves the completed change.
   CSRF, login rate limiting, verified backup/restore, TLS deployment guidance,
   and schema versioning are implemented. Initial Ollama latency and memory
   measurements on the Raspberry Pi 3B are recorded in
-  [CHAT_PI_BENCHMARK.md](CHAT_PI_BENCHMARK.md). App-only and app-plus-model
-  profiling remain to be done.
+  [CHAT_PI_BENCHMARK.md](CHAT_PI_BENCHMARK.md). App and app-plus-model profiles
+  are now recorded; answer-quality review remains.
 - **Lists and Recipes:** Shopping, To-do, Chores, recipe privacy/notes,
   serving scaling, and Add to list snapshots are merged to main. Copy/Paste is
   awaiting review. Weekend, weather, and system status cards remain.
@@ -54,10 +54,10 @@ to `main` only after the user approves the completed change.
 - Complete Admin settings as each feature arrives: vertical cards, section
   jump links, fixed Home/Admin ends with reorderable middle tabs, backup and
   restore, account/session controls, and feature-specific settings.
-- Measure app-only and app-plus-model resource use on the Pi. Initial model-only
-  results are in [CHAT_PI_BENCHMARK.md](CHAT_PI_BENCHMARK.md). Targets are under
-  256 MB application RSS where practical and under 10 GB for app, dependencies,
-  and data, excluding OS and LLM files.
+- Pi app-only and app-plus-model resource profiles are recorded in
+  [CHAT_PI_BENCHMARK.md](CHAT_PI_BENCHMARK.md). Targets are under 256 MB
+  application RSS where practical and under 10 GB for app, dependencies, and
+  data, excluding OS and LLM files.
 
 ## Tabs and feature work
 
@@ -235,16 +235,15 @@ to `main` only after the user approves the completed change.
   one lazy in-process worker, prioritizes admins among waiting requests, shows
   queue positions, and records successful answers with the model name. Ollama
   requests use a 2048-token context and unload the model after each response.
-  Read-only tools for lists/chores, recipes, calendar, cached weather, saved
-  articles, and system status are implemented behind an admin toggle that
-  defaults off; a safe configuration summary is admin-only. Tools enforce
-  requester visibility, a 31-day calendar window, three tool calls per
-  request, and bounded result sizes. The Pi resource-budget measurement
-  remains; keep database tools disabled until that measurement passes.
-  App-plus-model profiling, answer-quality review, and manual browser review
-  of the approved design also remain.
-  Before enabling Chat for household use, profile Home Hub and the selected
-  model together, then verify answer quality.
+  Read-only list and calendar tools are implemented behind an admin toggle
+  that defaults off. They enforce requester visibility, a 31-day calendar
+  window, three tool calls per request, and 100-row/16-KiB result caps. The
+  Combined Pi profiling is recorded in
+  [CHAT_PI_BENCHMARK.md](CHAT_PI_BENCHMARK.md). Qwen2.5 0.5b retained 244 MiB
+  available with the app running and is the current Pi 3B choice for tools;
+  Qwen3 0.6b dropped to 32 MiB and is not recommended on 1 GB hardware.
+  Representative answer-quality review and manual browser review of the
+  approved design remain before household rollout.
 - Add a provider interface for possible remote models, off by default. If
   database tools are enabled, enforce the approved read-only per-user scope
   and resource budget; require explicit confirmation and fresh authorization
