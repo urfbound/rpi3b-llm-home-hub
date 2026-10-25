@@ -196,6 +196,14 @@ to `main` only after the user approves the completed change.
   constraints, solvability, broad difficulty coverage, and daily selection
   across the full banks. These exhaustive checks are marked `bank` and skipped
   by default; run them on request with `pytest -m bank`.
+- Mini Crossword bank rebuilt from the attributed Canadian English word source
+  and curated clue definitions. All 5,000 grids have ten distinct entries;
+  adjacent days differ by at least eight open letters and share no more than
+  two answers; one-letter variants are spaced over 30 days apart. The previous
+  formulaic sound effects and asides are gone. Bank tests cover these limits
+  and reproducibility. Before release, conduct broader human solving review
+  for clue fairness, editor voice, and the Medium/Medium-Hard labels. See
+  [CROSSWORD_QUALITY_AUDIT.md](CROSSWORD_QUALITY_AUDIT.md).
 - Private resumable attempts, midnight expiry, per-game streaks, score floors,
   optional hints where approved, daily and all-time scoreboards, timed-game
   tie breaking, and next-day solution visibility are implemented and tested.
