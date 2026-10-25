@@ -1384,10 +1384,13 @@ def create_app(test_config=None):
                 request_state['active'] -= 1
                 maintenance.notify_all()
 
+    @app.get('/calendar')
+    @app.get('/lists')
     @app.get('/')
     @login_required
     def index():
         db = get_db()
+        page_mode = {'/lists': 'lists', '/calendar': 'calendar'}.get(request.path, 'home')
         today = household_today()
         try:
             calendar_month = int(request.args.get('month', today.month))
@@ -1607,9 +1610,12 @@ def create_app(test_config=None):
           calendar_year_options=calendar_year_options,
           calendar_has_previous=calendar_has_previous,
           calendar_has_next=calendar_has_next,
-          calendar_previous_url=url_for('index', month=previous_month, year=previous_year),
-          calendar_next_url=url_for('index', month=next_month, year=next_year),
-          calendar_today_url=url_for('index', month=today.month, year=today.year),
+          calendar_previous_url=url_for('index', _external=False, month=previous_month, year=previous_year)
+              if page_mode == 'home' else f"/calendar?month={previous_month}&year={previous_year}",
+          calendar_next_url=url_for('index', _external=False, month=next_month, year=next_year)
+              if page_mode == 'home' else f"/calendar?month={next_month}&year={next_year}",
+          calendar_today_url=f"/calendar?month={today.month}&year={today.year}",
+          page_mode=page_mode, list_page_url='/lists', calendar_page_url='/calendar',
           items=items, lists=lists, selected_list=selected_list, list_kind=list_kind,
           list_users=list_users, todo_assignees=todo_assignees,
           shopping_categories=SHOPPING_CATEGORIES,

@@ -1,10 +1,11 @@
 {% extends 'base.html' %}
 {% block content %}
 <section class="intro">
-  <h1>A little home for everything.</h1>
-  <p>Your family's recipes, plans, and shopping lists, all in one place.</p>
+  <h1>{% if page_mode == 'lists' %}Lists{% elif page_mode == 'calendar' %}Calendar{% else %}A little home for everything.{% endif %}</h1>
+  {% if page_mode == 'home' %}<p>Your family's recipes, plans, and shopping lists, all in one place.</p>{% endif %}
 </section>
 <div class="grid">
+  {% if page_mode == 'home' %}
   <section class="panel home-chores" id="home-chores">
     <h2>Chores · {{ weekdays[home_weekday] }}</h2>
     {% if current_user['account_kind'] == 'person' %}
@@ -40,7 +41,7 @@
       {% endif %}
     {% endfor %}
     {% if not home_has_chores.value %}<p class="muted">No chores assigned for today.</p>{% endif %}
-    <a href="{{ url_for('index', kind='chores', weekday=home_weekday) }}">Manage chores</a>
+    <a href="{{ list_page_url }}?kind=chores&weekday={{ home_weekday }}">Manage chores</a>
   </section>
 
   <section class="panel home-weekend" id="this-weekend">
@@ -69,7 +70,7 @@
       </ul>
     </section>
     {% else %}<p class="muted">Nothing on the calendar this weekend.</p>{% endfor %}
-    <a href="{{ url_for('index') }}#calendar">Open calendar</a>
+    <a href="{{ calendar_page_url }}">Open calendar</a>
   </section>
 
   <section class="panel home-weather" id="weather-summary">
@@ -109,12 +110,15 @@
   </section>
   {% endif %}
 
+  {% endif %}
+
+  {% if page_mode in ('home', 'calendar') %}
   <section class="panel" id="calendar">
     <div class="calendar-heading"><h2>{{ calendar_month_name }} {{ calendar_year }}</h2></div>
     <nav class="calendar-controls" aria-label="Calendar month navigation">
       <div class="calendar-month-controls">
         {% if calendar_has_previous %}<a class="calendar-nav-button" aria-label="Previous month" href="{{ calendar_previous_url }}">←</a>{% else %}<span class="calendar-nav-button is-disabled" aria-label="No earlier retained month">←</span>{% endif %}
-        <form method="get" action="{{ url_for('index') }}">
+        <form method="get" action="{{ calendar_page_url if page_mode == 'calendar' else url_for('index') }}">
           <label class="visually-hidden" for="calendar-month">Choose month</label>
           <select id="calendar-month" name="month" onchange="this.form.submit()">
             {% for month_number in range(1,13) %}<option value="{{ month_number }}"{% if month_number == calendar_month %} selected{% endif %}>{{ months[month_number-1] }}</option>{% endfor %}
@@ -123,7 +127,7 @@
         </form>
         {% if calendar_has_next %}<a class="calendar-nav-button" aria-label="Next month" href="{{ calendar_next_url }}">→</a>{% else %}<span class="calendar-nav-button is-disabled" aria-label="No later month">→</span>{% endif %}
       </div>
-      <form method="get" action="{{ url_for('index') }}" class="calendar-year-control">
+      <form method="get" action="{{ calendar_page_url if page_mode == 'calendar' else url_for('index') }}" class="calendar-year-control">
         <label class="visually-hidden" for="calendar-year">Choose year</label>
         <select id="calendar-year" name="year" onchange="this.form.submit()">
           {% for option_year in calendar_year_options %}<option value="{{ option_year }}"{% if option_year == calendar_year %} selected{% endif %}>{{ option_year }}</option>{% endfor %}
@@ -150,17 +154,19 @@
     <a href="{{ url_for('export_calendar') }}">Download calendar (.ics)</a>
     <a href="{{ url_for('export_calendar', only_required=1) }}">Download only events involving me (.ics)</a>
   </section>
+  {% endif %}
 
+  {% if page_mode in ('home', 'lists') %}
   <section class="panel" id="shopping" {% if list_kind == 'shopping' and selected_list %}data-away-list-id="{{ selected_list['id'] }}" data-away-list-title="{{ selected_list['title'] }}"{% endif %}>
     <h2>Lists</h2>
     <nav aria-label="List categories" class="list-tabs">
-      <a href="{{ url_for('index', kind='shopping') }}" {% if list_kind == 'shopping' %}aria-current="page"{% endif %}>Shopping</a>
-      <a href="{{ url_for('index', kind='todo') }}" {% if list_kind == 'todo' %}aria-current="page"{% endif %}>To-do</a>
-      <a href="{{ url_for('index', kind='chores') }}" {% if list_kind == 'chores' %}aria-current="page"{% endif %}>Chores</a>
+      <a href="{{ list_page_url }}?kind=shopping" {% if list_kind == 'shopping' %}aria-current="page"{% endif %}>Shopping</a>
+      <a href="{{ list_page_url }}?kind=todo" {% if list_kind == 'todo' %}aria-current="page"{% endif %}>To-do</a>
+      <a href="{{ list_page_url }}?kind=chores" {% if list_kind == 'chores' %}aria-current="page"{% endif %}>Chores</a>
     </nav>
 
     {% if lists %}
-    <form method="get" action="{{ url_for('index') }}" class="inline">
+    <form method="get" action="{{ list_page_url }}" class="inline">
       <input type="hidden" name="kind" value="{{ list_kind }}">
       <label for="list-picker">Choose a list</label>
       <select id="list-picker" name="list_id">
@@ -277,7 +283,7 @@
     {% elif list_kind == 'chores' %}
       <nav class="chore-days" aria-label="Day of the week">
         {% for day in weekdays %}
-        <a href="{{ url_for('index', kind='chores', weekday=loop.index0, assignee_id=chore_filter or None) }}" {% if selected_weekday == loop.index0 %}aria-current="page"{% endif %}>{{ day }}</a>
+        <a href="{{ list_page_url }}?kind=chores&weekday={{ loop.index0 }}{% if chore_filter %}&assignee_id={{ chore_filter }}{% endif %}" {% if selected_weekday == loop.index0 %}aria-current="page"{% endif %}>{{ day }}</a>
         {% endfor %}
       </nav>
       {% if current_user['account_kind'] != 'house' %}
@@ -296,7 +302,7 @@
         <button class="primary">Add chore</button>
       </form>
       {% endif %}
-      <form method="get" action="{{ url_for('index') }}" class="chore-filter">
+      <form method="get" action="{{ list_page_url }}" class="chore-filter">
         <input type="hidden" name="kind" value="chores">
         <input type="hidden" name="weekday" value="{{ selected_weekday }}">
         <label for="chore-filter-user">Filter by user</label>
@@ -378,6 +384,7 @@
     <p>Weather, RSS headlines, games, and local LLM chat will plug into this lightweight foundation.</p>
     <p class="muted">This starter intentionally doesn't include external network requests or a running model yet.</p>
   </section>
+  {% endif %}
 </div>
 <script>
 document.querySelectorAll('[data-copy-url]').forEach((button) => {
