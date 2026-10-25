@@ -36,6 +36,7 @@ from .system_status import (collect_system_snapshot, cpu_usage_percent,
 from .rss import (DEFAULT_RSS_REFRESH_MINUTES, MAX_RSS_REFRESH_MINUTES,
                   MIN_RSS_REFRESH_MINUTES, RSSFeedError, validate_feed_url)
 from .rss_store import RSSArticleError, articles_for_user, set_article_state
+from .rss_scheduler import refresh_feed_now
 from .games import games, SCHEMA as GAMES_SCHEMA, upgrade_multigame_schema
 
 PH = PasswordHasher(memory_cost=16384, time_cost=2, parallelism=1)
@@ -1792,17 +1793,31 @@ def create_app(test_config=None):
         title = urlsplit(normalized_url).hostname or normalized_url
         owner = g.user['id'] if scope == 'personal' else None
         try:
-            db.execute(
+            cursor = db.execute(
                 'INSERT INTO rss_feeds(normalized_url,title,scope,owner_user_id,allow_lan,created_by,sort_order) '
                 'VALUES(?,?,?,?,?,?,COALESCE((SELECT MAX(sort_order)+1 FROM rss_feeds '
                 'WHERE scope=? AND owner_user_id IS ?),0))',
                 (normalized_url, title, scope, owner, int(allow_lan), g.user['id'], scope, owner),
             )
             db.commit()
-            flash('Feed added.')
         except sqlite3.IntegrityError:
             db.rollback()
             flash('This feed is already in the feed list.')
+            return redirect(url_for('rss_page'))
+        refresh = refresh_feed_now(db, cursor.lastrowid)
+        db.commit()
+        if refresh['status'] == 'refreshed':
+            if refresh['articles_added']:
+                flash(f"Feed added and refreshed. {refresh['articles_added']} new articles found.")
+            else:
+                flash('Feed added and refreshed. No new articles were found.')
+        elif refresh['status'] == 'disabled':
+            flash('Feed added. First refresh skipped because outbound access is disabled.')
+        elif refresh['status'] == 'failed':
+            flash('Feed was saved, but its first refresh failed: '
+                  f"{refresh['error']} It will retry after the configured refresh interval.")
+        else:
+            flash('Feed was added, but could not be refreshed because it was removed.')
         return redirect(url_for('rss_page'))
 
     @app.post('/rss/feeds/<int:feed_id>/delete')
