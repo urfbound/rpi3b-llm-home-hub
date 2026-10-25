@@ -69,14 +69,19 @@ def moon_phase_path(phase):
         raise WeatherError('Moon phase must be a number from 0 to 1.') from exc
     if not 0 <= phase <= 1:
         raise WeatherError('Moon phase must be a number from 0 to 1.')
+    if phase in (0, 1):
+        return ''
     radius = 44
+    if phase == 0.5:
+        return (f'M 50 6 A {radius} {radius} 0 0 1 50 94 '
+                f'A {radius} {radius} 0 0 1 50 6 Z')
     terminator = round(radius * abs(cos(2 * pi * phase)), 2)
     if phase < 0.5:
         outer_sweep = 1
-        terminator_sweep = 1 if phase < 0.25 else 0
+        terminator_sweep = 0 if phase <= 0.25 else 1
     else:
         outer_sweep = 0
-        terminator_sweep = 1 if phase < 0.75 else 0
+        terminator_sweep = 0 if phase <= 0.75 else 1
     return (f'M 50 6 A {radius} {radius} 0 0 {outer_sweep} 50 94 '
             f'A {terminator} {radius} 0 0 {terminator_sweep} 50 6 Z')
 
