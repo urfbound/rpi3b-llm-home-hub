@@ -14,8 +14,8 @@ from homehub.app import create_app
 
 
 LOCATION = {
-    'name': 'Brigus', 'latitude': 47.533, 'longitude': -53.55,
-    'timezone': 'America/St_Johns',
+    'name': 'Sampleville', 'latitude': 44.6488, 'longitude': -63.5752,
+    'timezone': 'America/Halifax',
 }
 NOW = datetime(2026, 10, 23, 12, tzinfo=timezone.utc)
 PAYLOAD = {
@@ -38,9 +38,9 @@ def test_forecast_request_includes_approved_current_hourly_daily_data_and_units(
     params = parse_qs(urlparse(url).query)
 
     assert url.startswith('https://api.open-meteo.com/v1/forecast?')
-    assert params['latitude'] == ['47.533']
-    assert params['longitude'] == ['-53.55']
-    assert params['timezone'] == ['America/St_Johns']
+    assert params['latitude'] == ['44.6488']
+    assert params['longitude'] == ['-63.5752']
+    assert params['timezone'] == ['America/Halifax']
     assert params['forecast_days'] == [str(WEATHER_FORECAST_DAYS_DEFAULT)]
     assert params['temperature_unit'] == ['fahrenheit']
     assert params['wind_speed_unit'] == ['mph']
@@ -64,10 +64,10 @@ def test_geocoder_uses_town_or_postcode_and_returns_candidates():
         calls.append(url)
         return {'results': [LOCATION]}
 
-    results = geocode_location('Brigus', transport=transport)
+    results = geocode_location('Sampleville', transport=transport)
 
     assert results == [LOCATION]
-    assert parse_qs(urlparse(calls[0]).query)['name'] == ['Brigus']
+    assert parse_qs(urlparse(calls[0]).query)['name'] == ['Sampleville']
     assert calls[0].startswith('https://geocoding-api.open-meteo.com/v1/search?')
 
 

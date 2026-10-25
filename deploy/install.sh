@@ -164,6 +164,6 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now homehub.service homehub-backup.timer
 
 printf '\nHome Hub is installed. It listens on the Pi loopback interface only.\n'
-printf 'For setup, open an SSH tunnel from Windows: ssh -L 8080:127.0.0.1:8080 %s@brigus\n' "$USER"
+printf 'For setup, open an SSH tunnel from Windows: ssh -L 8080:127.0.0.1:8080 %s@hostname\n' "$USER"
 printf 'Then browse to http://127.0.0.1:8080 on your Windows PC.\n'
 printf 'The source repository remains at %s; uninstall does not remove it.\n' "$REPO_ROOT"

@@ -9,8 +9,8 @@ from homehub.app import PH, create_app
 
 
 LOCATION_RESULTS = [{
-    'name': 'Brigus', 'latitude': 47.533, 'longitude': -53.55,
-    'timezone': 'America/St_Johns', 'admin1': 'Newfoundland and Labrador',
+    'name': 'Sampleville', 'latitude': 44.6488, 'longitude': -63.5752,
+    'timezone': 'America/Halifax', 'admin1': 'Nova Scotia',
     'country': 'Canada', 'country_code': 'CA',
 }]
 
@@ -68,6 +68,7 @@ def test_weather_settings_are_admin_configurable_with_approved_defaults(app):
     assert b'value="metric" selected' in page.data
     assert b'name="outbound_enabled" value="1" checked' in page.data
     assert b'No household location selected' in page.data
+    assert b'placeholder="Town or postal code"' in page.data
 
 
 def test_weather_settings_reject_invalid_units_and_forecast_range(app):
@@ -109,7 +110,7 @@ def test_only_admins_can_change_weather_settings_or_search_locations(app, monkey
         '_csrf': csrf(bob), 'forecast_days': '5', 'units': 'metric',
     })
     search = bob.post('/admin/weather/location/search', data={
-        '_csrf': csrf(bob), 'location_query': 'Brigus',
+        '_csrf': csrf(bob), 'location_query': 'Sampleville',
     })
 
     assert update.status_code == HTTPStatus.FORBIDDEN
@@ -124,29 +125,29 @@ def test_location_search_requires_outbound_access_and_does_not_save_unselected_c
                         lambda query: calls.append(query) or LOCATION_RESULTS)
 
     response = admin.post('/admin/weather/location/search', data={
-        '_csrf': csrf(admin), 'location_query': 'Brigus',
+        '_csrf': csrf(admin), 'location_query': 'Sampleville',
     }, follow_redirects=True)
 
     assert response.status_code == HTTPStatus.OK
-    assert b'Brigus, Newfoundland and Labrador, Canada' in response.data
-    assert calls == ['Brigus']
+    assert b'Sampleville, Nova Scotia, Canada' in response.data
+    assert calls == ['Sampleville']
     assert 'weather_latitude' not in settings(app)
 
     admin.post('/admin/weather/settings', data={
         '_csrf': csrf(admin), 'forecast_days': '5', 'units': 'metric',
     })
     blocked = admin.post('/admin/weather/location/search', data={
-        '_csrf': csrf(admin), 'location_query': 'Brigus',
+        '_csrf': csrf(admin), 'location_query': 'Sampleville',
     })
     assert blocked.status_code == HTTPStatus.BAD_REQUEST
-    assert calls == ['Brigus']
+    assert calls == ['Sampleville']
 
 
 def test_admin_selects_a_geocoded_location_for_the_household(app, monkeypatch):
     admin = sign_in(app, 'admin', 'admin weather password')
     monkeypatch.setattr(app_module, 'geocode_location', lambda _query: LOCATION_RESULTS)
     admin.post('/admin/weather/location/search', data={
-        '_csrf': csrf(admin), 'location_query': 'Brigus',
+        '_csrf': csrf(admin), 'location_query': 'Sampleville',
     })
 
     response = admin.post('/admin/weather/location/select', data={
@@ -155,9 +156,9 @@ def test_admin_selects_a_geocoded_location_for_the_household(app, monkeypatch):
 
     assert response.status_code == HTTPStatus.FOUND
     assert settings(app) == {
-        'weather_location_name': 'Brigus, Newfoundland and Labrador, Canada',
-        'weather_latitude': '47.533', 'weather_longitude': '-53.55',
-        'weather_timezone': 'America/St_Johns',
+        'weather_location_name': 'Sampleville, Nova Scotia, Canada',
+        'weather_latitude': '44.6488', 'weather_longitude': '-63.5752',
+        'weather_timezone': 'America/Halifax',
     }
 
 

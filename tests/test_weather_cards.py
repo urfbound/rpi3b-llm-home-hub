@@ -80,9 +80,9 @@ def configure_location(app, outbound='1'):
     with sqlite3.connect(app.config['DATABASE']) as db:
         db.executemany(
             'INSERT INTO app_settings(key,value) VALUES(?,?)',
-            [('weather_location_name', 'Brigus, Newfoundland and Labrador, Canada'),
-             ('weather_latitude', '47.533'), ('weather_longitude', '-53.55'),
-             ('weather_timezone', 'America/St_Johns'), ('weather_forecast_days', '5'),
+            [('weather_location_name', 'Sampleville, Nova Scotia, Canada'),
+             ('weather_latitude', '44.6488'), ('weather_longitude', '-63.5752'),
+             ('weather_timezone', 'America/Halifax'), ('weather_forecast_days', '5'),
              ('weather_units', 'metric'), ('weather_outbound_enabled', outbound)],
         )
 
@@ -105,7 +105,7 @@ def test_weather_home_summary_and_detail_use_shared_forecast(app, monkeypatch):
     detail = bob.get('/weather')
 
     assert b'Current weather' in home.data
-    assert b'Brigus, Newfoundland and Labrador, Canada' in home.data
+    assert b'Sampleville, Nova Scotia, Canada' in home.data
     assert b'11.2' in home.data
     assert b'Weather details' in home.data
     assert b'Right now' in detail.data
@@ -127,9 +127,9 @@ def test_weather_home_summary_and_detail_use_shared_forecast(app, monkeypatch):
     assert b'<path d="M 50 6' in detail.data
     assert b'7:21 AM' in detail.data and b'6:12 PM' in detail.data
     assert len(requests) == 2
-    assert requests[0][0] == {'name': 'Brigus, Newfoundland and Labrador, Canada',
-                              'latitude': 47.533, 'longitude': -53.55,
-                              'timezone': 'America/St_Johns'}
+    assert requests[0][0] == {'name': 'Sampleville, Nova Scotia, Canada',
+                              'latitude': 44.6488, 'longitude': -63.5752,
+                              'timezone': 'America/Halifax'}
     assert requests[0][1:] == (5, 'metric', True)
 
 

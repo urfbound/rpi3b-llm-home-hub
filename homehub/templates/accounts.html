@@ -63,7 +63,7 @@
   <p class="muted">{% if weather_location_name %}Current location: <strong>{{ weather_location_name }}</strong>{% else %}No household location selected{% endif %}</p>
   <form method="post" action="{{ url_for('search_weather_locations') }}" class="weather-location-search">
     <input type="hidden" name="_csrf" value="{{ csrf_token }}">
-      <label>Town or postcode<input name="location_query" maxlength="{{ limits.LOCATION_QUERY_MAXIMUM }}" value="{{ weather_location_query }}" placeholder="Brigus or postal code" required></label>
+      <label>Town or postcode<input name="location_query" maxlength="{{ limits.LOCATION_QUERY_MAXIMUM }}" value="{{ weather_location_query }}" placeholder="Town or postal code" required></label>
     <button {% if not weather_outbound_enabled %}disabled{% endif %}>Search locations</button>
   </form>
   {% if weather_location_candidates %}

@@ -47,14 +47,14 @@ with `sudo`. The app listens on loopback only.
 
 ### Transfer files from Windows
 
-Open PowerShell in the project folder on Windows. The example uses the Pi
-login `jake` and SSH host alias `brigus`; replace `jake` if your Pi account
-has a different name. Windows OpenSSH's `ssh` and `scp` utilities are used.
+Open PowerShell in the project folder on Windows. Replace `username` and
+`hostname` in the commands with your Pi login and SSH host name or alias.
+Windows OpenSSH's `ssh` and `scp` utilities are used.
 
 ```powershell
-ssh jake@brigus "mkdir -p ~/homehub-starter"
-scp -r .\homehub .\deploy .\pyproject.toml .\README.md .\LICENSE jake@brigus:~/homehub-starter/
-ssh jake@brigus "cd ~/homehub-starter && chmod +x deploy/install.sh deploy/uninstall.sh && ./deploy/install.sh"
+ssh username@hostname "mkdir -p ~/homehub-starter"
+scp -r .\homehub .\deploy .\pyproject.toml .\README.md .\LICENSE username@hostname:~/homehub-starter/
+ssh username@hostname "cd ~/homehub-starter && chmod +x deploy/install.sh deploy/uninstall.sh && ./deploy/install.sh"
 ```
 
 The transfer includes only runtime files and deployment examples, not your
@@ -71,7 +71,7 @@ the database has no active admin. Create a tunnel from another PowerShell
 window, leaving it open while using the app:
 
 ```powershell
-ssh -N -L 8080:127.0.0.1:8080 jake@brigus
+ssh -N -L 8080:127.0.0.1:8080 username@hostname
 ```
 
 Then open <http://127.0.0.1:8080> on the Windows PC. Stop the tunnel with
@@ -84,7 +84,7 @@ household LAN; do not expose the service through a router port.
 Run the uninstaller as your regular Pi login from the transferred repository:
 
 ```powershell
-ssh -t jake@brigus "cd ~/homehub-starter && ./deploy/uninstall.sh"
+ssh -t username@hostname "cd ~/homehub-starter && ./deploy/uninstall.sh"
 ```
 
 It creates an immediate verified database backup first. If that backup fails,
