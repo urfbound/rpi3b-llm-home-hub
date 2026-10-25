@@ -238,7 +238,19 @@ def test_grid_games_have_thirty_distinct_daily_puzzles(game):
                          for row in range(5))
             columns = tuple(''.join(puzzle['answer'][row * 5 + col] for row in range(5))
                             .replace('#', '') for col in range(5))
-            assert rows == columns
+            assert all(len(word) in {3, 5} for word in rows + columns)
+            assert puzzle['editor'] in {'Larry', 'Moe', 'Curly', 'Shemp'}
+            assert puzzle['difficulty'] in {'Medium', 'Medium-Hard'}
+
+
+def test_crossword_daily_puzzle_displays_its_editor(game_app):
+    client = sign_in(game_app, 'alex')
+    from homehub.game_grids import daily_puzzle
+    puzzle = daily_puzzle('crossword', date(2026, 10, 24))
+    page = client.get('/games/crossword')
+    assert page.status_code == 200
+    assert puzzle['editor'] in {'Larry', 'Moe', 'Curly', 'Shemp'}
+    assert f"Edited by {puzzle['editor']}".encode() in page.data
 
 
 @pytest.mark.parametrize('game', ['crossword', 'nonogram', 'sudoku'])

@@ -182,13 +182,17 @@ to `main` only after the user approves the completed change.
   past puzzles for the word and grid games; Wumpus offers a chosen or random
   seed. A v17 upgrade preserves v16 Word Garden attempts.
 - Expanded offline content banks now include 5,000 word ladders, 5,000 unique
-  8 × 8 nonograms, and 5,000 unique 9 × 9 Sudoku puzzles. Ladder estimates use
-  shortest-path length; Sudoku estimates use clue counts and are labeled as
-  coarse rather than formal human-technique ratings. Unit tests check puzzle
+  8 × 8 nonograms, 5,000 unique 9 × 9 Sudoku puzzles, and 5,000 5 × 5 mini
+  crosswords. The crosswords rotate among four distinct editors—Larry, Moe,
+  Curly, and Shemp—with 1,250 puzzles each. Crossword clueing is a little above
+  easy; most puzzles are Medium, with one in five Medium-Hard. Their style
+  profiles and localization guidance are in
+  [CROSSWORD_EDITORS.md](CROSSWORD_EDITORS.md). Ladder estimates use shortest-
+  path length; Sudoku estimates use clue counts and are labeled as coarse
+  rather than formal human-technique ratings. Unit tests check puzzle
   constraints, solvability, broad difficulty coverage, and daily selection
   across the full banks. These exhaustive checks are marked `bank` and skipped
-  by default; run them on request with `pytest -m bank`. Mini Crossword bank
-  expansion remains for its separate prompt.
+  by default; run them on request with `pytest -m bank`.
 - Private resumable attempts, midnight expiry, per-game streaks, score floors,
   optional hints where approved, daily and all-time scoreboards, timed-game
   tie breaking, and next-day solution visibility are implemented and tested.

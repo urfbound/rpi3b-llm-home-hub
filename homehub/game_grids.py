@@ -2,6 +2,7 @@
 
 import json
 from datetime import date
+from functools import lru_cache
 from pathlib import Path
 
 
@@ -14,23 +15,32 @@ SUDOKU_SOLUTION = (
     '713924856' '961537284' '287419635' '345286179'
 )
 
-CROSSWORD_TOPS = tuple(f'{letter}AT' for letter in 'BCFHMPRSTV')
-CROSSWORD_BOTTOMS = (('ERE', 'TEN'), ('ERA', 'TAN'), ('EGO', 'TOW'))
-
-CLUES = {
-    'ARE': 'Present tense of be', 'TEN': 'Two hands of fingers',
-    'TENET': 'A guiding principle', 'ERE': 'Before, in verse',
-    'ERA': 'A distinct period of time', 'TAN': 'Light brown shade',
-    'EGO': 'Sense of self', 'TOW': 'Pull behind a vehicle',
-    'BAT': 'Flying mammal', 'CAT': 'Purring pet', 'FAT': 'Opposite of lean',
-    'HAT': 'Headwear', 'MAT': 'Small floor covering', 'PAT': 'Gentle tap',
-    'RAT': 'Long-tailed rodent', 'SAT': 'Past tense of sit',
-    'TAT': 'Small piece of lace', 'VAT': 'Large liquid container',
-}
-
 NONOGRAM_ART = tuple('#' * (row + 1) + '.' * (7 - row) for row in range(8))
 
 _DATA = Path(__file__).with_name('game_data')
+_CROSSWORD_PATH = _DATA / 'crossword_editors.jsonl'
+
+
+def _jsonl_offsets(path):
+    offsets = []
+    with path.open('rb') as source:
+        while True:
+            offset = source.tell()
+            if not source.readline():
+                return tuple(offsets)
+            offsets.append(offset)
+
+
+_CROSSWORD_OFFSETS = _jsonl_offsets(_CROSSWORD_PATH)
+
+
+@lru_cache(maxsize=32)
+def _crossword_record(index):
+    with _CROSSWORD_PATH.open('rb') as source:
+        source.seek(_CROSSWORD_OFFSETS[index])
+        return json.loads(source.readline())
+
+
 _NONOGRAM_BANK = tuple(json.loads(
     (_DATA / 'mini_nonograms.json').read_text(encoding='utf-8')))
 _SUDOKU_BANK = tuple(json.loads(
@@ -61,18 +71,17 @@ def _sudoku(day):
 
 
 def _crossword(day):
-    index = day.toordinal() % 30
-    top = CROSSWORD_TOPS[index % 10]
-    lower, bottom = CROSSWORD_BOTTOMS[index // 10]
-    rows = (top, 'ARE', 'TENET', lower, bottom)
-    answer = top + '##' + 'ARE' + '##' + 'TENET' + '##' + lower + '##' + bottom
-    initial = ''.join('#' if char == '#' else '.' for char in answer)
-    clues = tuple((direction, number, CLUES[word])
-                  for direction in ('Across', 'Down')
-                  for number, word in enumerate(rows, start=1))
+    record = _crossword_record(day.toordinal() % len(_CROSSWORD_OFFSETS))
+    answer = record['answer']
+    initial = record['initial']
+    clues = tuple((clue['direction'], clue['number'], clue['text'])
+                  for clue in record['clues'])
     return {'game': 'crossword', 'title': 'Mini Crossword', 'size': 5,
             'initial': initial, 'answer': answer, 'first_open': 0,
-            'difficulty': '', 'clues': clues}
+            'difficulty': record['difficulty'], 'clues': clues,
+            'editor': record['editor'].title(),
+            'style_signature': record['style_signature'],
+            'style_version': record['style_version']}
 
 
 def _nonogram(day):
