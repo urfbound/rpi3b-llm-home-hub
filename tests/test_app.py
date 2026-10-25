@@ -148,6 +148,46 @@ def test_list_page_offers_copy_and_paste_controls(client):
     assert b'Paste list' in page.data
     assert b'Clipboard access unavailable' in page.data
 
+def test_calendar_month_control_selects_the_month_shown_in_its_heading(client):
+    sign_in(client)
+    response = client.get('/?month=10&year=2026')
+
+    assert b'October 2026' in response.data
+    assert b'<option value="10" selected>October</option>' in response.data
+    assert b'<option value="9" selected>September</option>' not in response.data
+
+def test_calendar_download_links_render_on_separate_lines(client):
+    sign_in(client)
+    response = client.get('/?month=10&year=2026')
+
+    assert b'</a></p>\n    <p><a href="/calendar.ics?only_required=1">' in response.data
+
+def test_theme_switch_uses_approved_theme_label(client):
+    sign_in(client)
+
+    assert '◐ Theme'.encode() in client.get('/').data
+
+def test_list_picker_groups_shopping_lists_by_category(client):
+    sign_in(client)
+    response = client.get('/')
+
+    assert b'<optgroup label="Groceries">' in response.data
+
+def test_calendar_weekdays_include_responsive_abbreviations(client):
+    sign_in(client)
+    response = client.get('/?month=10&year=2026')
+
+    assert b'<span class="weekday-full">Sunday</span>' in response.data
+    assert b'<span class="weekday-short">Sun</span>' in response.data
+    assert b'<span class="weekday-narrow">S</span>' in response.data
+
+def test_list_and_recipe_remove_controls_have_inline_layout_hooks(client):
+    sign_in(client)
+    response = client.get('/')
+
+    assert b'class="checks list-items"' in response.data
+    assert b'class="recipe-ingredient-row"' in response.data
+    assert b'class="recipe-step-row"' in response.data
 def test_top_navigation_links_to_dedicated_lists_and_calendar_pages(client):
     sign_in(client)
     page = client.get('/')
