@@ -235,12 +235,14 @@ to `main` only after the user approves the completed change.
   one lazy in-process worker, prioritizes admins among waiting requests, shows
   queue positions, and records successful answers with the model name. Ollama
   requests use a 2048-token context and unload the model after each response.
-  Read-only list and calendar tools are implemented behind an admin toggle
-  that defaults off. They enforce requester visibility, a 31-day calendar
-  window, three tool calls per request, and 100-row/16-KiB result caps. The
-  Pi resource-budget measurement remains; keep database tools disabled until
-  that measurement passes. App-plus-model profiling, answer-quality review,
-  and manual browser review of the approved design also remain.
+  Read-only tools for lists/chores, recipes, calendar, cached weather, saved
+  articles, and system status are implemented behind an admin toggle that
+  defaults off; a safe configuration summary is admin-only. Tools enforce
+  requester visibility, a 31-day calendar window, three tool calls per
+  request, and bounded result sizes. The Pi resource-budget measurement
+  remains; keep database tools disabled until that measurement passes.
+  App-plus-model profiling, answer-quality review, and manual browser review
+  of the approved design also remain.
   Before enabling Chat for household use, profile Home Hub and the selected
   model together, then verify answer quality.
 - Add a provider interface for possible remote models, off by default. If
@@ -254,6 +256,16 @@ to `main` only after the user approves the completed change.
 - Inbound email controls.
 - Multiple daily puzzles, locally generated puzzle banks, weather almanac,
   on-demand historical weather, and alternate weather providers.
+
+## Post-R1.0
+
+- Add Chat working-state bubbles: show `🧠...` while the model is reasoning and
+  `🗣️...` while it is composing a response.
+- Add more read-only and proposal-based Chat tools, including RSS summaries and
+  adding a day's recipes to a shopping list. Any write proposal must be shown
+  for confirmation and re-authorized by the server before applying it.
+- Allow users to navigate away from an in-progress Chat conversation while the
+  server-side request continues, then return to see its status and response.
 
 ## Release gates
 
