@@ -56,3 +56,28 @@ body was not captured. Other first-request cold-start tests ranged from about
   representative responses before recommending a model to household users.
 - Continue to use a bounded context and a response token cap. Recheck memory
   and latency if either changes. Do not expose Ollama beyond loopback.
+
+## Combined Home Hub and model profile
+
+The repository includes a standard-library-only sampler for the Pi. From the
+project checkout on the Pi, run:
+
+```sh
+python3 scripts/profile_pi.py --baseline-seconds 15 --measure-seconds 180
+```
+
+It records an idle baseline, then prompts you to open Chat, submit a normal
+prompt, and leave the page open while it samples every half-second. It reports
+minimum system `MemAvailable`, peak Home Hub RSS, Ollama server RSS, model
+runner RSS, their combined Ollama-plus-runner RSS, and peak whole-system CPU
+use normalized across cores. Increase `--measure-seconds` if a response can
+take longer than three minutes; `--interval` can adjust sample frequency.
+Run one capture for the selected chat model and repeat after changing models.
+
+Process RSS can count shared pages more than once, so use system
+`MemAvailable` as the primary measure of actual memory headroom. The combined
+Ollama and runner RSS is a useful per-process comparison, not a substitute for
+system memory accounting. Include model, context size, response cap, ambient
+temperature, and whether other household activity was occurring when sharing
+results. The tool requires Linux `/proc` and must be run on the Pi; it does not
+make requests or change server settings itself.
