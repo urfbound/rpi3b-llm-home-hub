@@ -57,6 +57,19 @@ scp -r .\homehub .\deploy .\pyproject.toml .\README.md .\LICENSE username@hostna
 ssh username@hostname "cd ~/homehub-starter && chmod +x deploy/install.sh deploy/uninstall.sh && ./deploy/install.sh"
 ```
 
+If `scp` reports `Permission denied` for one existing destination file, copy
+that file to a temporary name in your home directory, then install it over the
+blocked file with the correct owner. For example, to transfer the venv
+permission helper:
+
+```powershell
+scp .\deploy\venv_permissions.sh jake@brigus:~/venv_permissions.sh
+ssh -t jake@brigus "sudo install -o jake -g jake -m 0644 /home/jake/venv_permissions.sh /home/jake/homehub-starter/deploy/venv_permissions.sh && rm /home/jake/venv_permissions.sh"
+```
+
+Then repeat the normal transfer command to ensure the rest of the files are
+current, and run the installer as `jake` without `sudo`.
+
 The transfer includes only runtime files and deployment examples, not your
 Windows `.git` directory, virtual environment, database, or backups. The
 installer copies the application into `/opt/homehub`; it leaves the transferred
