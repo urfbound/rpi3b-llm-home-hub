@@ -160,7 +160,7 @@ to `main` only after the user approves the completed change.
   disabled remains.
 - Article persistence now stores feed content once and keeps read, favourite,
   and delete state per user; personal-feed visibility is owner-only. Implement
-  article-open read tracking, Done reading
+  article-open read tracking and feed-grouped article display. Done reading
   behavior, prompt preference, favourite confirmation, and the bottom
   favourites card. Keep house-wide articles for at most three days; track
   their read state per user when practical, otherwise ignore it. Personal

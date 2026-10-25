@@ -35,6 +35,7 @@ from .system_status import (collect_system_snapshot, cpu_usage_percent,
                             cpu_bar_class, record_metric_sample)
 from .rss import (DEFAULT_RSS_REFRESH_MINUTES, MAX_RSS_REFRESH_MINUTES,
                   MIN_RSS_REFRESH_MINUTES, RSSFeedError, validate_feed_url)
+from .rss_store import articles_for_user, set_article_state
 from .games import games, SCHEMA as GAMES_SCHEMA, upgrade_multigame_schema
 
 PH = PasswordHasher(memory_cost=16384, time_cost=2, parallelism=1)
@@ -1621,6 +1622,9 @@ def create_app(test_config=None):
     @login_required
     def rss_page():
         db = get_db()
+        articles_by_feed = {}
+        for article in articles_for_user(db, g.user['id']):
+            articles_by_feed.setdefault(article['feed_id'], []).append(article)
         personal_feeds = []
         if g.user['account_kind'] == 'person':
             personal_feeds = db.execute(
@@ -1631,7 +1635,20 @@ def create_app(test_config=None):
             "SELECT * FROM rss_feeds WHERE scope='household' ORDER BY sort_order,id"
         ).fetchall()
         return render_template('rss.html', personal_feeds=personal_feeds,
-                               household_feeds=household_feeds)
+                               household_feeds=household_feeds,
+                               articles_by_feed=articles_by_feed)
+
+    @app.get('/rss/articles/<int:article_id>/open')
+    @login_required
+    def open_rss_article(article_id):
+        db = get_db()
+        article = next((item for item in articles_for_user(db, g.user['id'])
+                        if item['id'] == article_id), None)
+        if article is None:
+            abort(HTTPStatus.NOT_FOUND)
+        set_article_state(db, g.user['id'], article_id, is_read=True)
+        db.commit()
+        return redirect(article['url'] or url_for('rss_page'))
 
     @app.post('/rss/feeds')
     @login_required

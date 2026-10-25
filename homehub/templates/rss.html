@@ -51,6 +51,13 @@
         </form>
       </div>
     </li>
+    {% for article in articles_by_feed.get(feed['id'], []) %}
+    <li class="rss-article-row{% if article['is_read'] %} is-read{% endif %}">
+      <h3><a href="{{ url_for('open_rss_article', article_id=article['id']) }}">{{ article['title'] }}</a></h3>
+      <p class="rss-article-meta">{{ 'Read' if article['is_read'] else 'Unread' }}{% if article['published'] %} · {{ article['published'] }}{% endif %}</p>
+      {% if article['summary'] %}<p class="rss-article-summary">{{ article['summary'] }}</p>{% endif %}
+    </li>
+    {% endfor %}
     {% endfor %}
   </ul>
   {% else %}<p class="muted">You have not added any personal feeds yet.</p>{% endif %}
@@ -77,9 +84,15 @@
         </form>
       </div>{% endif %}
     </li>
+    {% for article in articles_by_feed.get(feed['id'], []) %}
+    <li class="rss-article-row{% if article['is_read'] %} is-read{% endif %}">
+      <h3><a href="{{ url_for('open_rss_article', article_id=article['id']) }}">{{ article['title'] }}</a></h3>
+      <p class="rss-article-meta">{{ 'Read' if article['is_read'] else 'Unread' }}{% if article['published'] %} · {{ article['published'] }}{% endif %}</p>
+      {% if article['summary'] %}<p class="rss-article-summary">{{ article['summary'] }}</p>{% endif %}
+    </li>
+    {% endfor %}
     {% endfor %}
   </ul>
   {% else %}<p class="muted">No house-wide feeds have been added.</p>{% endif %}
 </section>
-<p class="muted">Feed articles will appear here after RSS refresh is implemented.</p>
 {% endblock %}
