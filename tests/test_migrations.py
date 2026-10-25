@@ -349,3 +349,27 @@ def test_v14_upgrade_adds_calendar_archive_metadata_without_losing_events(tmp_pa
         assert db.execute('PRAGMA foreign_key_check').fetchall() == []
     backups = list(tmp_path.glob(f'v14.pre-v{str(LATEST_SCHEMA_VERSION)}-*.sqlite3'))
     assert len(backups) == 1
+
+
+def test_v17_upgrade_adds_rss_article_storage_without_losing_feeds(tmp_path):
+    path = tmp_path / 'v17.sqlite3'
+    create_app(config(path))
+    with sqlite3.connect(path) as db:
+        db.execute("INSERT INTO users(username,password_hash,role) VALUES('rss-reader','hash','user')")
+        db.execute("INSERT INTO rss_feeds(normalized_url,title,scope,owner_user_id,created_by) "
+                   "VALUES('https://feed.example/rss','Example','personal',1,1)")
+        db.execute('PRAGMA user_version=17')
+
+    create_app(config(path))
+
+    with sqlite3.connect(path) as db:
+        assert db.execute('PRAGMA user_version').fetchone()[0] == LATEST_SCHEMA_VERSION
+        assert db.execute('SELECT normalized_url,title FROM rss_feeds').fetchone() == (
+            'https://feed.example/rss', 'Example')
+        assert {'id', 'feed_id', 'article_key', 'title', 'url', 'summary',
+                'published', 'first_seen_at', 'content_bytes'} <= {
+                    row[1] for row in db.execute('PRAGMA table_info(rss_articles)')}
+        assert {'article_id', 'user_id', 'is_read', 'read_at', 'is_favorite',
+                'deleted_at'} <= {
+                    row[1] for row in db.execute('PRAGMA table_info(rss_article_states)')}
+        assert db.execute('PRAGMA foreign_key_check').fetchall() == []
