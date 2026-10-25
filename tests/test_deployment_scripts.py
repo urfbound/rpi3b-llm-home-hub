@@ -38,3 +38,12 @@ def test_installer_keeps_backup_schedule_in_one_systemd_timer():
     assert 'sudo rm -f -- /etc/cron.d/homehub-backup' in INSTALL
     assert 'homehub-backup.timer.example' in INSTALL
     assert 'sudo systemctl enable --now homehub.service homehub-backup.timer' in INSTALL
+
+
+def test_deployment_shell_scripts_use_unix_line_endings_for_pi_scp():
+    shell_scripts = sorted((ROOT / 'deploy').glob('*.sh'))
+    attributes = (ROOT / '.gitattributes').read_text(encoding='utf-8')
+
+    assert shell_scripts
+    assert '*.sh text eol=lf' in attributes
+    assert all(b'\r' not in path.read_bytes() for path in shell_scripts)
