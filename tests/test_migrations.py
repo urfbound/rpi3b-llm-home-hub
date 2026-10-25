@@ -413,3 +413,35 @@ def test_v19_upgrade_adds_rss_user_preferences(tmp_path):
         db.execute('INSERT INTO rss_user_preferences(user_id) VALUES(1)')
         assert db.execute('SELECT ask_before_done_delete FROM rss_user_preferences').fetchone() == (1,)
         assert db.execute('PRAGMA foreign_key_check').fetchall() == []
+
+
+def test_v15_upgrade_adds_chat_storage_without_losing_household_data(tmp_path):
+    path = tmp_path / 'v15.sqlite3'
+    create_app(config(path))
+    with sqlite3.connect(path) as db:
+        db.execute("INSERT INTO users(username,password_hash,role) VALUES('alex','hash','user')")
+        db.execute("INSERT INTO events(title,event_date,created_by) "
+                   "VALUES('Dinner','2026-10-24',1)")
+        db.execute('DROP TABLE chat_pairs')
+        db.execute('DROP TABLE chat_conversations')
+        db.execute('PRAGMA user_version=15')
+
+    create_app(config(path))
+
+    with sqlite3.connect(path) as db:
+        assert db.execute('PRAGMA user_version').fetchone()[0] == LATEST_SCHEMA_VERSION
+        assert {'id', 'owner_user_id', 'title', 'is_pinned', 'created_at', 'updated_at'} <= {
+            row[1] for row in db.execute('PRAGMA table_info(chat_conversations)')}
+        assert {'id', 'conversation_id', 'position', 'prompt', 'response', 'model',
+                'created_at'} <= {
+                    row[1] for row in db.execute('PRAGMA table_info(chat_pairs)')}
+        assert db.execute('SELECT title FROM events').fetchone() == ('Dinner',)
+        assert db.execute('PRAGMA foreign_key_check').fetchall() == []
+
+    backups = list(tmp_path.glob(f'v15.pre-v{str(LATEST_SCHEMA_VERSION)}-*.sqlite3'))
+    assert len(backups) == 1
+    with sqlite3.connect(backups[0]) as db:
+        assert db.execute('PRAGMA user_version').fetchone()[0] == 15
+        assert db.execute('SELECT title FROM events').fetchone() == ('Dinner',)
+        assert db.execute("SELECT name FROM sqlite_master WHERE type='table' "
+                          "AND name='chat_conversations'").fetchone() is None
