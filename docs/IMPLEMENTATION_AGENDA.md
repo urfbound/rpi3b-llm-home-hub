@@ -155,7 +155,10 @@ to `main` only after the user approves the completed change.
 - Personal feed add/remove/reordering and admin-managed house-wide feed
   add/remove/reordering are implemented on the current review branch. The
   server enforces duplicate checks across scopes, admin-only household changes,
-  and a three-feed household limit. The house-wide list is viewable by all
+  and a three-feed household limit. Adding a feed triggers an immediate first
+  refresh; failures are shown to the user, recorded, and retried after the
+  configured interval. When outbound access is disabled, the feed is saved and
+  the skipped refresh is explained. The house-wide list is viewable by all
   signed-in accounts.
 - Bounded HTTP fetching now pins connections to DNS-validated public addresses,
   rechecks every redirect, enforces time/size/redirect limits, and supports an
