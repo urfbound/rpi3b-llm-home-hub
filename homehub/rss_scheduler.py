@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from . import constants as limits
 from .rss import (DEFAULT_RSS_REFRESH_MINUTES, RSSFeedError, parse_feed)
 from .rss_fetch import fetch_feed
-from .rss_store import store_feed_articles
+from .rss_store import prune_articles, store_feed_articles
 
 
 def _setting(db, key, default):
@@ -31,6 +31,8 @@ def refresh_due_feeds(db, *, now=None, fetcher=fetch_feed):
     The caller owns the SQLite transaction. Network access is done only for
     feeds whose last attempt is older than the configured refresh interval.
     """
+    instant = _utc(now)
+    prune_articles(db, now=instant)
     if _setting(db, 'rss_outbound_enabled', '1') != '1':
         return {'disabled': True, 'checked': 0, 'refreshed': 0, 'failed': 0}
 
@@ -42,7 +44,6 @@ def refresh_due_feeds(db, *, now=None, fetcher=fetch_feed):
     if not limits.RSS_REFRESH_MINIMUM_MINUTES <= interval <= limits.RSS_REFRESH_MAXIMUM_MINUTES:
         interval = DEFAULT_RSS_REFRESH_MINUTES
 
-    instant = _utc(now)
     cutoff = instant - timedelta(minutes=interval)
     feeds = db.execute(
         'SELECT f.id,f.normalized_url,f.allow_lan,s.attempted_at '

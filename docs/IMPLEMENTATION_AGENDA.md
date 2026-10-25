@@ -162,11 +162,10 @@ to `main` only after the user approves the completed change.
   and delete state per user; personal-feed visibility is owner-only. Article
   open tracking, feed-grouped display, Done reading with its configurable
   deletion prompt, favourite-deletion confirmation, and centralized Manage
-  feeds controls are implemented. The bottom favourites card and retention/
-  eviction remain.
-  Keep house-wide articles for at most three days; track their read state per
-  user when practical, otherwise ignore it. Personal articles retain the
-  90-day/64 MB per-user cap and eviction order.
+  feeds controls are implemented. The bottom favourites card remains. Cleanup
+  expires household articles after three days and personal articles after 90;
+  personal storage evicts oldest unread, then oldest read until within 64 MB,
+  while favourites remain protected.
 
 ### Games
 

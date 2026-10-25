@@ -1,6 +1,6 @@
 """Persistence and per-user state for fetched RSS articles."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 from urllib.parse import urlsplit, urlunsplit
@@ -134,3 +134,65 @@ def articles_for_user(db, user_id):
         article['is_read'] = bool(article['is_read'])
         article['is_favorite'] = bool(article['is_favorite'])
     return articles
+
+
+def prune_articles(db, *, now=None):
+    """Apply household age retention and personal age/size budgets.
+
+    Favourited articles are protected from automatic expiry and quota eviction.
+    Personal quota eviction chooses unread articles first, then read articles,
+    oldest first within each group.
+    """
+    instant = now or datetime.now(timezone.utc)
+    if instant.tzinfo is None:
+        instant = instant.replace(tzinfo=timezone.utc)
+    instant = instant.astimezone(timezone.utc)
+    household_cutoff = _timestamp(
+        instant - timedelta(days=limits.RSS_HOUSEHOLD_ARTICLE_RETENTION_DAYS))
+    personal_cutoff = _timestamp(
+        instant - timedelta(days=limits.RSS_PERSONAL_ARTICLE_RETENTION_DAYS))
+
+    cursor = db.execute(
+        'DELETE FROM rss_articles AS a WHERE a.first_seen_at<? AND '
+        'EXISTS(SELECT 1 FROM rss_feeds f WHERE f.id=a.feed_id AND f.scope="household") '
+        'AND NOT EXISTS(SELECT 1 FROM rss_article_states s '
+        'WHERE s.article_id=a.id AND s.is_favorite=1)',
+        (household_cutoff,),
+    )
+    household_age = cursor.rowcount
+    cursor = db.execute(
+        'DELETE FROM rss_articles AS a WHERE a.first_seen_at<? AND '
+        'EXISTS(SELECT 1 FROM rss_feeds f WHERE f.id=a.feed_id AND f.scope="personal") '
+        'AND NOT EXISTS(SELECT 1 FROM rss_article_states s '
+        'WHERE s.article_id=a.id AND s.is_favorite=1)',
+        (personal_cutoff,),
+    )
+    personal_age = cursor.rowcount
+
+    personal_quota = 0
+    owners = [row[0] for row in db.execute(
+        "SELECT DISTINCT owner_user_id FROM rss_feeds WHERE scope='personal' "
+        'AND owner_user_id IS NOT NULL')]
+    for user_id in owners:
+        used = db.execute(
+            'SELECT COALESCE(SUM(a.content_bytes),0) FROM rss_articles a '
+            'JOIN rss_feeds f ON f.id=a.feed_id WHERE f.scope="personal" '
+            'AND f.owner_user_id=?', (user_id,),
+        ).fetchone()[0]
+        while used > limits.RSS_PERSONAL_ARTICLE_STORAGE_BYTES_MAXIMUM:
+            oldest = db.execute(
+                'SELECT a.id,a.content_bytes FROM rss_articles a '
+                'JOIN rss_feeds f ON f.id=a.feed_id '
+                'LEFT JOIN rss_article_states s ON s.article_id=a.id AND s.user_id=? '
+                'WHERE f.scope="personal" AND f.owner_user_id=? '
+                'AND COALESCE(s.is_favorite,0)=0 '
+                'ORDER BY COALESCE(s.is_read,0),a.first_seen_at,a.id LIMIT 1',
+                (user_id, user_id),
+            ).fetchone()
+            if oldest is None:
+                break
+            db.execute('DELETE FROM rss_articles WHERE id=?', (oldest[0],))
+            used -= oldest[1]
+            personal_quota += 1
+    return {'household_age': household_age, 'personal_age': personal_age,
+            'personal_quota': personal_quota}
