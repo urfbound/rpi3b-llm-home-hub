@@ -9,7 +9,7 @@
 </style>
 <p><a href="{{ url_for('games.page') }}">← All games</a></p>
 <p class="eyebrow">{{ 'Practice' if practice else 'Daily challenge' }}</p><h1>{{ puzzle['title'] }}</h1>
-<p>{{ day.isoformat() }} · {{ streak }}-day streak{% if puzzle['difficulty'] %} · {{ puzzle['difficulty'] }}{% endif %}</p>
+<p>{{ day.isoformat() }} · {{ streak }}-day streak{% if puzzle['difficulty'] %} · {{ puzzle['difficulty'] }}{% if game == 'sudoku' %} estimate{% endif %}{% endif %}</p>
 {% if game == 'crossword' %}<p>Fill each open square from the across and down clues.</p>{% elif game == 'nonogram' %}<p>Mark every square filled or empty using the row and column clues.</p>{% else %}<p>Fill each row, column, and 3×3 box with the digits 1 through 9.</p>{% endif %}
 <section class="panel">
 {% if attempt and attempt['status'] != 'playing' %}<p role="status">{% if attempt['status'] == 'won' %}Completed! {{ attempt['points'] }} points{% else %}Attempt expired{% endif %}.</p>{% endif %}

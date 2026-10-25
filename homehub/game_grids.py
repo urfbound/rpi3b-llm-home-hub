@@ -1,6 +1,8 @@
-"""Curated and reproducibly transformed offline grid puzzles."""
+"""Offline grid puzzle banks and board validation."""
 
+import json
 from datetime import date
+from pathlib import Path
 
 
 SUDOKU_START = (
@@ -28,6 +30,12 @@ CLUES = {
 
 NONOGRAM_ART = tuple('#' * (row + 1) + '.' * (7 - row) for row in range(8))
 
+_DATA = Path(__file__).with_name('game_data')
+_NONOGRAM_BANK = tuple(json.loads(
+    (_DATA / 'mini_nonograms.json').read_text(encoding='utf-8')))
+_SUDOKU_BANK = tuple(json.loads(
+    (_DATA / 'mini_sudoku.json').read_text(encoding='utf-8')))
+
 
 def _runs(cells):
     runs = []
@@ -44,26 +52,12 @@ def _runs(cells):
 
 
 def _sudoku(day):
-    index = day.toordinal() % 30
-    digit_shift = index % 9
-    row_turn = (index // 9) % 3
-    transpose = index >= 27
-
-    def transform(source):
-        grid = [list(source[row * 9:(row + 1) * 9]) for row in range(9)]
-        for band in range(3):
-            rows = grid[band * 3:band * 3 + 3]
-            grid[band * 3:band * 3 + 3] = rows[row_turn:] + rows[:row_turn]
-        if transpose:
-            grid = [list(row) for row in zip(*grid)]
-        return ''.join(str((int(cell) + digit_shift - 1) % 9 + 1) if cell != '0' else '0'
-                       for row in grid for cell in row)
-
-    initial = transform(SUDOKU_START)
-    answer = transform(SUDOKU_SOLUTION)
+    record = _SUDOKU_BANK[day.toordinal() % len(_SUDOKU_BANK)]
+    initial = ''.join(str(value) for row in record['puzzle'] for value in row)
+    answer = ''.join(str(value) for row in record['solution'] for value in row)
     return {'game': 'sudoku', 'title': 'Mini Sudoku', 'size': 9,
             'initial': initial, 'answer': answer, 'first_open': initial.index('0'),
-            'difficulty': 'Easy', 'clues': ()}
+            'difficulty': record['difficulty'].title(), 'clues': ()}
 
 
 def _crossword(day):
@@ -82,15 +76,11 @@ def _crossword(day):
 
 
 def _nonogram(day):
-    index = day.toordinal() % 30
-    row_shift, col_shift = index % 8, index // 8
-    # This staircase has a forced full row and column. Permutations preserve
-    # its unique solution while providing thirty distinct clue sets.
-    rows = [NONOGRAM_ART[(row + row_shift) % 8] for row in range(8)]
-    rows = [''.join(row[(col + col_shift) % 8] for col in range(8)) for row in rows]
+    record = _NONOGRAM_BANK[day.toordinal() % len(_NONOGRAM_BANK)]
+    rows = record['solution']
     answer = ''.join('#' if char == '#' else 'x' for row in rows for char in row)
-    row_clues = tuple(_runs(row) for row in rows)
-    col_clues = tuple(_runs(rows[row][col] for row in range(8)) for col in range(8))
+    row_clues = tuple(tuple(clue) or (0,) for clue in record['rows'])
+    col_clues = tuple(tuple(clue) or (0,) for clue in record['columns'])
     return {'game': 'nonogram', 'title': 'Mini Nonogram', 'size': 8,
             'initial': '.' * 64, 'answer': answer, 'first_open': 0,
             'difficulty': '', 'clues': (), 'row_clues': row_clues, 'col_clues': col_clues}

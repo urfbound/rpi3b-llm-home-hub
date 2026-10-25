@@ -19,5 +19,10 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 include = ["homehub*"]
 
+[tool.setuptools.package-data]
+homehub = ["game_data/*.json", "game_data/*.md"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "-m 'not bank'"
+markers = ["bank: exhaustive validation of the large offline puzzle banks"]
