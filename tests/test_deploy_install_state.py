@@ -79,3 +79,25 @@ homehub_ensure_environment_file {shlex.quote(str(env_file))} \
     result = subprocess.run([_bash(), '-c', script], capture_output=True, text=True)
 
     assert result.returncode == 0, result.stderr
+
+
+def test_legacy_backup_cron_cleanup_is_repeatable_and_preserves_other_jobs(tmp_path):
+    helper = Path(__file__).parents[1] / 'deploy' / 'install_helpers.sh'
+    script = f'''\
+set -euo pipefail
+source {shlex.quote(_bash_path(helper))}
+crontab=''' + "'''" + '''\
+0 4 * * * /opt/homehub/.venv/bin/homehub-backup
+15 2 * * * /usr/local/bin/other-backup
+*/10 * * * * /opt/homehub/.venv/bin/python -m homehub.backup_scheduler
+30 5 * * * /usr/local/bin/other-maintenance
+''' + "'''" + '''
+once=$(printf '%s' "$crontab" | homehub_filter_legacy_backup_crontab)
+twice=$(printf '%s' "$once" | homehub_filter_legacy_backup_crontab)
+[[ "$once" == "$twice" ]]
+[[ "$once" == $'15 2 * * * /usr/local/bin/other-backup\\n30 5 * * * /usr/local/bin/other-maintenance' ]]
+'''
+
+    result = subprocess.run([_bash(), '-c', script], capture_output=True, text=True)
+
+    assert result.returncode == 0, result.stderr

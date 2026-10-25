@@ -7,10 +7,9 @@ UNINSTALL = (ROOT / 'deploy' / 'uninstall.sh').read_text(encoding='utf-8')
 
 
 def test_reinstall_repairs_service_read_and_traverse_permissions():
-    assert 'sudo chmod -R a+rX -- "$INSTALL_ROOT/homehub"' in INSTALL
-    assert 'sudo chmod -R a+rX -- "$INSTALL_ROOT/.venv"' in INSTALL
+    assert 'homehub_replace_runtime_tree "$REPO_ROOT/homehub" "$INSTALL_ROOT/homehub" sudo' in INSTALL
+    assert 'homehub_make_venv_service_accessible "$INSTALL_ROOT/.venv" sudo' in INSTALL
     assert 'if [[ ! -x $INSTALL_ROOT/.venv/bin/python ]]' in INSTALL
-    assert 'sudo rm -rf -- "$INSTALL_ROOT/homehub"' in INSTALL
     assert 'sudo rm -rf -- "$INSTALL_ROOT"' not in INSTALL
 
 
@@ -21,5 +20,21 @@ def test_uninstall_backs_up_before_stopping_and_removing_scheduled_work():
 
     assert backup < stop < remove_units
     assert 'sudo rm -rf -- "$DATA_ROOT"' not in UNINSTALL
-    assert 'sudo rm -rf -- "$INSTALL_ROOT"' in UNINSTALL
+    assert 'homehub_remove_installed_files "$INSTALL_ROOT" "$ENV_FILE" "$CONFIG_ROOT" sudo' in UNINSTALL
     assert 'homehub-backup' in UNINSTALL and 'backup_scheduler' in UNINSTALL
+
+
+def test_install_verifies_existing_database_backup_before_service_activation():
+    backup = INSTALL.index('homehub-backup" --force')
+    activate_services = INSTALL.index('sudo systemctl enable --now homehub.service')
+
+    assert 'if [[ -f $database_path ]]' in INSTALL
+    assert backup < activate_services
+    assert 'set -Eeuo pipefail' in INSTALL
+
+
+def test_installer_keeps_backup_schedule_in_one_systemd_timer():
+    assert 'homehub_filter_legacy_backup_crontab' in INSTALL
+    assert 'sudo rm -f -- /etc/cron.d/homehub-backup' in INSTALL
+    assert 'homehub-backup.timer.example' in INSTALL
+    assert 'sudo systemctl enable --now homehub.service homehub-backup.timer' in INSTALL

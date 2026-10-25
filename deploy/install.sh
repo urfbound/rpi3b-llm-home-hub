@@ -148,8 +148,7 @@ sudo install -o root -g root -m 0644 "$SCRIPT_DIR/homehub-rss-refresh.timer.exam
 # Remove legacy Home Hub cron entries so only the systemd timer schedules backups.
 for cron_user in root "$SERVICE_USER"; do
   if old_crontab="$(sudo crontab -u "$cron_user" -l 2>/dev/null)"; then
-    new_crontab="$(printf '%s\n' "$old_crontab" | awk '
-      index($0, "homehub-backup") == 0 && index($0, "backup_scheduler") == 0')"
+    new_crontab="$(printf '%s\n' "$old_crontab" | homehub_filter_legacy_backup_crontab)"
     if [[ $new_crontab != "$old_crontab" ]]; then
       printf '%s\n' "$new_crontab" | sudo crontab -u "$cron_user" -
     fi
