@@ -2981,7 +2981,186 @@ def create_app(test_config=None):
         body = target['title'] + '\n\n' + '\n'.join(
             ('[x] ' if item['done'] else '[ ] ') + item['text'] for item in items
         ) + '\n'
-        return Response(body,mimetype='text/plain',headers={'Content-Disposition':'attachment; filename="shopping.txt"'})
+        return Response(body, mimetype='text/plain', headers={
+            'Content-Disposition': 'attachment; filename="shopping.txt"',
+            'Cache-Control': 'no-store',
+        })
+
+    @app.get('/lists/<int:list_id>/text')
+    @login_required
+    def list_text(list_id):
+        db = get_db()
+        target = visible_list(db, g.user, list_id)
+        items = db.execute('SELECT text,done FROM shopping_items WHERE list_id=? ORDER BY id',
+                           (target['id'],)).fetchall()
+        body = target['title'] + '\n\n' + '\n'.join(
+            ('[x] ' if item['done'] else '[ ] ') + item['text'] for item in items
+        ) + '\n'
+        return Response(body, mimetype='text/plain', headers={'Cache-Control': 'no-store'})
+
+    @app.post('/lists/<int:list_id>/paste')
+    @login_required
+    def paste_list(list_id):
+        raw_text = request.form.get('text', '')
+        if not raw_text.strip() or len(raw_text) > 65536:
+            abort(400)
+        db = get_db()
+        target = visible_list(db, g.user, list_id)
+        preview, issues, rows = prepare_paste_review(db, target, raw_text)
+        signature = paste_review_signature(list_id, g.user['id'], raw_text, rows)
+        return render_paste_review(target, raw_text, preview, issues, signature)
+
+    def normalize_list_item(value):
+        return ' '.join(value.casefold().split())
+
+    def prepare_paste_review(db, target, raw_text):
+        lines = raw_text.splitlines()
+        first_content = next((i for i, line in enumerate(lines) if line.strip()), None)
+        header_index = None
+        if first_content is not None and first_content + 1 < len(lines):
+            first_line = lines[first_content].strip()
+            if (not re.fullmatch(r'\[([^\]]*)\]\s+(.+)', first_line)
+                    and not lines[first_content + 1].strip()):
+                header_index = first_content
+        imported = {}
+        issues = []
+        for line_number, raw_line in enumerate(lines, start=1):
+            if line_number - 1 == header_index:
+                continue
+            line = raw_line.strip()
+            if not line:
+                continue
+            match = re.fullmatch(r'\[([^\]]*)\]\s+(.+)', line)
+            if not match:
+                issues.append((line_number, raw_line, 'Use [ ] or [x] followed by an item.'))
+                continue
+            marker, item_text = match.groups()
+            item_text = item_text.strip()
+            if not item_text or len(item_text) > 240:
+                issues.append((line_number, raw_line, 'Item text must be between 1 and 240 characters.'))
+                continue
+            key = normalize_list_item(item_text)
+            if key in imported:
+                imported[key]['checked'] = imported[key]['checked'] or bool(marker.strip())
+            else:
+                imported[key] = {'text': item_text, 'checked': bool(marker.strip())}
+
+        rows = db.execute(
+            'SELECT id,text,done,created_by,due_date,assignee_id,updated_at '
+            'FROM shopping_items WHERE list_id=? ORDER BY id', (target['id'],)
+        ).fetchall()
+        by_text = {}
+        for row in rows:
+            by_text.setdefault(normalize_list_item(row['text']), []).append(row)
+        preview = []
+        for key, item in imported.items():
+            matches = by_text.get(key, [])
+            if len(matches) > 1:
+                issues.append((0, item['text'], 'Ambiguous match: multiple existing items have this text.'))
+                action = 'Needs attention: ambiguous match'
+            elif matches:
+                current = matches[0]
+                action = ('Mark complete' if item['checked'] and not current['done']
+                          else 'Already complete' if current['done']
+                          else 'Keep current state')
+            else:
+                action = 'Add as complete' if item['checked'] else 'Add as open'
+            preview.append({'text': item['text'], 'action': action})
+        return preview, issues, rows
+
+    def paste_review_signature(list_id, user_id, raw_text, rows):
+        snapshot = hashlib.sha256(repr([
+            tuple(row[key] for key in ('id', 'text', 'done', 'created_by',
+                                       'due_date', 'assignee_id', 'updated_at'))
+            for row in rows
+        ]).encode('utf-8')).hexdigest()
+        text_hash = hashlib.sha256(raw_text.encode('utf-8')).hexdigest()
+        payload = f'{list_id}:{user_id}:{snapshot}:{text_hash}'
+        secret = app.config['SECRET_KEY']
+        if isinstance(secret, str):
+            secret = secret.encode('utf-8')
+        return hmac.new(secret, payload.encode('utf-8'), hashlib.sha256).hexdigest()
+
+    def render_paste_review(target, raw_text, preview, issues, signature,
+                            stale=False, status=200):
+        response = make_response(render_template(
+            'paste_review.html', target=target, raw_text=raw_text,
+            preview=preview, issues=issues, signature=signature, stale=stale
+        ), status)
+        response.headers['Cache-Control'] = 'no-store'
+        return response
+
+    @app.post('/lists/<int:list_id>/paste/apply')
+    @login_required
+    def apply_pasted_list(list_id):
+        raw_text = request.form.get('text', '')
+        if not raw_text.strip() or len(raw_text) > 65536:
+            abort(400)
+        db = get_db()
+        target = visible_list(db, g.user, list_id)
+        preview, issues, rows = prepare_paste_review(db, target, raw_text)
+        if issues:
+            abort(400)
+        submitted_signature = request.form.get('review_token', '')
+        stale = False
+        with db:
+            db.execute('BEGIN IMMEDIATE')
+            target = visible_list(db, g.user, list_id)
+            preview, issues, rows = prepare_paste_review(db, target, raw_text)
+            current_signature = paste_review_signature(
+                list_id, g.user['id'], raw_text, rows)
+            if issues:
+                abort(400)
+            if not hmac.compare_digest(submitted_signature, current_signature):
+                stale = True
+            else:
+                imported = {}
+                lines = raw_text.splitlines()
+                first_content = next((i for i, line in enumerate(lines) if line.strip()), None)
+                header_index = None
+                if first_content is not None and first_content + 1 < len(lines):
+                    first_line = lines[first_content].strip()
+                    if (not re.fullmatch(r'\[([^\]]*)\]\s+(.+)', first_line)
+                            and not lines[first_content + 1].strip()):
+                        header_index = first_content
+                for line_index, line in enumerate(lines):
+                    if line_index == header_index:
+                        continue
+                    match = re.fullmatch(r'\[([^\]]*)\]\s+(.+)', line.strip())
+                    if not match:
+                        continue
+                    marker, item_text = match.groups()
+                    item_text = item_text.strip()
+                    key = normalize_list_item(item_text)
+                    imported.setdefault(key, {'text': item_text, 'checked': False})
+                    imported[key]['checked'] |= bool(marker.strip())
+                by_text = {}
+                for row in rows:
+                    by_text.setdefault(normalize_list_item(row['text']), []).append(row)
+                for key, item in imported.items():
+                    matches = by_text.get(key, [])
+                    if len(matches) > 1:
+                        abort(400)
+                    if matches:
+                        if item['checked'] and not matches[0]['done']:
+                            db.execute('UPDATE shopping_items SET done=1,updated_at=CURRENT_TIMESTAMP '
+                                       'WHERE id=?', (matches[0]['id'],))
+                    else:
+                        cursor = db.execute(
+                            'INSERT INTO shopping_items(text,done,created_by,list_id,updated_at) '
+                            'VALUES(?,?,?,?,CURRENT_TIMESTAMP)',
+                            (item['text'], int(item['checked']), g.user['id'], target['id'])
+                        )
+                        by_text[key] = [{'id': cursor.lastrowid, 'text': item['text'],
+                                         'done': int(item['checked'])}]
+        if stale:
+            target = visible_list(db, g.user, list_id)
+            preview, issues, rows = prepare_paste_review(db, target, raw_text)
+            signature = paste_review_signature(list_id, g.user['id'], raw_text, rows)
+            return render_paste_review(target, raw_text, preview, issues,
+                                       signature, stale=True, status=409)
+        return redirect(url_for('index', kind=target['kind'], list_id=target['id']) +
+                        ('#shopping' if target['kind'] == 'shopping' else '#todo'))
 
     @app.get('/shopping/sync')
     @login_required

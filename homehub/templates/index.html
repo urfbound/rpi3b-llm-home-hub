@@ -246,7 +246,34 @@
         {% endif %}</li>
         {% else %}<li>{{ 'Nothing to buy.' if list_kind == 'shopping' else 'No tasks yet.' }}</li>{% endfor %}
       </ul>
-      {% if list_kind == 'shopping' %}<a href="{{ url_for('shopping_text', list_id=selected_list['id']) }}">Download list</a>{% endif %}
+      <div class="list-transfer">
+        <button type="button" class="button" data-copy-url="{{ url_for('list_text', list_id=selected_list['id']) }}">Copy list</button>
+        {% if current_user['account_kind'] != 'house' %}
+        <button type="button" class="button" onclick="document.getElementById('paste-list-dialog').showModal()">Paste list</button>
+        <dialog id="paste-list-dialog">
+          <form method="post" action="{{ url_for('paste_list', list_id=selected_list['id']) }}" class="dialog-form">
+            <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+            <p class="eyebrow">Merge plain text</p>
+            <h2>Paste list</h2>
+            <p>Checked lines mark matching items complete. New items will be added to this list under your name.</p>
+            <label for="paste-list-text">List text</label>
+            <textarea id="paste-list-text" name="text" rows="8" maxlength="65536" required></textarea>
+            <div class="dialog-actions"><button type="button" onclick="this.closest('dialog').close()">Cancel</button><button class="primary">Merge list</button></div>
+          </form>
+        </dialog>
+        {% endif %}
+        <a href="{{ url_for('shopping_text', list_id=selected_list['id']) if list_kind == 'shopping' else url_for('list_text', list_id=selected_list['id']) }}">Download text</a>
+        <span class="muted" id="copy-list-status" role="status" aria-live="polite"></span>
+      </div>
+      <dialog id="copy-fallback-dialog">
+        <div class="dialog-form">
+          <p class="eyebrow">Clipboard access unavailable</p>
+          <h2>Copy list text</h2>
+          <p>The text is selected below. Copy it, then paste it wherever you need it.</p>
+          <textarea id="copy-fallback-text" rows="8" readonly></textarea>
+          <div class="dialog-actions"><button type="button" onclick="this.closest('dialog').close()">Done</button></div>
+        </div>
+      </dialog>
     {% elif list_kind == 'chores' %}
       <nav class="chore-days" aria-label="Day of the week">
         {% for day in weekdays %}
@@ -353,6 +380,35 @@
   </section>
 </div>
 <script>
+document.querySelectorAll('[data-copy-url]').forEach((button) => {
+  button.addEventListener('click', async () => {
+    const status = document.getElementById('copy-list-status');
+    try {
+      const response = await fetch(button.dataset.copyUrl, {credentials: 'same-origin'});
+      if (!response.ok) throw new Error('Could not read list');
+      const text = await response.text();
+      let copied = false;
+      if (navigator.clipboard && window.isSecureContext) {
+        try {
+          await navigator.clipboard.writeText(text);
+          copied = true;
+        } catch (_) {}
+      }
+      if (copied) {
+        status.textContent = 'List copied.';
+      } else {
+        const fallback = document.getElementById('copy-fallback-text');
+        fallback.value = text;
+        document.getElementById('copy-fallback-dialog').showModal();
+        fallback.focus();
+        fallback.select();
+        status.textContent = 'Select and copy the list text.';
+      }
+    } catch (_) {
+      status.textContent = 'Could not copy list. Try downloading the text.';
+    }
+  });
+});
 const ingredientRows = document.getElementById('recipe-ingredients');
 document.getElementById('add-recipe-ingredient')?.addEventListener('click', () => {
   if (ingredientRows.children.length >= 64) return;
