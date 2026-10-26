@@ -445,3 +445,24 @@ def test_v15_upgrade_adds_chat_storage_without_losing_household_data(tmp_path):
         assert db.execute('SELECT title FROM events').fetchone() == ('Dinner',)
         assert db.execute("SELECT name FROM sqlite_master WHERE type='table' "
                           "AND name='chat_conversations'").fetchone() is None
+
+
+def test_v20_upgrade_adds_contacts_and_sticky_notes_without_losing_users(tmp_path):
+    path = tmp_path / 'v20.sqlite3'
+    create_app(config(path))
+    with sqlite3.connect(path) as db:
+        db.execute("INSERT INTO users(username,password_hash,role) VALUES('owner','hash','user')")
+        db.execute('PRAGMA user_version=20')
+
+    create_app(config(path))
+
+    with sqlite3.connect(path) as db:
+        assert db.execute('PRAGMA user_version').fetchone()[0] == LATEST_SCHEMA_VERSION
+        assert db.execute('SELECT username FROM users').fetchone() == ('owner',)
+        assert {'owner_user_id', 'name', 'home_address', 'visibility'} <= {
+            row[1] for row in db.execute('PRAGMA table_info(contacts)')}
+        assert {'author_user_id', 'text', 'color', 'everyone', 'expires_at'} <= {
+            row[1] for row in db.execute('PRAGMA table_info(sticky_notes)')}
+        assert {'note_id', 'user_id'} <= {
+            row[1] for row in db.execute('PRAGMA table_info(sticky_note_recipients)')}
+        assert db.execute('PRAGMA foreign_key_check').fetchall() == []

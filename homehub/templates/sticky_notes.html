@@ -1,0 +1,32 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="intro">
+  <h1>Sticky notes</h1>
+  <p>Leave a note for someone at home.</p>
+</section>
+<section class="panel sticky-compose">
+  <h2>Write a note</h2>
+  <p class="muted">{{ active_count }} / {{ note_limit }} of your active notes</p>
+  <form method="post" action="{{ url_for('create_sticky_note') }}">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <label>Note <textarea name="text" maxlength="128" required rows="3"></textarea></label>
+    <div class="sticky-form-row">
+      <label>Color <select name="color">{% for color in colors %}<option value="{{ color }}">{{ color|capitalize }}</option>{% endfor %}</select></label>
+      <label>Expire after (days, optional) <input type="number" name="expires_in_days" min="1" max="{{ expiry_maximum }}" placeholder="Never"></label>
+    </div>
+    <label class="checkbox-line"><input type="checkbox" name="everyone" value="1"> Everyone's wall</label>
+    <label>Or choose people <select name="recipient_ids" multiple size="4">{% for user in users %}<option value="{{ user['id'] }}">{{ user['display_name'] or user['username'] }}</option>{% endfor %}</select></label>
+    <button class="primary" {% if active_count >= note_limit %}disabled{% endif %}>Post sticky note</button>
+  </form>
+</section>
+<section class="sticky-grid" aria-label="Sticky notes on your wall">
+  {% for note in notes %}
+  <article class="sticky-card sticky-{{ note['color'] }}">
+    <p>{{ note['text'] }}</p>
+    <footer><span>From {{ note['author_name'] or 'Household member' }} · <time datetime="{{ note['created_at'] }}">{{ note['created_at'][:10] }}</time> · {{ note['recipient_scope'] }}{% if note['expires_at'] %} · Expires {{ note['expires_at'][:10] }}{% endif %}</span>
+      {% if note['author_user_id'] == current_user['id'] %}<form method="post" action="{{ url_for('delete_sticky_note', note_id=note['id']) }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><button aria-label="Delete sticky note">Delete</button></form>{% endif %}
+    </footer>
+  </article>
+  {% else %}<p class="muted">No sticky notes for you yet.</p>{% endfor %}
+</section>
+{% endblock %}

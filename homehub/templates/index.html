@@ -7,7 +7,7 @@
 <div class="grid">
   {% if page_mode == 'home' %}
   <section class="panel home-chores" id="home-chores">
-    <h2>Chores · {{ weekdays[home_weekday] }}</h2>
+    <h2>Chores Â· {{ weekdays[home_weekday] }}</h2>
     {% if current_user['account_kind'] == 'person' %}
     <form method="get" action="{{ url_for('index') }}" class="home-chore-filter">
       <input type="hidden" name="kind" value="shopping">
@@ -28,11 +28,11 @@
             {% if current_user['account_kind'] == 'person' and group['user']['id'] == current_user['id'] %}
             <form method="post" action="{{ url_for('toggle_chore', chore_id=chore['id'], return_to='home') }}">
               <input type="hidden" name="_csrf" value="{{ csrf_token }}">
-              <button aria-label="{{ 'Mark incomplete' if chore_done else 'Mark complete' }}">{{ '✓' if chore_done else '◯' }}</button>
+              <button aria-label="{{ 'Mark incomplete' if chore_done else 'Mark complete' }}">{{ 'âœ“' if chore_done else 'â—¯' }}</button>
               <span class="{{ 'done' if chore_done else '' }}">{{ chore['text'] }}</span>
             </form>
             {% else %}
-            <span class="{{ 'done' if chore_done else '' }}">{{ '✓' if chore_done else '◯' }} {{ chore['text'] }}</span>
+            <span class="{{ 'done' if chore_done else '' }}">{{ 'âœ“' if chore_done else 'â—¯' }} {{ chore['text'] }}</span>
             {% endif %}
           </li>
           {% endfor %}
@@ -61,7 +61,7 @@
         {% for event in day['events'] %}
         <li>
           <p class="home-weekend-title"><a href="{{ url_for('event_detail', event_id=event['id']) }}">{{ event['title'] }}</a>
-            {% if not event['all_day'] and event['display_start_time'] %}<time>{{ event['display_start_time'] }}{% if event['display_end_time'] %}<small>–{{ event['display_end_time'] }}</small>{% endif %}</time>{% endif %}
+            {% if not event['all_day'] and event['display_start_time'] %}<time>{{ event['display_start_time'] }}{% if event['display_end_time'] %}<small>â€“{{ event['display_end_time'] }}</small>{% endif %}</time>{% endif %}
           </p>
           {% if event['participants'] %}<p class="home-weekend-subline">Invited: {% for person in event['participants'] %}{{ person['display_name'] }}{% if not loop.last %}, {% endif %}{% endfor %}</p>{% endif %}
           {% if event['description'] %}<p class="home-weekend-subline">{{ event['description'] }}</p>{% endif %}
@@ -77,9 +77,9 @@
     <h2>Current weather</h2>
     {% if weather['configured'] and weather['view'] %}
       <p class="muted">{{ weather['location_name'] }}</p>
-      <div class="home-weather-now"><strong>{{ weather['view']['current']['temperature_2m'] }}{{ weather['view']['current_units'].get('temperature_2m', '°') }}</strong><span>{{ weather['view']['condition'] }}</span></div>
-      <p>Feels like {{ weather['view']['current']['apparent_temperature'] }}{{ weather['view']['current_units'].get('apparent_temperature', '°') }}</p>
-      {% if weather['stale'] %}<p class="muted">Out of date · last updated {{ weather['age_label'] }} ago</p>{% endif %}
+      <div class="home-weather-now"><strong>{{ weather['view']['current']['temperature_2m'] }}{{ weather['view']['current_units'].get('temperature_2m', 'Â°') }}</strong><span>{{ weather['view']['condition'] }}</span></div>
+      <p>Feels like {{ weather['view']['current']['apparent_temperature'] }}{{ weather['view']['current_units'].get('apparent_temperature', 'Â°') }}</p>
+      {% if weather['stale'] %}<p class="muted">Out of date Â· last updated {{ weather['age_label'] }} ago</p>{% endif %}
       <a href="{{ url_for('weather_page') }}">Weather details</a>
     {% elif weather['configured'] %}
       <p class="muted">Current weather is temporarily unavailable{% if weather['error'] %}: {{ weather['error'] }}{% endif %}.</p>
@@ -97,7 +97,7 @@
       <article class="system-metric"><span>Disk usage</span><strong>{% if system_status['disk_percent'] is not none %}{{ system_status['disk_percent'] }}%{% else %}Unavailable{% endif %}</strong><small>{{ system_status['disk_used_label'] }} of {{ system_status['disk_total_label'] }}</small></article>
       <article class="system-metric"><span>RAM used</span><strong>{% if system_status['ram_percent'] is not none %}{{ system_status['ram_percent'] }}%{% else %}Unavailable{% endif %}</strong><small>{{ system_status['ram_used_label'] }} of {{ system_status['ram_total_label'] }}</small></article>
       <article class="system-metric"><span>CPU usage</span><strong>{% if system_status['cpu_percent'] is not none %}{{ system_status['cpu_percent'] }}%{% else %}Warming up{% endif %}</strong><small>All cores, normalized to 100%</small></article>
-      <article class="system-metric"><span>System temperature</span><strong>{% if system_status['temperature_c'] is not none %}{{ system_status['temperature_c'] }}°C{% else %}Unavailable{% endif %}</strong><small>Server board sensor</small></article>
+      <article class="system-metric"><span>System temperature</span><strong>{% if system_status['temperature_c'] is not none %}{{ system_status['temperature_c'] }}Â°C{% else %}Unavailable{% endif %}</strong><small>Server board sensor</small></article>
       <article class="system-metric"><span>Application memory</span><strong>{{ system_status['app_rss_label'] }}</strong><small>Home Hub process RSS</small></article>
     </div>
     <section class="cpu-history-section"><h3>Recent CPU history</h3>
@@ -105,10 +105,52 @@
         {% for sample in system_status['history'] if sample['cpu_percent'] is not none %}<div class="cpu-bar {{ sample['css_class'] }}" style="height:{{ sample['height'] }}%" title="{{ sample['cpu_percent'] }}% CPU at {{ sample['sampled_at'] }}"></div>{% else %}<span class="muted">No recent CPU history yet.</span>{% endfor %}
       </div>
       <div class="cpu-history-labels"><small>1 hour ago</small><small>Now</small></div>
-      <div class="cpu-legend"><span class="normal">Under 60%</span><span class="warning">60–80%</span><span class="critical">Over 80%</span></div>
+      <div class="cpu-legend"><span class="normal">Under 60%</span><span class="warning">60â€“80%</span><span class="critical">Over 80%</span></div>
     </section>
   </section>
   {% endif %}
+
+  <section class="panel home-contacts" id="contacts">
+    <div class="card-heading"><div><h2>Contacts</h2><p class="muted">Your address book</p></div>
+      {% set own_contact_count = contacts|selectattr('owner_user_id', 'equalto', current_user['id'])|list|length %}
+      <span class="muted">{{ own_contact_count }} / {{ contact_limit }}</span>
+    </div>
+    <form method="post" action="{{ url_for('create_contact') }}" class="contact-form" id="contact-form">
+      <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+      <div class="contact-fields">
+        <label>Name <input name="name" maxlength="128" required></label>
+        <label>Phone <input name="phone" maxlength="256" type="tel"></label>
+        <label>Email <input name="email" maxlength="256" type="email"></label>
+        <label>Organization <input name="organization" maxlength="256"></label>
+        <label class="contact-address">Home address <input name="home_address" maxlength="256" autocomplete="street-address"></label>
+      </div>
+      <div class="contact-actions"><label>Visibility <select name="visibility"><option value="private">Private</option><option value="shared">Shared with everyone</option></select></label>
+        <button type="button" id="phone-contact-import" hidden>Choose from phone</button>
+        <button class="primary" {% if own_contact_count >= contact_limit %}disabled{% endif %}>Add contact</button>
+      </div>
+    </form>
+    <label class="contacts-search-label">Search contacts <input id="contacts-search" type="search" autocomplete="off"></label>
+    <ul class="contact-list">
+      {% for contact in contacts %}
+      <li data-own="{{ 'true' if contact['owner_user_id'] == current_user['id'] else 'false' }}" data-phone="{{ contact['phone'] }}" data-email="{{ contact['email'] }}"><div><strong>{{ contact['name'] }}</strong> <span class="muted">{{ 'Shared' if contact['visibility'] == 'shared' else 'Private' if contact['owner_user_id'] == current_user['id'] else '' }}</span>
+        {% if contact['owner_user_id'] != current_user['id'] %}<small class="muted">Added by {{ contact['owner_name'] }}</small>{% endif %}
+        {% if contact['phone'] %}<span>{{ contact['phone'] }}</span>{% endif %}{% if contact['email'] %}<span>{{ contact['email'] }}</span>{% endif %}
+        {% if contact['organization'] %}<span>{{ contact['organization'] }}</span>{% endif %}{% if contact['home_address'] %}<span>{{ contact['home_address'] }}</span>{% endif %}
+      </div>{% if contact['owner_user_id'] == current_user['id'] %}<details class="contact-edit"><summary>Edit</summary>
+        <form method="post" action="{{ url_for('update_contact', contact_id=contact['id']) }}" class="contact-fields">
+          <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+          <label>Name <input name="name" maxlength="128" required value="{{ contact['name'] }}"></label>
+          <label>Phone <input name="phone" maxlength="256" value="{{ contact['phone'] }}"></label>
+          <label>Email <input name="email" maxlength="256" type="email" value="{{ contact['email'] }}"></label>
+          <label>Organization <input name="organization" maxlength="256" value="{{ contact['organization'] }}"></label>
+          <label>Home address <input name="home_address" maxlength="256" value="{{ contact['home_address'] }}"></label>
+          <label>Visibility <select name="visibility"><option value="private" {% if contact['visibility']=='private' %}selected{% endif %}>Private</option><option value="shared" {% if contact['visibility']=='shared' %}selected{% endif %}>Shared with everyone</option></select></label>
+          <button class="primary">Save changes</button>
+        </form>
+      </details><form method="post" action="{{ url_for('delete_contact', contact_id=contact['id']) }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><button aria-label="Delete {{ contact['name'] }}">Delete</button></form>{% endif %}</li>
+      {% else %}<li class="muted">No contacts yet.</li>{% endfor %}
+    </ul>
+  </section>
 
   {% endif %}
 
@@ -125,7 +167,7 @@
           </select>
           <input type="hidden" name="year" value="{{ calendar_year }}">
         </form>
-        {% if calendar_has_next %}<a class="calendar-nav-button" aria-label="Next month" href="{{ calendar_next_url }}">→</a>{% else %}<span class="calendar-nav-button is-disabled" aria-label="No later month">→</span>{% endif %}
+        {% if calendar_has_next %}<a class="calendar-nav-button" aria-label="Next month" href="{{ calendar_next_url }}">â†’</a>{% else %}<span class="calendar-nav-button is-disabled" aria-label="No later month">â†’</span>{% endif %}
       </div>
       <form method="get" action="{{ calendar_page_url if page_mode == 'calendar' else url_for('index') }}" class="calendar-year-control">
         <label class="visually-hidden" for="calendar-year">Choose year</label>
@@ -232,11 +274,11 @@
         {% for item in items %}
         <li {% if list_kind == 'shopping' %}data-away-item data-away-id="{{ item['id'] }}" data-away-text="{{ item['text'] }}" data-away-done="{{ 'true' if item['done'] else 'false' }}" data-away-updated-at="{{ item['updated_at'] or '' }}"{% endif %}><form method="post" action="{{ url_for('toggle_item', item_id=item['id']) }}" {% if list_kind == 'shopping' %}data-away-toggle{% endif %}>
           <input type="hidden" name="_csrf" value="{{ csrf_token }}">
-          <button aria-label="{{ 'Mark incomplete' if item['done'] else 'Mark complete' }}">{{ '✓' if item['done'] else '○' }}</button>
+          <button aria-label="{{ 'Mark incomplete' if item['done'] else 'Mark complete' }}">{{ 'âœ“' if item['done'] else 'â—‹' }}</button>
           <span class="{{ 'done' if item['done'] else '' }}">{{ item['text'] }}</span>
         </form>
         {% if list_kind == 'todo' %}
-        {% if item['due_date'] or item['assignee_id'] %}<small class="todo-metadata">{% if item['due_date'] %}Due {{ item['due_date'] }}{% endif %}{% if item['assignee_id'] %}{% if item['due_date'] %} · {% endif %}Assigned to {{ item['assignee_name'] or item['assignee_username'] }}{% endif %}</small>{% endif %}
+        {% if item['due_date'] or item['assignee_id'] %}<small class="todo-metadata">{% if item['due_date'] %}Due {{ item['due_date'] }}{% endif %}{% if item['assignee_id'] %}{% if item['due_date'] %} Â· {% endif %}Assigned to {{ item['assignee_name'] or item['assignee_username'] }}{% endif %}</small>{% endif %}
         <button type="button" onclick="document.getElementById('edit-todo-{{ item['id'] }}').showModal()">Edit task</button>
         <dialog id="edit-todo-{{ item['id'] }}"><form method="post" action="{{ url_for('edit_todo_item', item_id=item['id']) }}" class="dialog-form">
           <input type="hidden" name="_csrf" value="{{ csrf_token }}"><p class="eyebrow">Edit To-do</p><h2>Update task</h2>
@@ -250,7 +292,7 @@
         <button type="button" class="danger" onclick="document.getElementById('delete-item-{{ item['id'] }}').showModal()">Delete</button>
         <dialog id="delete-item-{{ item['id'] }}"><form method="post" action="{{ url_for('delete_list_item', item_id=item['id']) }}" class="dialog-form">
           <input type="hidden" name="_csrf" value="{{ csrf_token }}"><p class="eyebrow">Remove item</p><h2>Delete this item?</h2>
-          <p>Remove “{{ item['text'] }}” from {{ selected_list['title'] }}?</p>
+          <p>Remove â€œ{{ item['text'] }}â€ from {{ selected_list['title'] }}?</p>
           <div class="dialog-actions"><button type="button" onclick="this.closest('dialog').close()">Cancel</button><button class="danger">Delete item</button></div>
         </form></dialog>
         {% endif %}</li>
@@ -329,11 +371,11 @@
             {% if current_user['account_kind'] != 'house' and group['user']['id'] == current_user['id'] and (chore['assigned_everyone'] or chore['assignee_id'] == current_user['id']) %}
             <form method="post" action="{{ url_for('toggle_chore', chore_id=chore['id']) }}">
               <input type="hidden" name="_csrf" value="{{ csrf_token }}">
-              <button aria-label="{{ 'Mark incomplete' if chore_done else 'Mark complete' }}">{{ '✓' if chore_done else '◯' }}</button>
+              <button aria-label="{{ 'Mark incomplete' if chore_done else 'Mark complete' }}">{{ 'âœ“' if chore_done else 'â—¯' }}</button>
               <span class="{{ 'done' if chore_done else '' }}">{{ chore['text'] }}</span>
             </form>
             {% else %}
-            <span class="{{ 'done' if chore_done else '' }}">{{ '✓' if chore_done else '◯' }} {{ chore['text'] }}</span>
+            <span class="{{ 'done' if chore_done else '' }}">{{ 'âœ“' if chore_done else 'â—¯' }} {{ chore['text'] }}</span>
             {% endif %}
             {% if (chore['created_by'] == current_user['id'] or current_user['role'] == 'admin') and (not chore['assigned_everyone'] or group_index == 0) %}
             <button type="button" class="danger" onclick="document.getElementById('delete-chore-{{ chore['id'] }}').showModal()">Delete</button>
@@ -458,5 +500,49 @@ document.getElementById('add-recipe-step')?.addEventListener('click', () => {
   recipeSteps.append(row);
   syncRecipeRemoveButtons(recipeSteps, 'step');
 });
+</script>
+<script>
+(() => {
+  const search = document.getElementById('contacts-search');
+  search?.addEventListener('input', () => {
+    const query = search.value.trim().toLocaleLowerCase();
+    document.querySelectorAll('.contact-list > li').forEach(row => {
+      row.hidden = !row.textContent.toLocaleLowerCase().includes(query);
+    });
+  });
+  document.getElementById('contact-form')?.addEventListener('submit', event => {
+    const form = event.currentTarget;
+    const phone = value => (value || '').replace(/\D/g, '');
+    const email = value => (value || '').trim().toLocaleLowerCase();
+    const candidatePhone = phone(form.elements.phone.value);
+    const candidateEmail = email(form.elements.email.value);
+    const duplicate = [...document.querySelectorAll('.contact-list > li[data-own="true"]')].some(row =>
+      (candidatePhone && phone(row.dataset.phone) === candidatePhone) ||
+      (candidateEmail && email(row.dataset.email) === candidateEmail));
+    if (duplicate && !window.confirm('A contact already uses this phone number or email. Save this duplicate anyway?')) event.preventDefault();
+  });
+  const button = document.getElementById('phone-contact-import');
+  if (!button || !('contacts' in navigator)) return;
+  navigator.contacts.getProperties().then(properties => {
+    const fields = ['name', 'tel', 'email', 'address'].filter(field => properties.includes(field));
+    if (!fields.includes('name')) return;
+    button.hidden = false;
+    button.addEventListener('click', async () => {
+      try {
+        const selected = await navigator.contacts.select(fields, {multiple: false});
+        const contact = selected[0];
+        if (!contact) return;
+        const form = document.getElementById('contact-form');
+        form.elements.name.value = (contact.name || [''])[0];
+        form.elements.phone.value = (contact.tel || [''])[0];
+        form.elements.email.value = (contact.email || [''])[0];
+        const address = (contact.address || [])[0];
+        if (address) form.elements.home_address.value = [address.addressLine, address.city, address.region, address.postalCode, address.country].filter(Boolean).join(', ');
+      } catch (error) {
+        // Cancellation leaves the manual form ready for entry.
+      }
+    });
+  }).catch(() => {});
+})();
 </script>
 {% endblock %}

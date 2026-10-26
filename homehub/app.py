@@ -50,6 +50,11 @@ SHOPPING_CATEGORIES = (
 )
 RECIPE_SERVING_MIN = limits.RECIPE_SERVING_MINIMUM
 RECIPE_SERVING_MAX = limits.RECIPE_SERVING_MAXIMUM
+FEATURE_TAB_DEFAULT_ORDER = ('weather', 'rss', 'games', 'chat', 'sticky_notes')
+FEATURE_TAB_LABELS = {
+    'weather': 'Weather', 'rss': 'RSS', 'games': 'Games',
+    'chat': 'Chat', 'sticky_notes': 'Sticky Notes',
+}
 VULGAR_FRACTIONS = {
     '¼': Fraction(1, 4), '½': Fraction(1, 2), '¾': Fraction(3, 4),
     '⅐': Fraction(1, 7), '⅑': Fraction(1, 9), '⅒': Fraction(1, 10),
@@ -265,6 +270,34 @@ CREATE TABLE IF NOT EXISTS users (
  password_hash TEXT NOT NULL, role TEXT NOT NULL CHECK(role IN ('user','admin')),
  active INTEGER NOT NULL DEFAULT 1, session_version INTEGER NOT NULL DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS contacts (
+ id INTEGER PRIMARY KEY,
+ owner_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ name TEXT NOT NULL CHECK(length(trim(name)) BETWEEN 1 AND {limits.CONTACT_NAME_MAXIMUM}),
+ phone TEXT NOT NULL DEFAULT '' CHECK(length(phone)<={limits.CONTACT_FIELD_MAXIMUM}),
+ email TEXT NOT NULL DEFAULT '' CHECK(length(email)<={limits.CONTACT_FIELD_MAXIMUM}),
+ organization TEXT NOT NULL DEFAULT '' CHECK(length(organization)<={limits.CONTACT_FIELD_MAXIMUM}),
+ home_address TEXT NOT NULL DEFAULT '' CHECK(length(home_address)<={limits.CONTACT_FIELD_MAXIMUM}),
+ visibility TEXT NOT NULL DEFAULT 'private' CHECK(visibility IN ('private','shared')),
+ created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS contacts_owner_name ON contacts(owner_user_id,name COLLATE NOCASE,id);
+CREATE TABLE IF NOT EXISTS sticky_notes (
+ id INTEGER PRIMARY KEY,
+ author_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ text TEXT NOT NULL CHECK(length(trim(text)) BETWEEN 1 AND {limits.STICKY_NOTE_TEXT_MAXIMUM}),
+ color TEXT NOT NULL CHECK(color IN ({','.join(repr(color) for color in limits.STICKY_NOTE_COLORS)})),
+ everyone INTEGER NOT NULL DEFAULT 0 CHECK(everyone IN (0,1)),
+ created_at TEXT NOT NULL,
+ expires_at TEXT
+);
+CREATE INDEX IF NOT EXISTS sticky_notes_author_active ON sticky_notes(author_user_id,expires_at);
+CREATE TABLE IF NOT EXISTS sticky_note_recipients (
+ note_id INTEGER NOT NULL REFERENCES sticky_notes(id) ON DELETE CASCADE,
+ user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ PRIMARY KEY(note_id,user_id)
+);
+CREATE INDEX IF NOT EXISTS sticky_note_recipients_user ON sticky_note_recipients(user_id,note_id);
 CREATE TABLE IF NOT EXISTS app_settings (
  key TEXT PRIMARY KEY, value TEXT NOT NULL
 );
@@ -505,6 +538,16 @@ def setting(db, key, default):
 def setting_text(db, key, default=''):
     row = db.execute('SELECT value FROM app_settings WHERE key=?', (key,)).fetchone()
     return row['value'] if row else default
+
+def feature_tab_order(db):
+    try:
+        stored = json.loads(setting_text(db, 'feature_tab_order', '[]'))
+    except (TypeError, ValueError):
+        stored = []
+    if (not isinstance(stored, list) or len(stored) != len(FEATURE_TAB_DEFAULT_ORDER)
+            or set(stored) != set(FEATURE_TAB_DEFAULT_ORDER)):
+        return list(FEATURE_TAB_DEFAULT_ORDER)
+    return stored
 
 def household_weather(db):
     name = setting_text(db, 'weather_location_name')
@@ -1371,8 +1414,37 @@ def create_app(test_config=None):
         chat_nav_enabled = bool(
             user and user['account_kind'] != 'house'
             and setting(get_db(), 'chat_enabled', limits.CHAT_ENABLED_DEFAULT))
+        feature_tabs = []
+        feature_order = list(FEATURE_TAB_DEFAULT_ORDER)
+        if user:
+            db = get_db()
+            feature_order = feature_tab_order(db)
+            endpoints = {
+                'weather': ('weather_page',),
+                'rss': ('rss_page', 'add_rss_feed', 'delete_rss_feed', 'move_rss_feed'),
+                'games': ('games.page',),
+                'chat': ('chat_page', 'create_chat_conversation', 'view_chat',
+                         'toggle_chat_pin', 'delete_own_chat'),
+                'sticky_notes': ('sticky_notes_page', 'create_sticky_note',
+                                 'delete_sticky_note'),
+            }
+            destinations = {
+                'weather': url_for('weather_page'), 'rss': url_for('rss_page'),
+                'games': url_for('games.page'), 'chat': url_for('chat_page'),
+                'sticky_notes': url_for('sticky_notes_page'),
+            }
+            feature_tabs = [
+                {'id': tab_id, 'label': FEATURE_TAB_LABELS[tab_id],
+                 'href': destinations[tab_id],
+                 'active': (request.blueprint == 'games' if tab_id == 'games'
+                            else request.endpoint in endpoints[tab_id]),
+                 'visible': tab_id != 'chat' or chat_nav_enabled}
+                for tab_id in feature_order
+            ]
         return dict(current_user=user, csrf_token=session['csrf_token'], limits=limits,
-                    chat_nav_enabled=chat_nav_enabled)
+                    chat_nav_enabled=chat_nav_enabled, feature_tabs=feature_tabs,
+                    feature_tab_order=feature_order,
+                    feature_tab_labels=FEATURE_TAB_LABELS)
 
     @app.teardown_appcontext
     def close_db(_err):
@@ -1383,6 +1455,171 @@ def create_app(test_config=None):
             with maintenance:
                 request_state['active'] -= 1
                 maintenance.notify_all()
+
+    @app.post('/contacts')
+    @login_required
+    def create_contact():
+        db = get_db()
+        name = request.form.get('name', '').strip()
+        fields = {key: request.form.get(key, '').strip() for key in
+                  ('phone', 'email', 'organization', 'home_address')}
+        visibility = request.form.get('visibility', 'private')
+        if (not name or len(name) > limits.CONTACT_NAME_MAXIMUM
+                or any(len(value) > limits.CONTACT_FIELD_MAXIMUM for value in fields.values())
+                or visibility not in ('private', 'shared')):
+            abort(HTTPStatus.BAD_REQUEST)
+        db.execute('BEGIN IMMEDIATE')
+        count = db.execute('SELECT count(*) FROM contacts WHERE owner_user_id=?',
+                           (g.user['id'],)).fetchone()[0]
+        if count >= limits.CONTACTS_PER_USER_MAXIMUM:
+            db.rollback()
+            abort(HTTPStatus.CONFLICT)
+        db.execute(
+            'INSERT INTO contacts(owner_user_id,name,phone,email,organization,home_address,visibility) '
+            'VALUES(?,?,?,?,?,?,?)',
+            (g.user['id'], name, fields['phone'], fields['email'], fields['organization'],
+             fields['home_address'], visibility),
+        )
+        db.commit()
+        flash('Contact saved.')
+        return redirect(url_for('index') + '#contacts')
+
+    @app.post('/contacts/<int:contact_id>')
+    @login_required
+    def update_contact(contact_id):
+        db = get_db()
+        contact = db.execute('SELECT owner_user_id FROM contacts WHERE id=?',
+                             (contact_id,)).fetchone()
+        if contact is None:
+            abort(HTTPStatus.NOT_FOUND)
+        if contact['owner_user_id'] != g.user['id']:
+            abort(HTTPStatus.FORBIDDEN)
+        name = request.form.get('name', '').strip()
+        fields = {key: request.form.get(key, '').strip() for key in
+                  ('phone', 'email', 'organization', 'home_address')}
+        visibility = request.form.get('visibility', 'private')
+        if (not name or len(name) > limits.CONTACT_NAME_MAXIMUM
+                or any(len(value) > limits.CONTACT_FIELD_MAXIMUM for value in fields.values())
+                or visibility not in ('private', 'shared')):
+            abort(HTTPStatus.BAD_REQUEST)
+        db.execute(
+            'UPDATE contacts SET name=?,phone=?,email=?,organization=?,home_address=?,visibility=? '
+            'WHERE id=? AND owner_user_id=?',
+            (name, fields['phone'], fields['email'], fields['organization'],
+             fields['home_address'], visibility, contact_id, g.user['id']),
+        )
+        db.commit()
+        return redirect(url_for('index') + '#contacts')
+
+    @app.post('/contacts/<int:contact_id>/delete')
+    @login_required
+    def delete_contact(contact_id):
+        db = get_db()
+        contact = db.execute('SELECT owner_user_id FROM contacts WHERE id=?',
+                             (contact_id,)).fetchone()
+        if contact is None:
+            abort(HTTPStatus.NOT_FOUND)
+        if contact['owner_user_id'] != g.user['id']:
+            abort(HTTPStatus.FORBIDDEN)
+        db.execute('DELETE FROM contacts WHERE id=?', (contact_id,))
+        db.commit()
+        return redirect(url_for('index') + '#contacts')
+
+    @app.get('/sticky-notes')
+    @login_required
+    def sticky_notes_page():
+        db = get_db()
+        now = datetime.now(timezone.utc).isoformat()
+        notes = db.execute(
+            "SELECT DISTINCT sticky_notes.*,users.display_name AS author_name, "
+            "CASE WHEN sticky_notes.everyone=1 THEN 'Everyone' ELSE 'Selected people' END AS recipient_scope "
+            'FROM sticky_notes JOIN users ON users.id=sticky_notes.author_user_id '
+            'LEFT JOIN sticky_note_recipients ON sticky_note_recipients.note_id=sticky_notes.id '
+            'WHERE (sticky_notes.expires_at IS NULL OR sticky_notes.expires_at>?) '
+            'AND (sticky_notes.author_user_id=? OR sticky_notes.everyone=1 '
+            'OR sticky_note_recipients.user_id=?) '
+            'ORDER BY sticky_notes.created_at DESC,sticky_notes.id DESC',
+            (now, g.user['id'], g.user['id']),
+        ).fetchall()
+        users = db.execute(
+            'SELECT id,display_name,username FROM users WHERE active=1 AND id<>? '
+            'ORDER BY display_name COLLATE NOCASE,id', (g.user['id'],)
+        ).fetchall()
+        active_count = db.execute(
+            'SELECT count(*) FROM sticky_notes WHERE author_user_id=? '
+            'AND (expires_at IS NULL OR expires_at>?)', (g.user['id'], now)
+        ).fetchone()[0]
+        return render_template('sticky_notes.html', notes=notes, users=users,
+                               colors=limits.STICKY_NOTE_COLORS,
+                               expiry_maximum=limits.STICKY_NOTE_EXPIRY_DAYS_MAXIMUM,
+                               active_count=active_count,
+                               note_limit=limits.STICKY_NOTES_PER_USER_MAXIMUM)
+
+    @app.post('/sticky-notes')
+    @login_required
+    def create_sticky_note():
+        db = get_db()
+        text = request.form.get('text', '').strip()
+        color = request.form.get('color', '')
+        everyone = request.form.get('everyone') == '1'
+        recipient_values = request.form.getlist('recipient_ids')
+        try:
+            recipient_ids = sorted({int(value) for value in recipient_values})
+        except ValueError:
+            abort(HTTPStatus.BAD_REQUEST)
+        expiry_value = request.form.get('expires_in_days', '').strip()
+        try:
+            expiry_days = int(expiry_value) if expiry_value else None
+        except ValueError:
+            abort(HTTPStatus.BAD_REQUEST)
+        if (not text or len(text) > limits.STICKY_NOTE_TEXT_MAXIMUM
+                or color not in limits.STICKY_NOTE_COLORS
+                or (expiry_days is not None and not 1 <= expiry_days <= limits.STICKY_NOTE_EXPIRY_DAYS_MAXIMUM)
+                or (not everyone and not recipient_ids)):
+            abort(HTTPStatus.BAD_REQUEST)
+        if recipient_ids:
+            placeholders = ','.join('?' for _ in recipient_ids)
+            valid_ids = {row[0] for row in db.execute(
+                f'SELECT id FROM users WHERE active=1 AND id IN ({placeholders})', recipient_ids
+            ).fetchall()}
+            if valid_ids != set(recipient_ids):
+                abort(HTTPStatus.BAD_REQUEST)
+        created_at = datetime.now(timezone.utc)
+        expires_at = (created_at + timedelta(days=expiry_days)).isoformat() if expiry_days else None
+        db.execute('BEGIN IMMEDIATE')
+        active_count = db.execute(
+            'SELECT count(*) FROM sticky_notes WHERE author_user_id=? '
+            'AND (expires_at IS NULL OR expires_at>?)',
+            (g.user['id'], created_at.isoformat()),
+        ).fetchone()[0]
+        if active_count >= limits.STICKY_NOTES_PER_USER_MAXIMUM:
+            db.rollback()
+            abort(HTTPStatus.CONFLICT)
+        cursor = db.execute(
+            'INSERT INTO sticky_notes(author_user_id,text,color,everyone,created_at,expires_at) '
+            'VALUES(?,?,?,?,?,?)',
+            (g.user['id'], text, color, int(everyone), created_at.isoformat(), expires_at),
+        )
+        db.executemany(
+            'INSERT INTO sticky_note_recipients(note_id,user_id) VALUES(?,?)',
+            [(cursor.lastrowid, user_id) for user_id in recipient_ids],
+        )
+        db.commit()
+        return redirect(url_for('sticky_notes_page'))
+
+    @app.post('/sticky-notes/<int:note_id>/delete')
+    @login_required
+    def delete_sticky_note(note_id):
+        db = get_db()
+        note = db.execute('SELECT author_user_id FROM sticky_notes WHERE id=?',
+                          (note_id,)).fetchone()
+        if note is None:
+            abort(HTTPStatus.NOT_FOUND)
+        if note['author_user_id'] != g.user['id']:
+            abort(HTTPStatus.FORBIDDEN)
+        db.execute('DELETE FROM sticky_notes WHERE id=?', (note_id,))
+        db.commit()
+        return redirect(url_for('sticky_notes_page'))
 
     @app.get('/calendar')
     @app.get('/lists')
@@ -1600,6 +1837,12 @@ def create_app(test_config=None):
             db, home_users, home_weekday,
             week_start_for(today).isoformat()
         )
+        contacts = db.execute(
+            'SELECT contacts.*,users.display_name AS owner_name FROM contacts '
+            'JOIN users ON users.id=contacts.owner_user_id '
+            "WHERE contacts.owner_user_id=? OR contacts.visibility='shared' "
+            'ORDER BY contacts.name COLLATE NOCASE,contacts.id', (g.user['id'],)
+        ).fetchall()
         return render_template('index.html', recipes=visible_recipes(db, g.user)[:6],
           events=month_events, calendar_weeks=calendar_weeks,
           calendar_month=calendar_month, calendar_year=calendar_year,
@@ -1627,7 +1870,8 @@ def create_app(test_config=None):
           system_status=system_status_for_dashboard(
               db, g.user, app, system_monitor
           ),
-          weekend_groups=weekend_groups, just_my_events=just_my_events)
+          weekend_groups=weekend_groups, just_my_events=just_my_events,
+          contacts=contacts, contact_limit=limits.CONTACTS_PER_USER_MAXIMUM)
 
     @app.get('/rss')
     @login_required
@@ -2070,6 +2314,32 @@ def create_app(test_config=None):
                                    limits.CHAT_PAIRS_PER_CHAT_DEFAULT),
                                chat_data_tools_enabled=setting(
                                    db, 'chat_data_tools_enabled', limits.CHAT_DATA_TOOLS_DEFAULT))
+
+    @app.post('/admin/tab-order')
+    @admin_required
+    def update_feature_tab_order():
+        order = request.form.getlist('feature_order')
+        if (len(order) != len(FEATURE_TAB_DEFAULT_ORDER)
+                or set(order) != set(FEATURE_TAB_DEFAULT_ORDER)):
+            abort(HTTPStatus.BAD_REQUEST)
+        try:
+            tab_id, direction = request.form.get('move', '').split(':', 1)
+            position = order.index(tab_id)
+        except (ValueError, AttributeError):
+            abort(HTTPStatus.BAD_REQUEST)
+        destination = position + (-1 if direction == 'up' else 1 if direction == 'down' else 0)
+        if direction not in ('up', 'down') or not 0 <= destination < len(order):
+            abort(HTTPStatus.BAD_REQUEST)
+        order[position], order[destination] = order[destination], order[position]
+        db = get_db()
+        db.execute(
+            'INSERT INTO app_settings(key,value) VALUES(?,?) '
+            'ON CONFLICT(key) DO UPDATE SET value=excluded.value',
+            ('feature_tab_order', json.dumps(order)),
+        )
+        db.commit()
+        flash('Feature tab order saved.')
+        return redirect(url_for('accounts') + '#tab-order-section')
 
     @app.post('/admin/chat/settings')
     @admin_required

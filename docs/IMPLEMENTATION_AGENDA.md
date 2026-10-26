@@ -239,6 +239,20 @@ to `main` only after the user approves the completed change.
   filtering. This slice is implemented on the current review branch. Weather
   and system status cards remain; keep the responsive two-column desktop
   layout and single-column narrow-phone layout.
+- **Contacts:** The Home card now supports up to 128 owner-managed contacts
+  with name, phone, email, organization, and home address. Private/shared
+  visibility is enforced server-side; shared contacts are read-only to others.
+  Owners can edit and delete contacts. The card has search, duplicate warnings,
+  scrollable results, and one-at-a-time phone import when supported. Browser
+  device verification and visual review on phone/light/dark remain.
+- **Sticky Notes:** The new page supports 32 active notes per author, 128
+  characters per note, eight colors, direct recipients or everyone, optional
+  1-to-365-day expiry, and author-only deletion. Expired notes stop displaying
+  and no longer use quota. Responsive bento cards show author/date and audience.
+  Sticky Notes is in the shared feature-tab order. Admins can move feature tabs;
+  Home remains first and Admin last. Automated privacy, limits, migration, and
+  navigation tests pass. Phone/browser review and visual light/dark review
+  remain.
 
 ### Chat
 

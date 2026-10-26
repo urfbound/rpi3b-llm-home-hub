@@ -119,4 +119,3 @@ def test_house_account_cannot_create_or_change_lists_items_or_chores(tmp_path):
         assert db.execute('SELECT COUNT(*) FROM shopping_items').fetchone()[0] == 3
         assert db.execute('SELECT COUNT(*) FROM chores').fetchone()[0] == 1
         assert db.execute('SELECT COUNT(*) FROM chore_completions').fetchone()[0] == 0
-
