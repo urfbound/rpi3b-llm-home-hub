@@ -77,6 +77,13 @@ def test_user_can_turn_done_reading_prompt_back_on_from_feed_management(app):
     assert b'Ask before deleting after Done reading' in page.data
     assert b'name="ask_before_done_delete" value="1" checked' in page.data
 
+def test_rss_links_open_popunder_and_submit_done_reading_when_closed(app):
+    client = signed_in(app)
+    page = client.get('/rss')
+    assert b'window.open(link.href' in page.data
+    assert b'window.setInterval' in page.data
+    assert b'doneForm.requestSubmit()' in page.data
+
 
 def test_deleting_a_favourite_requires_confirmation(app):
     client = signed_in(app)

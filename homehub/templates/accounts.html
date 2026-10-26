@@ -1,5 +1,6 @@
 {% extends 'base.html' %}
 {% block content %}
+<style>.account-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:1rem;align-items:start}.account-grid>.panel,.account-side,.account-side>.panel{min-width:0;max-width:100%}.account-side{display:grid;gap:1rem}</style>
 <div class="crumb">Admin / <strong>Accounts</strong></div>
 <div class="page-heading"><div><p class="eyebrow">Your household</p><h1>People at home</h1><p class="muted">Give each person their own space, and manage access to the shared home.</p></div><button class="primary" type="button" onclick="document.getElementById('create-dialog').showModal()">+ Add account</button></div>
 <nav class="admin-jumps" aria-label="Jump to admin section"><a href="#accounts-section">Accounts</a><a href="#tab-order-section">Navigation</a><a href="#access-section">Access</a><a href="#calendar-limits-section">Calendar limits</a><a href="#calendar-retention-section">Calendar retention</a><a href="#weather-settings-section">Weather</a><a href="#rss-settings-section">RSS</a><a href="#chat-settings-section">Chat</a><a href="#system-status-settings-section">System status</a><a href="#backup-restore-section">Backup and restore</a><a href="#house-wide-section">House-wide access</a></nav>

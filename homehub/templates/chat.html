@@ -38,7 +38,7 @@
     {% else %}<div class="chat-empty-conversation"><h2>Choose a chat or start a new one</h2><p class="muted">Your conversations are private to your account.</p></div>{% endif %}
   </section>
 </div>
-{% if conversation and conversation.owner_user_id == current_user['id'] and chat_enabled %}<script src="{{ url_for('static', filename='chat-ui.js') }}"></script><script>
+{% if conversation and conversation.owner_user_id == current_user['id'] and chat_enabled %}<style>.chat-working-ellipsis[hidden]{display:none}</style><script src="{{ url_for('static', filename='chat-ui.js') }}"></script><script>
 (() => {
   const form = document.getElementById('chat-prompt-form');
   const prompt = document.getElementById('chat-prompt');

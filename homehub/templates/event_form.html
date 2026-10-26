@@ -8,8 +8,7 @@
     <label>Event title<input name="title" maxlength="{{ limits.EVENT_TITLE_MAXIMUM }}" value="{{ event['title'] }}" required></label>
     <input type="hidden" name="recipe_title_auto" value="{{ event['recipe_title_auto'] or 0 }}">
     {% if recipes or event['recipe_id'] %}
-    <fieldset class="event-recipe-fields">
-      <legend>Recipe and meal prep</legend>
+    <details class="event-recipe-details"><summary>Recipe and meal prep</summary><fieldset class="event-recipe-fields">
       <label>Recipe<select name="recipe_id">
         <option value="">No linked recipe</option>
         {% if event['recipe_id'] and event['recipe_id'] not in recipes|map(attribute='id')|list %}<option value="{{ event['recipe_id'] }}" selected>Private recipe</option>{% endif %}
@@ -18,7 +17,7 @@
       <label>Servings<input type="number" name="recipe_servings" min="{{ limits.RECIPE_SERVING_MINIMUM }}" max="{{ limits.RECIPE_SERVING_MAXIMUM }}" value="{{ event['recipe_servings'] or '' }}"></label>
       <label class="event-all-day"><input type="checkbox" name="meal_prep" value="1" {% if event['meal_prep'] %}checked{% endif %}> Meal-prep event</label>
       <label>Meal<select name="meal_slot"><option value="">No meal selected</option>{% for slot in ('breakfast','lunch','dinner') %}<option value="{{ slot }}" {% if event['meal_slot']==slot %}selected{% endif %}>{{ slot|capitalize }}</option>{% endfor %}</select></label>
-    </fieldset>
+    </fieldset></details>
     {% endif %}
     <label>Date<input type="date" name="event_date" value="{{ event['event_date'] }}" required></label>
     <label>Visibility<select name="visibility">

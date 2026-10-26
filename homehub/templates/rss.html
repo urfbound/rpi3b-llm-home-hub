@@ -176,6 +176,20 @@ document.querySelector('[data-confirm-delete]').addEventListener('click', () => 
   const input = document.createElement('input'); input.type = 'hidden'; input.name = 'confirmed'; input.value = '1'; rssFavoriteForm.append(input);
   rssFavoriteForm.dataset.confirmed = '1'; favoriteDialog.close(); rssFavoriteForm.requestSubmit();
 });
+document.querySelectorAll('a[href*="/rss/articles/"][href$="/open"]').forEach(link => {
+  link.addEventListener('click', event => {
+    const popup = window.open(link.href, '_blank');
+    if (!popup) return;
+    event.preventDefault();
+    window.focus();
+    const timer = window.setInterval(() => {
+      if (!popup.closed) return;
+      window.clearInterval(timer);
+      const doneForm = link.closest('li')?.querySelector('.rss-done-form');
+      if (doneForm) doneForm.requestSubmit();
+    }, 500);
+  });
+});
 </script>
 {% endif %}
 {% endblock %}
