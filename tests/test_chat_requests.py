@@ -106,6 +106,7 @@ def test_chat_conversation_includes_busy_status_and_disable_controls(app):
     assert b'id="chat-send-button"' in page.data
     assert b'id="chat-request-status-text"' in page.data
     assert b'id="chat-request-ellipsis"' in page.data
+    assert b'.chat-working-ellipsis[hidden]{display:none}' in page.data
     assert b'chat-ui.js' in page.data
     assert b'HomeHubChatUI.setBusy' in page.data
     assert b'HomeHubChatUI.setWorkingStatus' in page.data

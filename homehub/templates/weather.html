@@ -41,6 +41,7 @@
   <section class="panel weather-moon">
     <p class="eyebrow">Moon phase</p>
     {% if view['moon_illumination'] is not none %}<div class="weather-moon-content"><svg class="weather-moon-image" viewBox="0 0 100 100" role="img" aria-label="{{ view['moon_phase_name'] }}, {{ view['moon_illumination'] }}% illuminated"><circle cx="50" cy="50" r="44" class="moon-shadow"></circle><path d="{{ view['moon_path'] }}" class="moon-light"></path></svg><div><strong>{{ view['moon_phase_name'] }}</strong><span>{{ view['moon_illumination'] }}% illuminated</span></div></div>{% else %}<p class="muted">Moon phase unavailable.</p>{% endif %}
+    {% if view['next_named_full_moon'] and view['next_named_full_moon']['date'].isoformat() == view['today']['date'] %}<p class="named-moon-today">{{ view['next_named_full_moon']['name'] }}</p>{% endif %}
     {% if view['next_named_full_moon'] %}<p class="next-named-full-moon">Next named full moon: <strong>{{ view['next_named_full_moon']['name'] }}</strong> · {{ view['next_named_full_moon']['date'].strftime('%B %d') }}</p>{% endif %}
   </section>
 </div>

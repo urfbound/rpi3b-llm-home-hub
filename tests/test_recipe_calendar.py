@@ -70,6 +70,14 @@ def event_form(client, **overrides):
     return data
 
 
+def test_recipe_and_meal_prep_fields_are_collapsed_by_default(app):
+    seed_recipe(app)
+    bob = sign_in(app, 'bob')
+    page = bob.get('/events/new')
+    assert b'<details class="event-recipe-details"><summary>Recipe and meal prep</summary>' in page.data
+    assert b'<details class="event-recipe-details" open' not in page.data
+
+
 def test_recipe_detail_add_to_calendar_link_preserves_selected_servings(app):
     recipe_id = seed_recipe(app)
     bob = sign_in(app, 'bob')

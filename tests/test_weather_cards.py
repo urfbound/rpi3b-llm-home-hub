@@ -1,4 +1,5 @@
 from http import HTTPStatus
+from copy import deepcopy
 import sqlite3
 
 import pytest
@@ -131,6 +132,19 @@ def test_weather_home_summary_and_detail_use_shared_forecast(app, monkeypatch):
                               'latitude': 44.6488, 'longitude': -63.5752,
                               'timezone': 'America/Halifax'}
     assert requests[0][1:] == (5, 'metric', True)
+
+
+def test_moon_name_appears_when_today_is_a_named_full_moon(app, monkeypatch):
+    configure_location(app)
+    forecast = deepcopy(FORECAST)
+    forecast['daily']['moon_phase'] = [0.5, 0.28]
+    monkeypatch.setattr(app_module, 'get_cached_forecast',
+                        lambda *_args: {'data': forecast, 'fetched_at': 'now',
+                                        'stale': False, 'age_seconds': 0, 'error': None})
+    bob = sign_in(app, 'bob', 'bob card password')
+    page = bob.get('/weather')
+    assert b'Full moon' in page.data
+    assert b'class="named-moon-today">Hunter&#39;s Moon' in page.data
 
 
 def test_weather_page_reports_unconfigured_location_without_fetching(app, monkeypatch):

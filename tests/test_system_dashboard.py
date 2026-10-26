@@ -81,6 +81,8 @@ def test_home_system_card_shows_disk_before_ram_cpu_temperature_and_app_rss(app,
     assert b'RAM used' in page.data
     assert b'CPU usage' in page.data
     assert b'System temperature' in page.data
+    assert b'44.8\xc2\xb0C' in page.data
+    assert b'\xc3\x82' not in page.data
     assert b'Application memory' in page.data
     assert page.data.index(b'Disk usage') < page.data.index(b'RAM used')
     assert b'class="cpu-bar normal"' in page.data

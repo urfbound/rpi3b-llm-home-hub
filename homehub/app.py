@@ -1575,8 +1575,10 @@ def create_app(test_config=None):
         if (not text or len(text) > limits.STICKY_NOTE_TEXT_MAXIMUM
                 or color not in limits.STICKY_NOTE_COLORS
                 or (expiry_days is not None and not 1 <= expiry_days <= limits.STICKY_NOTE_EXPIRY_DAYS_MAXIMUM)
-                or (not everyone and not recipient_ids)):
+                ):
             abort(HTTPStatus.BAD_REQUEST)
+        if not everyone and not recipient_ids:
+            recipient_ids = [g.user['id']]
         if recipient_ids:
             placeholders = ','.join('?' for _ in recipient_ids)
             valid_ids = {row[0] for row in db.execute(
@@ -1621,13 +1623,34 @@ def create_app(test_config=None):
         db.commit()
         return redirect(url_for('sticky_notes_page'))
 
+    @app.post('/sticky-notes/<int:note_id>/edit')
+    @login_required
+    def edit_sticky_note(note_id):
+        db = get_db()
+        note = db.execute('SELECT author_user_id FROM sticky_notes WHERE id=?',
+                          (note_id,)).fetchone()
+        if note is None:
+            abort(HTTPStatus.NOT_FOUND)
+        if note['author_user_id'] != g.user['id']:
+            abort(HTTPStatus.FORBIDDEN)
+        text = request.form.get('text', '').strip()
+        color = request.form.get('color', '')
+        if not text or len(text) > limits.STICKY_NOTE_TEXT_MAXIMUM or color not in limits.STICKY_NOTE_COLORS:
+            abort(HTTPStatus.BAD_REQUEST)
+        db.execute('UPDATE sticky_notes SET text=?,color=? WHERE id=?',
+                   (text, color, note_id))
+        db.commit()
+        return redirect(url_for('sticky_notes_page'))
+
     @app.get('/calendar')
     @app.get('/lists')
+    @app.get('/recipes')
     @app.get('/')
     @login_required
     def index():
         db = get_db()
-        page_mode = {'/lists': 'lists', '/calendar': 'calendar'}.get(request.path, 'home')
+        page_mode = {'/lists': 'lists', '/calendar': 'calendar',
+                     '/recipes': 'recipes'}.get(request.path, 'home')
         today = household_today()
         try:
             calendar_month = int(request.args.get('month', today.month))
@@ -3569,7 +3592,7 @@ def create_app(test_config=None):
             if visibility == 'private':
                 db.executemany('INSERT INTO recipe_access(recipe_id,user_id) VALUES(?,?)',
                                [(recipe_id, user_id) for user_id in allowed_ids])
-        return redirect(url_for('index')+'#recipes')
+        return redirect('/recipes#recipes')
 
     @app.get('/recipes/<int:recipe_id>')
     @login_required
@@ -3756,7 +3779,7 @@ def create_app(test_config=None):
             abort(HTTPStatus.FORBIDDEN)
         with db:
             db.execute('DELETE FROM recipes WHERE id=?', (recipe_id,))
-        return redirect(url_for('index') + '#recipes')
+        return redirect('/recipes#recipes')
 
     @app.get('/events/new')
     @login_required

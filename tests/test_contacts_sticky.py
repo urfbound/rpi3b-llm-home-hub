@@ -131,6 +131,51 @@ def test_sticky_notes_are_recipient_private_and_author_deletable(app):
         assert note['expires_at'] is not None
         assert datetime.fromisoformat(note['expires_at']).tzinfo == timezone.utc
 
+def test_sticky_note_without_recipients_defaults_to_author_only(app):
+    alex = sign_in(app, 'alex')
+    created = alex.post('/sticky-notes', data={
+        '_csrf': csrf(alex), 'text': 'Just for me', 'color': 'blue',
+    })
+    assert created.status_code == HTTPStatus.FOUND
+    assert b'Just for me' in alex.get('/sticky-notes').data
+    assert b'Just for me' not in sign_in(app, 'bob').get('/sticky-notes').data
+
+def test_sticky_note_sharing_rejects_inactive_or_unknown_recipients(app):
+    alex = sign_in(app, 'alex')
+    response = alex.post('/sticky-notes', data={
+        '_csrf': csrf(alex), 'text': 'Not authorized recipient', 'color': 'blue',
+        'recipient_ids': '999',
+    })
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+
+def test_sticky_notes_offer_owner_edit_copy_and_delete_confirmation(app):
+    alex = sign_in(app, 'alex')
+    alex.post('/sticky-notes', data={
+        '_csrf': csrf(alex), 'text': 'Editable note', 'color': 'blue',
+        'everyone': '1',
+    })
+    page = alex.get('/sticky-notes')
+    assert b'Edit sticky note' in page.data
+    assert b'Copy to clipboard' in page.data
+    assert b'confirm(' in page.data
+    assert b'.sticky-card footer{color:#30302b}' in page.data
+
+def test_only_sticky_note_owner_can_edit(app):
+    alex = sign_in(app, 'alex')
+    alex.post('/sticky-notes', data={
+        '_csrf': csrf(alex), 'text': 'Original', 'color': 'blue', 'everyone': '1',
+    })
+    bob = sign_in(app, 'bob')
+    denied = bob.post('/sticky-notes/1/edit', data={
+        '_csrf': csrf(bob), 'text': 'Changed', 'color': 'pink',
+    })
+    assert denied.status_code == HTTPStatus.FORBIDDEN
+    saved = alex.post('/sticky-notes/1/edit', data={
+        '_csrf': csrf(alex), 'text': 'Changed', 'color': 'pink',
+    })
+    assert saved.status_code == HTTPStatus.FOUND
+    assert b'Changed' in alex.get('/sticky-notes').data
+
 
 def test_sticky_note_validation_rejects_bad_length_color_and_expiry(app):
     alex = sign_in(app, 'alex')

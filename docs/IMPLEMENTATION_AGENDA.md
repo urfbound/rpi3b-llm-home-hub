@@ -259,7 +259,8 @@ to `main` only after the user approves the completed change.
   Sticky Notes is in the shared feature-tab order. Admins can move feature tabs;
   Home remains first and Admin last. Automated privacy, limits, migration, and
   navigation tests pass. Phone/browser review and visual light/dark review
-  remain.
+  remain. Add an optional sticky-note stacking layout after a later design
+  review.
 
 ### Chat
 
