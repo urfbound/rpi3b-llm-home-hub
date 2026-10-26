@@ -215,6 +215,32 @@ def test_lists_and_calendar_routes_show_their_own_sections(client):
     assert b'id="calendar"' in calendar_page.data
     assert b'id="shopping"' not in calendar_page.data
 
+def test_lists_opens_selected_list_on_lists_tab_and_hides_placeholder(client):
+    sign_in(client)
+    page = client.get('/lists')
+    assert b'href="/lists?kind=shopping' in page.data
+    assert b'Coming next' not in page.data
+    assert b'id="recipes"' not in page.data
+    assert b'href="/recipes"' in page.data
+    assert b'action="/lists" class="inline list-picker-form"' in page.data
+
+def test_recipes_have_a_dedicated_navigation_page(client):
+    sign_in(client)
+    page = client.get('/recipes')
+    assert page.status_code == HTTPStatus.OK
+    assert b'<h1>Recipes</h1>' in page.data
+    assert b'id="recipes"' in page.data
+    assert b'id="shopping"' not in page.data
+
+def test_home_uses_valid_utf8_symbols_for_dashboard_labels(client):
+    sign_in(client)
+    page = client.get('/')
+    assert b'Chores' in page.data
+    assert b'Chores \xc2\xb7' in page.data
+    assert b'\xc3\x82' not in page.data
+    assert b'Next month' in page.data
+    assert b'\xe2\x86\x92' in page.data
+
 def test_list_text_exports_the_selected_todo_list(client):
     sign_in(client)
     token = csrf_token(client)

@@ -23,6 +23,7 @@
     <nav class="site-nav" aria-label="Main navigation">
       <a href="{{ url_for('index') }}" {% if request.endpoint == 'index' %}aria-current="page"{% endif %}>Home</a>
       <a href="/lists" {% if request.path == '/lists' %}aria-current="page"{% endif %}>Lists</a>
+      <a href="/recipes" {% if request.path == '/recipes' %}aria-current="page"{% endif %}>Recipes</a>
       <a href="/calendar" {% if request.path == '/calendar' %}aria-current="page"{% endif %}>Calendar</a>
       {% for tab in feature_tabs if tab['visible'] %}
       <a href="{{ tab['href'] }}" {% if tab['active'] %}aria-current="page"{% endif %}>{{ tab['label'] }}</a>
