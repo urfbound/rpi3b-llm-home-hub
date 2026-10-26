@@ -48,6 +48,36 @@ def test_accounts_are_admin_only(app):
     assert post(client, '/admin/accounts', username='new', display_name='New').status_code == HTTPStatus.FORBIDDEN
 
 
+def test_admin_can_reorder_feature_tabs_without_moving_home_or_admin(app):
+    admin = app.test_client()
+    sign_in(admin)
+    response = admin.get('/admin/accounts')
+    assert b'Feature tab order' in response.data
+    assert b'href="/sticky-notes"' in admin.get('/').data
+
+    changed = post(admin, '/admin/tab-order',
+                   feature_order=['weather', 'rss', 'games', 'chat', 'sticky_notes'],
+                   move='games:up')
+    assert changed.status_code == HTTPStatus.FOUND
+    nav = admin.get('/').data.decode().split('<nav class="site-nav"', 1)[1].split('</nav>', 1)[0]
+    assert nav.index('href="/games"') < nav.index('href="/rss"')
+    assert nav.index('>Home</a>') < nav.index('href="/games"')
+    assert nav.index('href="/sticky-notes"') < nav.index('>Admin</a>')
+
+
+def test_feature_tab_order_rejects_invalid_order_and_non_admins(app):
+    admin = app.test_client()
+    sign_in(admin)
+    invalid = post(admin, '/admin/tab-order',
+                   feature_order=['weather', 'rss', 'games', 'chat', 'chat'],
+                   move='games:up')
+    assert invalid.status_code == HTTPStatus.BAD_REQUEST
+
+    member = app.test_client()
+    sign_in(member, 'sam', 'another long password')
+    assert post(member, '/admin/tab-order', feature_order=[], move='games:up').status_code == HTTPStatus.FORBIDDEN
+
+
 def test_create_and_force_password_change(app):
     admin = app.test_client()
     sign_in(admin)

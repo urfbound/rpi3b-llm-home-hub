@@ -2,7 +2,7 @@
 {% block content %}
 <div class="crumb">Admin / <strong>Accounts</strong></div>
 <div class="page-heading"><div><p class="eyebrow">Your household</p><h1>People at home</h1><p class="muted">Give each person their own space, and manage access to the shared home.</p></div><button class="primary" type="button" onclick="document.getElementById('create-dialog').showModal()">+ Add account</button></div>
-<nav class="admin-jumps" aria-label="Jump to admin section"><a href="#accounts-section">Accounts</a><a href="#access-section">Access</a><a href="#calendar-limits-section">Calendar limits</a><a href="#calendar-retention-section">Calendar retention</a><a href="#weather-settings-section">Weather</a><a href="#rss-settings-section">RSS</a><a href="#chat-settings-section">Chat</a><a href="#system-status-settings-section">System status</a><a href="#backup-restore-section">Backup and restore</a><a href="#house-wide-section">House-wide access</a></nav>
+<nav class="admin-jumps" aria-label="Jump to admin section"><a href="#accounts-section">Accounts</a><a href="#tab-order-section">Navigation</a><a href="#access-section">Access</a><a href="#calendar-limits-section">Calendar limits</a><a href="#calendar-retention-section">Calendar retention</a><a href="#weather-settings-section">Weather</a><a href="#rss-settings-section">RSS</a><a href="#chat-settings-section">Chat</a><a href="#system-status-settings-section">System status</a><a href="#backup-restore-section">Backup and restore</a><a href="#house-wide-section">House-wide access</a></nav>
 <section class="stats" aria-label="Account counts">
   <div class="stat"><strong>{{ counts.users }} <small>/ 32</small></strong><span>Accounts</span></div>
   <div class="stat"><strong>{{ counts.admins }} <small>/ 4</small></strong><span>Admins</span></div>
@@ -25,6 +25,24 @@
     <section class="panel" id="house-wide-section"><p class="eyebrow">Shared display</p><h2>House-wide access</h2><p>The house-wide login can see shared content and play games. Its scores stay off leaderboards.</p><p class="callout"><strong>Privacy note</strong><br>Admins can view all household content, including private chats.</p></section>
   </aside>
 </div>
+<section class="panel tab-order-settings" id="tab-order-section">
+  <p class="eyebrow">Navigation</p><h2>Feature tab order</h2>
+  <p class="muted">Home stays first and Admin stays last. Move feature tabs to set the same order for everyone.</p>
+  <ol class="tab-order-list">
+    <li class="tab-order-fixed"><span>Home</span><small>Always first</small></li>
+    {% for tab_id in feature_tab_order %}
+    <li data-order-tab="{{ tab_id }}"><span>{{ feature_tab_labels[tab_id] }}</span>
+      <form method="post" action="{{ url_for('update_feature_tab_order') }}">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        {% for order_id in feature_tab_order %}<input type="hidden" name="feature_order" value="{{ order_id }}">{% endfor %}
+        <button name="move" value="{{ tab_id }}:up" aria-label="Move {{ feature_tab_labels[tab_id] }} up" {% if loop.first %}disabled{% endif %}>Move up</button>
+        <button name="move" value="{{ tab_id }}:down" aria-label="Move {{ feature_tab_labels[tab_id] }} down" {% if loop.last %}disabled{% endif %}>Move down</button>
+      </form>
+    </li>
+    {% endfor %}
+    <li class="tab-order-fixed"><span>Admin</span><small>Always last</small></li>
+  </ol>
+</section>
 <section class="panel" id="calendar-limits-section"><p class="eyebrow">Event budgets</p><h2>Calendar limits</h2>
   <form method="post" action="{{ url_for('update_calendar_limits') }}" class="calendar-limits-form">
     <input type="hidden" name="_csrf" value="{{ csrf_token }}">

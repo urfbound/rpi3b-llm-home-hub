@@ -32,6 +32,12 @@ lists, recipes, or events; its upgrade creates a verified pre-v4 copy. Later
 releases must continue adding ordered migrations and upgrade tests for each
 supported prior release.
 
+Schema version 21 adds per-user contacts and sticky notes with recipient
+assignments. Contact ownership and note authorship cascade when an account is
+deleted; removing a recipient clears only that recipient's assignment. The
+migration preserves existing account and household data while adding the new
+tables and indexes.
+
 ## If an upgrade fails
 
 Leave the service stopped. The transactional migration should have left the
