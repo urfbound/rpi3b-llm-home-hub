@@ -1,4 +1,5 @@
 from http import HTTPStatus
+from datetime import datetime, timedelta
 import sqlite3
 
 import pytest
@@ -7,6 +8,14 @@ from homehub.constants import HOUSEHOLD_FEEDS_MAXIMUM
 import homehub.app as app_module
 from homehub.app import PH, create_app
 from homehub.rss import RSSFeedError
+from homehub import rss_scheduler as rss_scheduler_module
+from homehub.rss_scheduler import refresh_due_feeds
+
+
+FIRST_FETCH_BODY = b'''<rss><channel><title>Example</title><item>
+<title>First article</title><link>https://garden.example/story</link>
+<description>Welcome article</description><pubDate>2026-10-25</pubDate>
+</item></channel></rss>'''
 
 
 @pytest.fixture
@@ -22,6 +31,14 @@ def app(tmp_path):
              ('house', 'House', PH.hash('house password'), 'user', 'house')],
         )
     return app
+
+
+@pytest.fixture(autouse=True)
+def mock_first_feed_refresh(monkeypatch):
+    monkeypatch.setattr(
+        rss_scheduler_module, 'fetch_feed',
+        lambda url, **_kwargs: (FIRST_FETCH_BODY, url),
+    )
 
 
 def csrf(client):
@@ -76,10 +93,128 @@ def test_personal_feed_add_normalizes_url_and_rejects_household_duplicate(app, m
 
     added = post(client, '/rss/feeds', scope='personal', feed_url='https://garden.example/feed')
     assert added.status_code == HTTPStatus.FOUND
+    assert b'Feed added and refreshed' in client.get('/rss').data
+    assert b'First article' in client.get('/rss').data
     with sqlite3.connect(app.config['DATABASE']) as db:
         assert db.execute('SELECT normalized_url,scope,owner_user_id FROM rss_feeds '
                           'WHERE normalized_url LIKE ?', ('%garden.example%',)).fetchone() == (
                               'https://garden.example/feed', 'personal', user_ids['reader'])
+        refresh = db.execute(
+            'SELECT succeeded_at,articles_added,last_error FROM rss_feed_refresh'
+        ).fetchone()
+        assert refresh[0] is not None
+        assert refresh[1:] == (1, None)
+        assert db.execute('SELECT title FROM rss_feeds WHERE normalized_url=?',
+                          ('https://garden.example/feed',)).fetchone() == ('Example',)
+
+def test_rss_page_shows_feed_status_and_keeps_feed_url_visible(app, monkeypatch):
+    monkeypatch.setattr(app_module, 'validate_feed_url', lambda url, **_kwargs: url)
+    client = app.test_client()
+    sign_in(client, 'reader', 'reader password')
+    post(client, '/rss/feeds', scope='personal', feed_url='https://garden.example/feed')
+
+    page = client.get('/rss').data
+
+    assert b'Example' in page
+    assert b'https://garden.example/feed' in page
+    assert b'Last successful refresh' in page
+
+def test_rss_add_form_sits_above_manage_feeds_and_explains_lan_approval(app):
+    client = app.test_client()
+    sign_in(client, 'admin', 'admin password')
+
+    page = client.get('/rss').data
+
+    assert page.index(b'id="rss-add-heading"') > page.index(b'id="house-feeds-heading"')
+    assert page.index(b'id="rss-add-heading"') < page.index(b'id="rss-manage"')
+    assert b'This lets Home Hub fetch a feed hosted on a device inside your home network' in page
+
+def test_rss_page_explains_when_outbound_refresh_is_disabled(app):
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        db.execute("INSERT INTO app_settings(key,value) VALUES('rss_outbound_enabled','0')")
+    client = app.test_client()
+    sign_in(client, 'reader', 'reader password')
+
+    page = client.get('/rss').data
+
+    assert b'RSS refresh is paused because household outbound access is disabled' in page
+
+
+def test_feed_add_keeps_feed_and_notifies_user_when_first_refresh_fails(app, monkeypatch):
+    monkeypatch.setattr(app_module, 'validate_feed_url', lambda url, **_kwargs: url)
+    monkeypatch.setattr(
+        rss_scheduler_module, 'fetch_feed',
+        lambda *_args, **_kwargs: (_ for _ in ()).throw(
+            RSSFeedError('The feed could not be reached.')),
+    )
+    client = app.test_client()
+    sign_in(client, 'reader', 'reader password')
+
+    response = post(client, '/rss/feeds', scope='personal',
+                    feed_url='https://garden.example/feed')
+
+    assert response.status_code == HTTPStatus.FOUND
+    page = client.get('/rss').data
+    assert b'Feed was saved, but its first refresh failed' in page
+    assert b'It will retry after the configured refresh interval' in page
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        assert db.execute('SELECT COUNT(*) FROM rss_feeds').fetchone()[0] == 1
+        assert db.execute('SELECT succeeded_at,last_error FROM rss_feed_refresh').fetchone() == (
+            None, 'The feed could not be reached.')
+
+
+def test_scheduler_retries_failed_first_pull_after_configured_interval(app, monkeypatch):
+    monkeypatch.setattr(app_module, 'validate_feed_url', lambda url, **_kwargs: url)
+    fetches = []
+
+    def fail_once(url, **_kwargs):
+        fetches.append(url)
+        if len(fetches) == 1:
+            raise RSSFeedError('The feed could not be reached.')
+        return FIRST_FETCH_BODY, url
+
+    monkeypatch.setattr(rss_scheduler_module, 'fetch_feed', fail_once)
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        db.execute("INSERT INTO app_settings(key,value) VALUES('rss_refresh_minutes','10')")
+    client = app.test_client()
+    sign_in(client, 'reader', 'reader password')
+    post(client, '/rss/feeds', scope='personal', feed_url='https://garden.example/feed')
+
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        db.row_factory = sqlite3.Row
+        attempted_at = datetime.fromisoformat(db.execute(
+            'SELECT attempted_at FROM rss_feed_refresh'
+        ).fetchone()['attempted_at'])
+        early = refresh_due_feeds(
+            db, now=attempted_at + timedelta(minutes=9), fetcher=fail_once)
+        due = refresh_due_feeds(
+            db, now=attempted_at + timedelta(minutes=10), fetcher=fail_once)
+        article_count = db.execute('SELECT COUNT(*) FROM rss_articles').fetchone()[0]
+
+    assert early['checked'] == 0
+    assert due['refreshed'] == 1
+    assert fetches == ['https://garden.example/feed'] * 2
+    assert article_count == 1
+
+
+def test_feed_add_skips_immediate_refresh_when_outbound_access_is_disabled(app, monkeypatch):
+    monkeypatch.setattr(app_module, 'validate_feed_url', lambda url, **_kwargs: url)
+    fetches = []
+    monkeypatch.setattr(rss_scheduler_module, 'fetch_feed',
+                        lambda *args, **kwargs: fetches.append((args, kwargs)))
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        db.execute("INSERT INTO app_settings(key,value) VALUES('rss_outbound_enabled','0')")
+    client = app.test_client()
+    sign_in(client, 'reader', 'reader password')
+
+    post(client, '/rss/feeds', scope='personal', feed_url='https://garden.example/feed')
+    page = client.get('/rss').data
+
+    assert b'Feed added. First refresh skipped because outbound access is disabled' in page
+    assert fetches == []
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        assert db.execute('SELECT COUNT(*) FROM rss_feeds').fetchone()[0] == 1
+        assert db.execute('SELECT COUNT(*) FROM rss_feed_refresh').fetchone()[0] == 0
 
 
 def test_only_admin_can_add_or_delete_household_feeds(app, monkeypatch):
@@ -225,7 +360,6 @@ def test_feed_management_actions_are_collected_in_manage_feeds_panel(app, monkey
 
     assert b'Manage feeds' in page
     assert b'href="#rss-manage"' in page
-    assert page.index(b'Move personal.example up') > panel
-    assert page.index(b'Move house.example up') > panel
+    assert page.index(b'Move Example up') > panel
     assert page.index(b'Remove') > panel
     assert b'aria-label="Move personal.example up"' not in page[:panel]

@@ -1,1 +1,47 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Home Hub</title><link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"><script>document.documentElement.dataset.theme=localStorage.getItem('theme')||'light';function toggleTheme(){const t=document.documentElement.dataset.theme==='light'?'dark':'light';document.documentElement.dataset.theme=t;localStorage.setItem('theme',t)}</script>{% if current_user %}<meta name="homehub-user-id" content="{{ current_user['id'] }}"><meta name="homehub-csrf" content="{{ csrf_token }}">{% endif %}<script src="{{ url_for('static', filename='away-mode.js') }}" defer></script></head><body><header><a class="brand" href="/">⌂ Home Hub</a>{% if current_user %}<nav class="site-nav" aria-label="Main navigation"><a href="{{ url_for('index') }}" {% if request.endpoint == 'index' %}aria-current="page"{% endif %}>Home</a><a href="{{ url_for('weather_page') }}" {% if request.endpoint == 'weather_page' %}aria-current="page"{% endif %}>Weather</a><a href="{{ url_for('rss_page') }}" {% if request.endpoint in ('rss_page','add_rss_feed','delete_rss_feed','move_rss_feed') %}aria-current="page"{% endif %}>RSS</a><a href="{{ url_for('games.page') }}" {% if request.blueprint == 'games' %}aria-current="page"{% endif %}>Games</a>{% if chat_nav_enabled %}<a href="{{ url_for('chat_page') }}" {% if request.endpoint in ('chat_page','create_chat_conversation','view_chat','toggle_chat_pin','delete_own_chat') %}aria-current="page"{% endif %}>Chat</a>{% endif %}{% if current_user['role'] == 'admin' %}<a href="{{ url_for('accounts') }}" {% if request.endpoint == 'accounts' %}aria-current="page"{% endif %}>Admin</a>{% endif %}</nav>{% endif %}<div class="toolbar"><button type="button" onclick="toggleTheme()" aria-label="Toggle light and dark theme">☀ / ☾</button>{% if current_user %}<a href="{{ url_for('change_password') }}">{{ current_user['display_name'] }}</a><form method="post" action="{{ url_for('logout') }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><button>Log out</button></form>{% endif %}</div></header><main>{% for msg in get_flashed_messages() %}<p class="notice">{{msg}}</p>{% endfor %}{% block content %}{% endblock %}</main><footer>Home Hub · Local-first and made for home.</footer></body></html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Home Hub</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='contacts-sticky.css') }}">
+  <script>
+    document.documentElement.dataset.theme=localStorage.getItem('theme')||'light';
+    function toggleTheme(){const t=document.documentElement.dataset.theme==='light'?'dark':'light';document.documentElement.dataset.theme=t;localStorage.setItem('theme',t)}
+  </script>
+  {% if current_user %}
+  <meta name="homehub-user-id" content="{{ current_user['id'] }}">
+  <meta name="homehub-csrf" content="{{ csrf_token }}">
+  {% endif %}
+  <script src="{{ url_for('static', filename='away-mode.js') }}" defer></script>
+</head>
+<body>
+  <header>
+    <a class="brand" href="{{ url_for('index') }}">⌂ Home Hub</a>
+    {% if current_user %}
+    <nav class="site-nav" aria-label="Main navigation">
+      <a href="{{ url_for('index') }}" {% if request.endpoint == 'index' %}aria-current="page"{% endif %}>Home</a>
+      <a href="/lists" {% if request.path == '/lists' %}aria-current="page"{% endif %}>Lists</a>
+      <a href="/calendar" {% if request.path == '/calendar' %}aria-current="page"{% endif %}>Calendar</a>
+      {% for tab in feature_tabs if tab['visible'] %}
+      <a href="{{ tab['href'] }}" {% if tab['active'] %}aria-current="page"{% endif %}>{{ tab['label'] }}</a>
+      {% endfor %}
+      {% if current_user['role'] == 'admin' %}<a href="{{ url_for('accounts') }}" {% if request.endpoint == 'accounts' %}aria-current="page"{% endif %}>Admin</a>{% endif %}
+    </nav>
+    {% endif %}
+    <div class="toolbar">
+      <button type="button" onclick="toggleTheme()" aria-label="Toggle light and dark theme">◐ Theme</button>
+      {% if current_user %}
+      <a href="{{ url_for('change_password') }}">{{ current_user['display_name'] }}</a>
+      <form method="post" action="{{ url_for('logout') }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><button>Log out</button></form>
+      {% endif %}
+    </div>
+  </header>
+  <main>
+    {% for msg in get_flashed_messages() %}<p class="notice">{{ msg }}</p>{% endfor %}
+    {% block content %}{% endblock %}
+  </main>
+  <footer>Home Hub · Local-first and made for home.</footer>
+</body>
+</html>

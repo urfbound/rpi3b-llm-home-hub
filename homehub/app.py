@@ -36,6 +36,7 @@ from .system_status import (collect_system_snapshot, cpu_usage_percent,
 from .rss import (DEFAULT_RSS_REFRESH_MINUTES, MAX_RSS_REFRESH_MINUTES,
                   MIN_RSS_REFRESH_MINUTES, RSSFeedError, validate_feed_url)
 from .rss_store import RSSArticleError, articles_for_user, set_article_state
+from .rss_scheduler import refresh_feed_now
 from .games import games, SCHEMA as GAMES_SCHEMA, upgrade_multigame_schema
 
 PH = PasswordHasher(memory_cost=16384, time_cost=2, parallelism=1)
@@ -49,6 +50,11 @@ SHOPPING_CATEGORIES = (
 )
 RECIPE_SERVING_MIN = limits.RECIPE_SERVING_MINIMUM
 RECIPE_SERVING_MAX = limits.RECIPE_SERVING_MAXIMUM
+FEATURE_TAB_DEFAULT_ORDER = ('weather', 'rss', 'games', 'chat', 'sticky_notes')
+FEATURE_TAB_LABELS = {
+    'weather': 'Weather', 'rss': 'RSS', 'games': 'Games',
+    'chat': 'Chat', 'sticky_notes': 'Sticky Notes',
+}
 VULGAR_FRACTIONS = {
     '¼': Fraction(1, 4), '½': Fraction(1, 2), '¾': Fraction(3, 4),
     '⅐': Fraction(1, 7), '⅑': Fraction(1, 9), '⅒': Fraction(1, 10),
@@ -264,6 +270,34 @@ CREATE TABLE IF NOT EXISTS users (
  password_hash TEXT NOT NULL, role TEXT NOT NULL CHECK(role IN ('user','admin')),
  active INTEGER NOT NULL DEFAULT 1, session_version INTEGER NOT NULL DEFAULT 0
 );
+CREATE TABLE IF NOT EXISTS contacts (
+ id INTEGER PRIMARY KEY,
+ owner_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ name TEXT NOT NULL CHECK(length(trim(name)) BETWEEN 1 AND {limits.CONTACT_NAME_MAXIMUM}),
+ phone TEXT NOT NULL DEFAULT '' CHECK(length(phone)<={limits.CONTACT_FIELD_MAXIMUM}),
+ email TEXT NOT NULL DEFAULT '' CHECK(length(email)<={limits.CONTACT_FIELD_MAXIMUM}),
+ organization TEXT NOT NULL DEFAULT '' CHECK(length(organization)<={limits.CONTACT_FIELD_MAXIMUM}),
+ home_address TEXT NOT NULL DEFAULT '' CHECK(length(home_address)<={limits.CONTACT_FIELD_MAXIMUM}),
+ visibility TEXT NOT NULL DEFAULT 'private' CHECK(visibility IN ('private','shared')),
+ created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX IF NOT EXISTS contacts_owner_name ON contacts(owner_user_id,name COLLATE NOCASE,id);
+CREATE TABLE IF NOT EXISTS sticky_notes (
+ id INTEGER PRIMARY KEY,
+ author_user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ text TEXT NOT NULL CHECK(length(trim(text)) BETWEEN 1 AND {limits.STICKY_NOTE_TEXT_MAXIMUM}),
+ color TEXT NOT NULL CHECK(color IN ({','.join(repr(color) for color in limits.STICKY_NOTE_COLORS)})),
+ everyone INTEGER NOT NULL DEFAULT 0 CHECK(everyone IN (0,1)),
+ created_at TEXT NOT NULL,
+ expires_at TEXT
+);
+CREATE INDEX IF NOT EXISTS sticky_notes_author_active ON sticky_notes(author_user_id,expires_at);
+CREATE TABLE IF NOT EXISTS sticky_note_recipients (
+ note_id INTEGER NOT NULL REFERENCES sticky_notes(id) ON DELETE CASCADE,
+ user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+ PRIMARY KEY(note_id,user_id)
+);
+CREATE INDEX IF NOT EXISTS sticky_note_recipients_user ON sticky_note_recipients(user_id,note_id);
 CREATE TABLE IF NOT EXISTS app_settings (
  key TEXT PRIMARY KEY, value TEXT NOT NULL
 );
@@ -504,6 +538,16 @@ def setting(db, key, default):
 def setting_text(db, key, default=''):
     row = db.execute('SELECT value FROM app_settings WHERE key=?', (key,)).fetchone()
     return row['value'] if row else default
+
+def feature_tab_order(db):
+    try:
+        stored = json.loads(setting_text(db, 'feature_tab_order', '[]'))
+    except (TypeError, ValueError):
+        stored = []
+    if (not isinstance(stored, list) or len(stored) != len(FEATURE_TAB_DEFAULT_ORDER)
+            or set(stored) != set(FEATURE_TAB_DEFAULT_ORDER)):
+        return list(FEATURE_TAB_DEFAULT_ORDER)
+    return stored
 
 def household_weather(db):
     name = setting_text(db, 'weather_location_name')
@@ -1370,8 +1414,37 @@ def create_app(test_config=None):
         chat_nav_enabled = bool(
             user and user['account_kind'] != 'house'
             and setting(get_db(), 'chat_enabled', limits.CHAT_ENABLED_DEFAULT))
+        feature_tabs = []
+        feature_order = list(FEATURE_TAB_DEFAULT_ORDER)
+        if user:
+            db = get_db()
+            feature_order = feature_tab_order(db)
+            endpoints = {
+                'weather': ('weather_page',),
+                'rss': ('rss_page', 'add_rss_feed', 'delete_rss_feed', 'move_rss_feed'),
+                'games': ('games.page',),
+                'chat': ('chat_page', 'create_chat_conversation', 'view_chat',
+                         'toggle_chat_pin', 'delete_own_chat'),
+                'sticky_notes': ('sticky_notes_page', 'create_sticky_note',
+                                 'delete_sticky_note'),
+            }
+            destinations = {
+                'weather': url_for('weather_page'), 'rss': url_for('rss_page'),
+                'games': url_for('games.page'), 'chat': url_for('chat_page'),
+                'sticky_notes': url_for('sticky_notes_page'),
+            }
+            feature_tabs = [
+                {'id': tab_id, 'label': FEATURE_TAB_LABELS[tab_id],
+                 'href': destinations[tab_id],
+                 'active': (request.blueprint == 'games' if tab_id == 'games'
+                            else request.endpoint in endpoints[tab_id]),
+                 'visible': tab_id != 'chat' or chat_nav_enabled}
+                for tab_id in feature_order
+            ]
         return dict(current_user=user, csrf_token=session['csrf_token'], limits=limits,
-                    chat_nav_enabled=chat_nav_enabled)
+                    chat_nav_enabled=chat_nav_enabled, feature_tabs=feature_tabs,
+                    feature_tab_order=feature_order,
+                    feature_tab_labels=FEATURE_TAB_LABELS)
 
     @app.teardown_appcontext
     def close_db(_err):
@@ -1383,10 +1456,178 @@ def create_app(test_config=None):
                 request_state['active'] -= 1
                 maintenance.notify_all()
 
+    @app.post('/contacts')
+    @login_required
+    def create_contact():
+        db = get_db()
+        name = request.form.get('name', '').strip()
+        fields = {key: request.form.get(key, '').strip() for key in
+                  ('phone', 'email', 'organization', 'home_address')}
+        visibility = request.form.get('visibility', 'private')
+        if (not name or len(name) > limits.CONTACT_NAME_MAXIMUM
+                or any(len(value) > limits.CONTACT_FIELD_MAXIMUM for value in fields.values())
+                or visibility not in ('private', 'shared')):
+            abort(HTTPStatus.BAD_REQUEST)
+        db.execute('BEGIN IMMEDIATE')
+        count = db.execute('SELECT count(*) FROM contacts WHERE owner_user_id=?',
+                           (g.user['id'],)).fetchone()[0]
+        if count >= limits.CONTACTS_PER_USER_MAXIMUM:
+            db.rollback()
+            abort(HTTPStatus.CONFLICT)
+        db.execute(
+            'INSERT INTO contacts(owner_user_id,name,phone,email,organization,home_address,visibility) '
+            'VALUES(?,?,?,?,?,?,?)',
+            (g.user['id'], name, fields['phone'], fields['email'], fields['organization'],
+             fields['home_address'], visibility),
+        )
+        db.commit()
+        flash('Contact saved.')
+        return redirect(url_for('index') + '#contacts')
+
+    @app.post('/contacts/<int:contact_id>')
+    @login_required
+    def update_contact(contact_id):
+        db = get_db()
+        contact = db.execute('SELECT owner_user_id FROM contacts WHERE id=?',
+                             (contact_id,)).fetchone()
+        if contact is None:
+            abort(HTTPStatus.NOT_FOUND)
+        if contact['owner_user_id'] != g.user['id']:
+            abort(HTTPStatus.FORBIDDEN)
+        name = request.form.get('name', '').strip()
+        fields = {key: request.form.get(key, '').strip() for key in
+                  ('phone', 'email', 'organization', 'home_address')}
+        visibility = request.form.get('visibility', 'private')
+        if (not name or len(name) > limits.CONTACT_NAME_MAXIMUM
+                or any(len(value) > limits.CONTACT_FIELD_MAXIMUM for value in fields.values())
+                or visibility not in ('private', 'shared')):
+            abort(HTTPStatus.BAD_REQUEST)
+        db.execute(
+            'UPDATE contacts SET name=?,phone=?,email=?,organization=?,home_address=?,visibility=? '
+            'WHERE id=? AND owner_user_id=?',
+            (name, fields['phone'], fields['email'], fields['organization'],
+             fields['home_address'], visibility, contact_id, g.user['id']),
+        )
+        db.commit()
+        return redirect(url_for('index') + '#contacts')
+
+    @app.post('/contacts/<int:contact_id>/delete')
+    @login_required
+    def delete_contact(contact_id):
+        db = get_db()
+        contact = db.execute('SELECT owner_user_id FROM contacts WHERE id=?',
+                             (contact_id,)).fetchone()
+        if contact is None:
+            abort(HTTPStatus.NOT_FOUND)
+        if contact['owner_user_id'] != g.user['id']:
+            abort(HTTPStatus.FORBIDDEN)
+        db.execute('DELETE FROM contacts WHERE id=?', (contact_id,))
+        db.commit()
+        return redirect(url_for('index') + '#contacts')
+
+    @app.get('/sticky-notes')
+    @login_required
+    def sticky_notes_page():
+        db = get_db()
+        now = datetime.now(timezone.utc).isoformat()
+        notes = db.execute(
+            "SELECT DISTINCT sticky_notes.*,users.display_name AS author_name, "
+            "CASE WHEN sticky_notes.everyone=1 THEN 'Everyone' ELSE 'Selected people' END AS recipient_scope "
+            'FROM sticky_notes JOIN users ON users.id=sticky_notes.author_user_id '
+            'LEFT JOIN sticky_note_recipients ON sticky_note_recipients.note_id=sticky_notes.id '
+            'WHERE (sticky_notes.expires_at IS NULL OR sticky_notes.expires_at>?) '
+            'AND (sticky_notes.author_user_id=? OR sticky_notes.everyone=1 '
+            'OR sticky_note_recipients.user_id=?) '
+            'ORDER BY sticky_notes.created_at DESC,sticky_notes.id DESC',
+            (now, g.user['id'], g.user['id']),
+        ).fetchall()
+        users = db.execute(
+            'SELECT id,display_name,username FROM users WHERE active=1 AND id<>? '
+            'ORDER BY display_name COLLATE NOCASE,id', (g.user['id'],)
+        ).fetchall()
+        active_count = db.execute(
+            'SELECT count(*) FROM sticky_notes WHERE author_user_id=? '
+            'AND (expires_at IS NULL OR expires_at>?)', (g.user['id'], now)
+        ).fetchone()[0]
+        return render_template('sticky_notes.html', notes=notes, users=users,
+                               colors=limits.STICKY_NOTE_COLORS,
+                               expiry_maximum=limits.STICKY_NOTE_EXPIRY_DAYS_MAXIMUM,
+                               active_count=active_count,
+                               note_limit=limits.STICKY_NOTES_PER_USER_MAXIMUM)
+
+    @app.post('/sticky-notes')
+    @login_required
+    def create_sticky_note():
+        db = get_db()
+        text = request.form.get('text', '').strip()
+        color = request.form.get('color', '')
+        everyone = request.form.get('everyone') == '1'
+        recipient_values = request.form.getlist('recipient_ids')
+        try:
+            recipient_ids = sorted({int(value) for value in recipient_values})
+        except ValueError:
+            abort(HTTPStatus.BAD_REQUEST)
+        expiry_value = request.form.get('expires_in_days', '').strip()
+        try:
+            expiry_days = int(expiry_value) if expiry_value else None
+        except ValueError:
+            abort(HTTPStatus.BAD_REQUEST)
+        if (not text or len(text) > limits.STICKY_NOTE_TEXT_MAXIMUM
+                or color not in limits.STICKY_NOTE_COLORS
+                or (expiry_days is not None and not 1 <= expiry_days <= limits.STICKY_NOTE_EXPIRY_DAYS_MAXIMUM)
+                or (not everyone and not recipient_ids)):
+            abort(HTTPStatus.BAD_REQUEST)
+        if recipient_ids:
+            placeholders = ','.join('?' for _ in recipient_ids)
+            valid_ids = {row[0] for row in db.execute(
+                f'SELECT id FROM users WHERE active=1 AND id IN ({placeholders})', recipient_ids
+            ).fetchall()}
+            if valid_ids != set(recipient_ids):
+                abort(HTTPStatus.BAD_REQUEST)
+        created_at = datetime.now(timezone.utc)
+        expires_at = (created_at + timedelta(days=expiry_days)).isoformat() if expiry_days else None
+        db.execute('BEGIN IMMEDIATE')
+        active_count = db.execute(
+            'SELECT count(*) FROM sticky_notes WHERE author_user_id=? '
+            'AND (expires_at IS NULL OR expires_at>?)',
+            (g.user['id'], created_at.isoformat()),
+        ).fetchone()[0]
+        if active_count >= limits.STICKY_NOTES_PER_USER_MAXIMUM:
+            db.rollback()
+            abort(HTTPStatus.CONFLICT)
+        cursor = db.execute(
+            'INSERT INTO sticky_notes(author_user_id,text,color,everyone,created_at,expires_at) '
+            'VALUES(?,?,?,?,?,?)',
+            (g.user['id'], text, color, int(everyone), created_at.isoformat(), expires_at),
+        )
+        db.executemany(
+            'INSERT INTO sticky_note_recipients(note_id,user_id) VALUES(?,?)',
+            [(cursor.lastrowid, user_id) for user_id in recipient_ids],
+        )
+        db.commit()
+        return redirect(url_for('sticky_notes_page'))
+
+    @app.post('/sticky-notes/<int:note_id>/delete')
+    @login_required
+    def delete_sticky_note(note_id):
+        db = get_db()
+        note = db.execute('SELECT author_user_id FROM sticky_notes WHERE id=?',
+                          (note_id,)).fetchone()
+        if note is None:
+            abort(HTTPStatus.NOT_FOUND)
+        if note['author_user_id'] != g.user['id']:
+            abort(HTTPStatus.FORBIDDEN)
+        db.execute('DELETE FROM sticky_notes WHERE id=?', (note_id,))
+        db.commit()
+        return redirect(url_for('sticky_notes_page'))
+
+    @app.get('/calendar')
+    @app.get('/lists')
     @app.get('/')
     @login_required
     def index():
         db = get_db()
+        page_mode = {'/lists': 'lists', '/calendar': 'calendar'}.get(request.path, 'home')
         today = household_today()
         try:
             calendar_month = int(request.args.get('month', today.month))
@@ -1596,6 +1837,12 @@ def create_app(test_config=None):
             db, home_users, home_weekday,
             week_start_for(today).isoformat()
         )
+        contacts = db.execute(
+            'SELECT contacts.*,users.display_name AS owner_name FROM contacts '
+            'JOIN users ON users.id=contacts.owner_user_id '
+            "WHERE contacts.owner_user_id=? OR contacts.visibility='shared' "
+            'ORDER BY contacts.name COLLATE NOCASE,contacts.id', (g.user['id'],)
+        ).fetchall()
         return render_template('index.html', recipes=visible_recipes(db, g.user)[:6],
           events=month_events, calendar_weeks=calendar_weeks,
           calendar_month=calendar_month, calendar_year=calendar_year,
@@ -1606,9 +1853,12 @@ def create_app(test_config=None):
           calendar_year_options=calendar_year_options,
           calendar_has_previous=calendar_has_previous,
           calendar_has_next=calendar_has_next,
-          calendar_previous_url=url_for('index', month=previous_month, year=previous_year),
-          calendar_next_url=url_for('index', month=next_month, year=next_year),
-          calendar_today_url=url_for('index', month=today.month, year=today.year),
+          calendar_previous_url=url_for('index', _external=False, month=previous_month, year=previous_year)
+              if page_mode == 'home' else f"/calendar?month={previous_month}&year={previous_year}",
+          calendar_next_url=url_for('index', _external=False, month=next_month, year=next_year)
+              if page_mode == 'home' else f"/calendar?month={next_month}&year={next_year}",
+          calendar_today_url=f"/calendar?month={today.month}&year={today.year}",
+          page_mode=page_mode, list_page_url='/lists', calendar_page_url='/calendar',
           items=items, lists=lists, selected_list=selected_list, list_kind=list_kind,
           list_users=list_users, todo_assignees=todo_assignees,
           shopping_categories=SHOPPING_CATEGORIES,
@@ -1620,7 +1870,8 @@ def create_app(test_config=None):
           system_status=system_status_for_dashboard(
               db, g.user, app, system_monitor
           ),
-          weekend_groups=weekend_groups, just_my_events=just_my_events)
+          weekend_groups=weekend_groups, just_my_events=just_my_events,
+          contacts=contacts, contact_limit=limits.CONTACTS_PER_USER_MAXIMUM)
 
     @app.get('/rss')
     @login_required
@@ -1643,6 +1894,14 @@ def create_app(test_config=None):
         household_feeds = db.execute(
             "SELECT * FROM rss_feeds WHERE scope='household' ORDER BY sort_order,id"
         ).fetchall()
+        refresh_status = {
+            row['feed_id']: row for row in db.execute(
+                'SELECT s.feed_id,s.attempted_at,s.succeeded_at,s.last_error,s.articles_added '
+                'FROM rss_feed_refresh s JOIN rss_feeds f ON f.id=s.feed_id '
+                "WHERE f.scope='household' OR f.owner_user_id=?",
+                (g.user['id'],),
+            ).fetchall()
+        }
         preference = db.execute(
             'SELECT ask_before_done_delete FROM rss_user_preferences WHERE user_id=?',
             (g.user['id'],),
@@ -1650,6 +1909,8 @@ def create_app(test_config=None):
         return render_template('rss.html', personal_feeds=personal_feeds,
                                household_feeds=household_feeds,
                                articles_by_feed=articles_by_feed,
+                               refresh_status=refresh_status,
+                               rss_outbound_enabled=setting(db, 'rss_outbound_enabled', 1),
                                favourite_articles=favourite_articles,
                                ask_before_done_delete=(preference[0] if preference else 1))
 
@@ -1792,17 +2053,31 @@ def create_app(test_config=None):
         title = urlsplit(normalized_url).hostname or normalized_url
         owner = g.user['id'] if scope == 'personal' else None
         try:
-            db.execute(
+            cursor = db.execute(
                 'INSERT INTO rss_feeds(normalized_url,title,scope,owner_user_id,allow_lan,created_by,sort_order) '
                 'VALUES(?,?,?,?,?,?,COALESCE((SELECT MAX(sort_order)+1 FROM rss_feeds '
                 'WHERE scope=? AND owner_user_id IS ?),0))',
                 (normalized_url, title, scope, owner, int(allow_lan), g.user['id'], scope, owner),
             )
             db.commit()
-            flash('Feed added.')
         except sqlite3.IntegrityError:
             db.rollback()
             flash('This feed is already in the feed list.')
+            return redirect(url_for('rss_page'))
+        refresh = refresh_feed_now(db, cursor.lastrowid)
+        db.commit()
+        if refresh['status'] == 'refreshed':
+            if refresh['articles_added']:
+                flash(f"Feed added and refreshed. {refresh['articles_added']} new articles found.")
+            else:
+                flash('Feed added and refreshed. No new articles were found.')
+        elif refresh['status'] == 'disabled':
+            flash('Feed added. First refresh skipped because outbound access is disabled.')
+        elif refresh['status'] == 'failed':
+            flash('Feed was saved, but its first refresh failed: '
+                  f"{refresh['error']} It will retry after the configured refresh interval.")
+        else:
+            flash('Feed was added, but could not be refreshed because it was removed.')
         return redirect(url_for('rss_page'))
 
     @app.post('/rss/feeds/<int:feed_id>/delete')
@@ -2039,6 +2314,32 @@ def create_app(test_config=None):
                                    limits.CHAT_PAIRS_PER_CHAT_DEFAULT),
                                chat_data_tools_enabled=setting(
                                    db, 'chat_data_tools_enabled', limits.CHAT_DATA_TOOLS_DEFAULT))
+
+    @app.post('/admin/tab-order')
+    @admin_required
+    def update_feature_tab_order():
+        order = request.form.getlist('feature_order')
+        if (len(order) != len(FEATURE_TAB_DEFAULT_ORDER)
+                or set(order) != set(FEATURE_TAB_DEFAULT_ORDER)):
+            abort(HTTPStatus.BAD_REQUEST)
+        try:
+            tab_id, direction = request.form.get('move', '').split(':', 1)
+            position = order.index(tab_id)
+        except (ValueError, AttributeError):
+            abort(HTTPStatus.BAD_REQUEST)
+        destination = position + (-1 if direction == 'up' else 1 if direction == 'down' else 0)
+        if direction not in ('up', 'down') or not 0 <= destination < len(order):
+            abort(HTTPStatus.BAD_REQUEST)
+        order[position], order[destination] = order[destination], order[position]
+        db = get_db()
+        db.execute(
+            'INSERT INTO app_settings(key,value) VALUES(?,?) '
+            'ON CONFLICT(key) DO UPDATE SET value=excluded.value',
+            ('feature_tab_order', json.dumps(order)),
+        )
+        db.commit()
+        flash('Feature tab order saved.')
+        return redirect(url_for('accounts') + '#tab-order-section')
 
     @app.post('/admin/chat/settings')
     @admin_required
@@ -2953,9 +3254,7 @@ def create_app(test_config=None):
     @login_required
     def delete_list(list_id):
         db = get_db()
-        target = db.execute('SELECT * FROM household_lists WHERE id=?', (list_id,)).fetchone()
-        if not target:
-            abort(HTTPStatus.NOT_FOUND)
+        target = visible_list(db, g.user, list_id)
         if target['created_by'] != g.user['id'] and g.user['role'] != 'admin':
             abort(HTTPStatus.FORBIDDEN)
         kind = target['kind']
@@ -2981,7 +3280,186 @@ def create_app(test_config=None):
         body = target['title'] + '\n\n' + '\n'.join(
             ('[x] ' if item['done'] else '[ ] ') + item['text'] for item in items
         ) + '\n'
-        return Response(body,mimetype='text/plain',headers={'Content-Disposition':'attachment; filename="shopping.txt"'})
+        return Response(body, mimetype='text/plain', headers={
+            'Content-Disposition': 'attachment; filename="shopping.txt"',
+            'Cache-Control': 'no-store',
+        })
+
+    @app.get('/lists/<int:list_id>/text')
+    @login_required
+    def list_text(list_id):
+        db = get_db()
+        target = visible_list(db, g.user, list_id)
+        items = db.execute('SELECT text,done FROM shopping_items WHERE list_id=? ORDER BY id',
+                           (target['id'],)).fetchall()
+        body = target['title'] + '\n\n' + '\n'.join(
+            ('[x] ' if item['done'] else '[ ] ') + item['text'] for item in items
+        ) + '\n'
+        return Response(body, mimetype='text/plain', headers={'Cache-Control': 'no-store'})
+
+    @app.post('/lists/<int:list_id>/paste')
+    @login_required
+    def paste_list(list_id):
+        raw_text = request.form.get('text', '')
+        if not raw_text.strip() or len(raw_text) > 65536:
+            abort(400)
+        db = get_db()
+        target = visible_list(db, g.user, list_id)
+        preview, issues, rows = prepare_paste_review(db, target, raw_text)
+        signature = paste_review_signature(list_id, g.user['id'], raw_text, rows)
+        return render_paste_review(target, raw_text, preview, issues, signature)
+
+    def normalize_list_item(value):
+        return ' '.join(value.casefold().split())
+
+    def prepare_paste_review(db, target, raw_text):
+        lines = raw_text.splitlines()
+        first_content = next((i for i, line in enumerate(lines) if line.strip()), None)
+        header_index = None
+        if first_content is not None and first_content + 1 < len(lines):
+            first_line = lines[first_content].strip()
+            if (not re.fullmatch(r'\[([^\]]*)\]\s+(.+)', first_line)
+                    and not lines[first_content + 1].strip()):
+                header_index = first_content
+        imported = {}
+        issues = []
+        for line_number, raw_line in enumerate(lines, start=1):
+            if line_number - 1 == header_index:
+                continue
+            line = raw_line.strip()
+            if not line:
+                continue
+            match = re.fullmatch(r'\[([^\]]*)\]\s+(.+)', line)
+            if not match:
+                issues.append((line_number, raw_line, 'Use [ ] or [x] followed by an item.'))
+                continue
+            marker, item_text = match.groups()
+            item_text = item_text.strip()
+            if not item_text or len(item_text) > 240:
+                issues.append((line_number, raw_line, 'Item text must be between 1 and 240 characters.'))
+                continue
+            key = normalize_list_item(item_text)
+            if key in imported:
+                imported[key]['checked'] = imported[key]['checked'] or bool(marker.strip())
+            else:
+                imported[key] = {'text': item_text, 'checked': bool(marker.strip())}
+
+        rows = db.execute(
+            'SELECT id,text,done,created_by,due_date,assignee_id,updated_at '
+            'FROM shopping_items WHERE list_id=? ORDER BY id', (target['id'],)
+        ).fetchall()
+        by_text = {}
+        for row in rows:
+            by_text.setdefault(normalize_list_item(row['text']), []).append(row)
+        preview = []
+        for key, item in imported.items():
+            matches = by_text.get(key, [])
+            if len(matches) > 1:
+                issues.append((0, item['text'], 'Ambiguous match: multiple existing items have this text.'))
+                action = 'Needs attention: ambiguous match'
+            elif matches:
+                current = matches[0]
+                action = ('Mark complete' if item['checked'] and not current['done']
+                          else 'Already complete' if current['done']
+                          else 'Keep current state')
+            else:
+                action = 'Add as complete' if item['checked'] else 'Add as open'
+            preview.append({'text': item['text'], 'action': action})
+        return preview, issues, rows
+
+    def paste_review_signature(list_id, user_id, raw_text, rows):
+        snapshot = hashlib.sha256(repr([
+            tuple(row[key] for key in ('id', 'text', 'done', 'created_by',
+                                       'due_date', 'assignee_id', 'updated_at'))
+            for row in rows
+        ]).encode('utf-8')).hexdigest()
+        text_hash = hashlib.sha256(raw_text.encode('utf-8')).hexdigest()
+        payload = f'{list_id}:{user_id}:{snapshot}:{text_hash}'
+        secret = app.config['SECRET_KEY']
+        if isinstance(secret, str):
+            secret = secret.encode('utf-8')
+        return hmac.new(secret, payload.encode('utf-8'), hashlib.sha256).hexdigest()
+
+    def render_paste_review(target, raw_text, preview, issues, signature,
+                            stale=False, status=200):
+        response = make_response(render_template(
+            'paste_review.html', target=target, raw_text=raw_text,
+            preview=preview, issues=issues, signature=signature, stale=stale
+        ), status)
+        response.headers['Cache-Control'] = 'no-store'
+        return response
+
+    @app.post('/lists/<int:list_id>/paste/apply')
+    @login_required
+    def apply_pasted_list(list_id):
+        raw_text = request.form.get('text', '')
+        if not raw_text.strip() or len(raw_text) > 65536:
+            abort(400)
+        db = get_db()
+        target = visible_list(db, g.user, list_id)
+        preview, issues, rows = prepare_paste_review(db, target, raw_text)
+        if issues:
+            abort(400)
+        submitted_signature = request.form.get('review_token', '')
+        stale = False
+        with db:
+            db.execute('BEGIN IMMEDIATE')
+            target = visible_list(db, g.user, list_id)
+            preview, issues, rows = prepare_paste_review(db, target, raw_text)
+            current_signature = paste_review_signature(
+                list_id, g.user['id'], raw_text, rows)
+            if issues:
+                abort(400)
+            if not hmac.compare_digest(submitted_signature, current_signature):
+                stale = True
+            else:
+                imported = {}
+                lines = raw_text.splitlines()
+                first_content = next((i for i, line in enumerate(lines) if line.strip()), None)
+                header_index = None
+                if first_content is not None and first_content + 1 < len(lines):
+                    first_line = lines[first_content].strip()
+                    if (not re.fullmatch(r'\[([^\]]*)\]\s+(.+)', first_line)
+                            and not lines[first_content + 1].strip()):
+                        header_index = first_content
+                for line_index, line in enumerate(lines):
+                    if line_index == header_index:
+                        continue
+                    match = re.fullmatch(r'\[([^\]]*)\]\s+(.+)', line.strip())
+                    if not match:
+                        continue
+                    marker, item_text = match.groups()
+                    item_text = item_text.strip()
+                    key = normalize_list_item(item_text)
+                    imported.setdefault(key, {'text': item_text, 'checked': False})
+                    imported[key]['checked'] |= bool(marker.strip())
+                by_text = {}
+                for row in rows:
+                    by_text.setdefault(normalize_list_item(row['text']), []).append(row)
+                for key, item in imported.items():
+                    matches = by_text.get(key, [])
+                    if len(matches) > 1:
+                        abort(400)
+                    if matches:
+                        if item['checked'] and not matches[0]['done']:
+                            db.execute('UPDATE shopping_items SET done=1,updated_at=CURRENT_TIMESTAMP '
+                                       'WHERE id=?', (matches[0]['id'],))
+                    else:
+                        cursor = db.execute(
+                            'INSERT INTO shopping_items(text,done,created_by,list_id,updated_at) '
+                            'VALUES(?,?,?,?,CURRENT_TIMESTAMP)',
+                            (item['text'], int(item['checked']), g.user['id'], target['id'])
+                        )
+                        by_text[key] = [{'id': cursor.lastrowid, 'text': item['text'],
+                                         'done': int(item['checked'])}]
+        if stale:
+            target = visible_list(db, g.user, list_id)
+            preview, issues, rows = prepare_paste_review(db, target, raw_text)
+            signature = paste_review_signature(list_id, g.user['id'], raw_text, rows)
+            return render_paste_review(target, raw_text, preview, issues,
+                                       signature, stale=True, status=409)
+        return redirect(url_for('index', kind=target['kind'], list_id=target['id']) +
+                        ('#shopping' if target['kind'] == 'shopping' else '#todo'))
 
     @app.get('/shopping/sync')
     @login_required

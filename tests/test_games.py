@@ -81,8 +81,10 @@ def test_daily_attempt_is_private_resumable_and_scored_once(game_app):
     alex = sign_in(game_app, 'alex')
     sam = sign_in(game_app, 'sam')
     assert alex.post('/games/word/guess', data={'guess': answer}).status_code == 400
-    assert alex.post('/games/word/guess', data={'_csrf': token_for(alex),
-                                                'guess': '1bad!'}).status_code == 400
+    invalid = alex.post('/games/word/guess', data={'_csrf': token_for(alex),
+                                                   'guess': '1bad!'})
+    assert invalid.status_code == 302
+    assert b'Enter a valid five-letter word from the offline word list' in alex.get('/games').data
     assert alex.post('/games/word/guess', data={'_csrf': token_for(alex),
                                                 'guess': answer}).status_code == 302
     resumed = alex.get('/games').data
@@ -120,6 +122,35 @@ def test_word_garden_accepts_common_offline_guesses(game_app):
         assert alex.post('/games/word/guess', data={
             '_csrf': token_for(alex), 'guess': guess
         }).status_code == 302
+
+def test_invalid_word_gives_prompt_without_spending_a_turn(game_app):
+    from homehub.games import daily_answer
+    alex = sign_in(game_app, 'alex')
+    answer = daily_answer(date(2026, 10, 24))
+
+    assert alex.post('/games/word/guess', data={
+        '_csrf': token_for(alex), 'guess': 'SMILE'
+    }).status_code == 302
+    invalid = alex.post('/games/word/guess', data={
+        '_csrf': token_for(alex), 'guess': 'ZZZZZ'
+    })
+
+    assert invalid.status_code == 302
+    page = alex.get('/games').data
+    assert b'Enter a valid five-letter word from the offline word list' in page
+    with sqlite3.connect(game_app.config['DATABASE']) as db:
+        guesses = json.loads(db.execute(
+            "SELECT guesses FROM game_attempts WHERE mode='daily'"
+        ).fetchone()[0])
+    assert guesses == ['SMILE']
+    assert alex.post('/games/word/guess', data={
+        '_csrf': token_for(alex), 'guess': answer
+    }).status_code == 302
+    with sqlite3.connect(game_app.config['DATABASE']) as db:
+        guesses = json.loads(db.execute(
+            "SELECT guesses FROM game_attempts WHERE mode='daily'"
+        ).fetchone()[0])
+    assert guesses == ['SMILE', answer]
 
 
 def test_practice_never_changes_daily_score(game_app):

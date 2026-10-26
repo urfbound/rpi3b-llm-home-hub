@@ -25,6 +25,46 @@ def _stamp(value):
     return value.isoformat(timespec='seconds')
 
 
+def refresh_feed_now(db, feed_id, *, now=None, fetcher=None):
+    """Refresh one newly added feed immediately and record its first result."""
+    instant = _utc(now)
+    if _setting(db, 'rss_outbound_enabled', '1') != '1':
+        return {'status': 'disabled', 'articles_added': 0}
+    feed = db.execute(
+        'SELECT id,normalized_url,allow_lan FROM rss_feeds WHERE id=?', (feed_id,)
+    ).fetchone()
+    if feed is None:
+        return {'status': 'missing', 'articles_added': 0}
+    if fetcher is None:
+        fetcher = fetch_feed
+    stamp = _stamp(instant)
+    try:
+        document, final_url = fetcher(feed['normalized_url'], allow_lan=bool(feed['allow_lan']))
+        parsed = parse_feed(document, final_url)
+        if parsed['title']:
+            db.execute('UPDATE rss_feeds SET title=? WHERE id=?',
+                       (parsed['title'], feed['id']))
+        added = store_feed_articles(db, feed['id'], parsed['articles'], fetched_at=stamp)
+        db.execute(
+            'INSERT INTO rss_feed_refresh(feed_id,attempted_at,succeeded_at,last_error,articles_added) '
+            'VALUES(?,?,?,NULL,?) ON CONFLICT(feed_id) DO UPDATE SET '
+            'attempted_at=excluded.attempted_at,succeeded_at=excluded.succeeded_at,'
+            'last_error=NULL,articles_added=excluded.articles_added',
+            (feed['id'], stamp, stamp, added),
+        )
+        return {'status': 'refreshed', 'articles_added': added}
+    except (RSSFeedError, OSError, TimeoutError, ValueError) as exc:
+        message = str(exc)[:limits.ERROR_TEXT_MAXIMUM]
+        db.execute(
+            'INSERT INTO rss_feed_refresh(feed_id,attempted_at,succeeded_at,last_error,articles_added) '
+            'VALUES(?,?,NULL,?,0) ON CONFLICT(feed_id) DO UPDATE SET '
+            'attempted_at=excluded.attempted_at,last_error=excluded.last_error,'
+            'articles_added=0',
+            (feed['id'], stamp, message),
+        )
+        return {'status': 'failed', 'articles_added': 0, 'error': message}
+
+
 def refresh_due_feeds(db, *, now=None, fetcher=fetch_feed):
     """Refresh due feeds sequentially, respecting the household network toggle.
 
@@ -60,6 +100,9 @@ def refresh_due_feeds(db, *, now=None, fetcher=fetch_feed):
         try:
             document, final_url = fetcher(feed[1], allow_lan=bool(feed[2]))
             parsed = parse_feed(document, final_url)
+            if parsed['title']:
+                db.execute('UPDATE rss_feeds SET title=? WHERE id=?',
+                           (parsed['title'], feed[0]))
             added = store_feed_articles(
                 db, feed[0], parsed['articles'], fetched_at=stamp)
             db.execute(

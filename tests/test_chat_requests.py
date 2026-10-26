@@ -97,6 +97,20 @@ def test_chat_request_saves_prompt_answer_model_and_updates_title(app):
         ).fetchone() == ('How is dinner going?', 'Local answer', 'gemma3:270m')
 
 
+def test_chat_conversation_includes_busy_status_and_disable_controls(app):
+    alice = sign_in(app, 'alice', 'alice chat password')
+
+    page = alice.get('/chat/1')
+
+    assert b'id="chat-prompt"' in page.data
+    assert b'id="chat-send-button"' in page.data
+    assert b'id="chat-request-status-text"' in page.data
+    assert b'id="chat-request-ellipsis"' in page.data
+    assert b'chat-ui.js' in page.data
+    assert b'HomeHubChatUI.setBusy' in page.data
+    assert b'HomeHubChatUI.setWorkingStatus' in page.data
+
+
 @pytest.mark.parametrize('prompt', ['', 'x' * (CHAT_PROMPT_MAXIMUM + 1)])
 def test_chat_rejects_blank_or_overlong_prompts(app, prompt):
     alice = sign_in(app, 'alice', 'alice chat password')
@@ -299,9 +313,11 @@ def test_enabled_chat_data_tools_are_scoped_and_model_receives_bounded_result(ap
     assert queued.status_code == HTTPStatus.ACCEPTED
     wait_for_request(alice, queued.get_json()['request_id'])
 
-    assert [tool['function']['name'] for tool in calls[0][1]] == [
-        'get_household_lists', 'get_calendar_events',
-    ]
+    assert {tool['function']['name'] for tool in calls[0][1]} == {
+        'get_household_lists', 'get_calendar_events', 'get_household_recipes',
+        'get_weather_forecast', 'get_saved_articles', 'get_system_status',
+        'get_admin_overview',
+    }
     serialized_tool_result = calls[1][0][-1]['content']
     assert 'Groceries' in serialized_tool_result and 'Bread' in serialized_tool_result
     assert 'Bob private' not in serialized_tool_result and 'Secret' not in serialized_tool_result

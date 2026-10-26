@@ -42,6 +42,18 @@ initial model-only Raspberry Pi 3B benchmarks support an optional feature.
 - An admin can set one household-wide order of feature tabs from the Admin tab
   only. Keep Home fixed at the start and Admin fixed at the end; the feature
   tabs between them can be reordered. The control's visual design is approved.
+- Home includes a Contacts card. Each account may own up to 128 contacts with
+  a required name and optional phone, email, organization, and home address.
+  Contacts are private by default or shared read-only with everyone. Owners can
+  create, edit, change visibility, and delete. Phone import is one contact at a
+  time when the browser supports it, with a review step and manual fallback.
+- Add a Sticky Notes feature tab. Users can create up to 32 active notes, each
+  up to 128 characters, select one of eight colors, and address a note to
+  selected users or everyone. Notes can optionally expire in 1 to 365 days;
+  expired notes leave recipients' walls and free quota. Notes cannot be edited
+  after posting and only authors can delete them. Show notes as responsive
+  bento cards with author, date, and audience. Admins control feature tab order;
+  Home and Admin stay at the ends.
 - Stack all Admin cards vertically, with Accounts first. Provide jump links
   to each feature's household configuration section; keep Admin's own settings
   in the Admin tab. Show Calendar limits before Calendar retention.

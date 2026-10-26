@@ -13,8 +13,8 @@ to `main` only after the user approves the completed change.
   CSRF, login rate limiting, verified backup/restore, TLS deployment guidance,
   and schema versioning are implemented. Initial Ollama latency and memory
   measurements on the Raspberry Pi 3B are recorded in
-  [CHAT_PI_BENCHMARK.md](CHAT_PI_BENCHMARK.md). App-only and app-plus-model
-  profiling remain to be done.
+  [CHAT_PI_BENCHMARK.md](CHAT_PI_BENCHMARK.md). App and app-plus-model profiles
+  are now recorded; answer-quality review remains.
 - **Lists and Recipes:** Shopping, To-do, Chores, recipe privacy/notes,
   serving scaling, and Add to list snapshots are merged to main. Copy/Paste is
   awaiting review. Weekend, weather, and system status cards remain.
@@ -54,10 +54,10 @@ to `main` only after the user approves the completed change.
 - Complete Admin settings as each feature arrives: vertical cards, section
   jump links, fixed Home/Admin ends with reorderable middle tabs, backup and
   restore, account/session controls, and feature-specific settings.
-- Measure app-only and app-plus-model resource use on the Pi. Initial model-only
-  results are in [CHAT_PI_BENCHMARK.md](CHAT_PI_BENCHMARK.md). Targets are under
-  256 MB application RSS where practical and under 10 GB for app, dependencies,
-  and data, excluding OS and LLM files.
+- Pi app-only and app-plus-model resource profiles are recorded in
+  [CHAT_PI_BENCHMARK.md](CHAT_PI_BENCHMARK.md). Targets are under 256 MB
+  application RSS where practical and under 10 GB for app, dependencies, and
+  data, excluding OS and LLM files.
 
 ## Tabs and feature work
 
@@ -155,7 +155,10 @@ to `main` only after the user approves the completed change.
 - Personal feed add/remove/reordering and admin-managed house-wide feed
   add/remove/reordering are implemented on the current review branch. The
   server enforces duplicate checks across scopes, admin-only household changes,
-  and a three-feed household limit. The house-wide list is viewable by all
+  and a three-feed household limit. Adding a feed triggers an immediate first
+  refresh; failures are shown to the user, recorded, and retried after the
+  configured interval. When outbound access is disabled, the feed is saved and
+  the skipped refresh is explained. The house-wide list is viewable by all
   signed-in accounts.
 - Bounded HTTP fetching now pins connections to DNS-validated public addresses,
   rechecks every redirect, enforces time/size/redirect limits, and supports an
@@ -174,6 +177,12 @@ to `main` only after the user approves the completed change.
   expires household articles after three days and personal articles after 90;
   personal storage evicts oldest unread, then oldest read until within 64 MB,
   while favourites remain protected.
+- Future investigation: evaluate increasing RSS article retention while
+  preserving at least 20% of the 10 GB app/data budget for other growth. Model
+  low, medium, and high household usage across up to 32 accounts; measure
+  SQLite payload, indexes, WAL/temporary growth, favourites that outlive normal
+  retention, and retained database backups together. Do not raise quotas until
+  measured totals show adequate headroom and pruning/backup limits are tested.
 
 ### Games
 
@@ -196,6 +205,14 @@ to `main` only after the user approves the completed change.
   constraints, solvability, broad difficulty coverage, and daily selection
   across the full banks. These exhaustive checks are marked `bank` and skipped
   by default; run them on request with `pytest -m bank`.
+- Mini Crossword bank rebuilt from the attributed Canadian English word source
+  and curated clue definitions. All 5,000 grids have ten distinct entries;
+  adjacent days differ by at least eight open letters and share no more than
+  two answers; one-letter variants are spaced over 30 days apart. The previous
+  formulaic sound effects and asides are gone. Bank tests cover these limits
+  and reproducibility. Before release, conduct broader human solving review
+  for clue fairness, editor voice, and the Medium/Medium-Hard labels. See
+  [CROSSWORD_QUALITY_AUDIT.md](CROSSWORD_QUALITY_AUDIT.md).
 - Private resumable attempts, midnight expiry, per-game streaks, score floors,
   optional hints where approved, daily and all-time scoreboards, timed-game
   tie breaking, and next-day solution visibility are implemented and tested.
@@ -222,6 +239,20 @@ to `main` only after the user approves the completed change.
   filtering. This slice is implemented on the current review branch. Weather
   and system status cards remain; keep the responsive two-column desktop
   layout and single-column narrow-phone layout.
+- **Contacts:** The Home card now supports up to 128 owner-managed contacts
+  with name, phone, email, organization, and home address. Private/shared
+  visibility is enforced server-side; shared contacts are read-only to others.
+  Owners can edit and delete contacts. The card has search, duplicate warnings,
+  scrollable results, and one-at-a-time phone import when supported. Browser
+  device verification and visual review on phone/light/dark remain.
+- **Sticky Notes:** The new page supports 32 active notes per author, 128
+  characters per note, eight colors, direct recipients or everyone, optional
+  1-to-365-day expiry, and author-only deletion. Expired notes stop displaying
+  and no longer use quota. Responsive bento cards show author/date and audience.
+  Sticky Notes is in the shared feature-tab order. Admins can move feature tabs;
+  Home remains first and Admin last. Automated privacy, limits, migration, and
+  navigation tests pass. Phone/browser review and visual light/dark review
+  remain.
 
 ### Chat
 
@@ -238,11 +269,12 @@ to `main` only after the user approves the completed change.
   Read-only list and calendar tools are implemented behind an admin toggle
   that defaults off. They enforce requester visibility, a 31-day calendar
   window, three tool calls per request, and 100-row/16-KiB result caps. The
-  Pi resource-budget measurement remains; keep database tools disabled until
-  that measurement passes. App-plus-model profiling, answer-quality review,
-  and manual browser review of the approved design also remain.
-  Before enabling Chat for household use, profile Home Hub and the selected
-  model together, then verify answer quality.
+  Combined Pi profiling is recorded in
+  [CHAT_PI_BENCHMARK.md](CHAT_PI_BENCHMARK.md). Qwen2.5 0.5b retained 244 MiB
+  available with the app running and is the current Pi 3B choice for tools;
+  Qwen3 0.6b dropped to 32 MiB and is not recommended on 1 GB hardware.
+  Representative answer-quality review and manual browser review of the
+  approved design remain before household rollout.
 - Add a provider interface for possible remote models, off by default. If
   database tools are enabled, enforce the approved read-only per-user scope
   and resource budget; require explicit confirmation and fresh authorization
@@ -306,6 +338,16 @@ to `main` only after the user approves the completed change.
   flow without introducing a separate always-on indexing service. Test CPU,
   memory, response time, and quality on the Pi before enabling tools; tool use
   must remain behind the existing admin controls.
+
+## Post-R1.0
+
+- Add Chat working-state bubbles: show `🧠...` while the model is reasoning and
+  `🗣️...` while it is composing a response.
+- Add more read-only and proposal-based Chat tools, including RSS summaries and
+  adding a day's recipes to a shopping list. Any write proposal must be shown
+  for confirmation and re-authorized by the server before applying it.
+- Allow users to navigate away from an in-progress Chat conversation while the
+  server-side request continues, then return to see its status and response.
 
 ## Release gates
 

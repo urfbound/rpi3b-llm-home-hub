@@ -52,30 +52,44 @@ Open PowerShell in the project folder on Windows. Replace `username` and
 Windows OpenSSH's `ssh` and `scp` utilities are used.
 
 ```powershell
-ssh username@hostname "mkdir -p ~/homehub-starter"
-scp -r .\homehub .\deploy .\pyproject.toml .\README.md .\LICENSE username@hostname:~/homehub-starter/
-ssh username@hostname "cd ~/homehub-starter && chmod +x deploy/install.sh deploy/uninstall.sh && ./deploy/install.sh"
+tar.exe -czf "$env:TEMP\homehub-transfer.tar.gz" --exclude=__pycache__ --exclude="*.pyc" -C . homehub deploy scripts pyproject.toml README.md LICENSE
+if ($LASTEXITCODE -ne 0) { throw "Could not create the transfer archive." }
+ssh username@hostname "mkdir -p ~/homehub-release"
+if ($LASTEXITCODE -ne 0) { throw "Could not create the Pi staging directory." }
+scp "$env:TEMP\homehub-transfer.tar.gz" username@hostname:~/homehub-release/
+if ($LASTEXITCODE -ne 0) { throw "Transfer failed; do not run the installer." }
+$extract = 'cd ~/homehub-release && mkdir -p source && tar -tzf homehub-transfer.tar.gz | while IFS= read -r p; do case "$p" in */) mkdir -p "source/$p";; */*) mkdir -p "source/${p%/*}";; esac; done && find source -type d -exec chmod u+rwx {} + && tar --no-same-owner --no-same-permissions --no-overwrite-dir -xzf homehub-transfer.tar.gz -C source && rm homehub-transfer.tar.gz'
+ssh username@hostname $extract
+if ($LASTEXITCODE -ne 0) { throw "Could not unpack the transfer on the Pi." }
+ssh -t username@hostname "cd ~/homehub-release/source && chmod +x deploy/install.sh deploy/uninstall.sh && ./deploy/install.sh"
 ```
 
-If `scp` reports `Permission denied` for one existing destination file, copy
-that file to a temporary name in your home directory, then install it over the
-blocked file with the correct owner. For example, to transfer the venv
-permission helper:
+This transfers source and deployment files in an archive, excluding Python
+bytecode caches. Before extracting, the Pi creates the archive's directory
+tree with your account's write permission, then tells GNU tar to preserve those
+permissions while extracting. This handles read-only permission bits that
+Windows may have stored in the archive and permits retrying after a partial
+extraction. Do not use `sudo scp` or run the installer with `sudo`.
 
-```powershell
-scp .\deploy\venv_permissions.sh username@hostname:~/venv_permissions.sh
-ssh -t username@hostname "sudo install -o username -g username -m 0644 /home/username/venv_permissions.sh /home/username/homehub-starter/deploy/venv_permissions.sh && rm /home/username/venv_permissions.sh"
+If a previous direct `scp` transfer left CRLF endings, convert those scripts
+before retrying that older checkout's installer:
+
+```sh
+cd ~/homehub-starter
+python3 -c 'from pathlib import Path; [p.write_bytes(p.read_bytes().replace(bytes((13, 10)), bytes((10,)))) for p in Path("deploy").glob("*.sh")]'
+chmod +x deploy/install.sh deploy/uninstall.sh
+./deploy/install.sh
 ```
 
-Then repeat the normal transfer command to ensure the rest of the files are
-current, and run the installer as `username` without `sudo`.
+The repository's `.gitattributes` keeps deployment shell scripts in Unix LF
+format in future Windows checkouts. The installer requests sudo only for
+system changes.
 
-The transfer includes only runtime files and deployment examples, not your
-Windows `.git` directory, virtual environment, database, or backups. The
-installer copies the application into `/opt/homehub`; it leaves the transferred
-repository in your Pi home directory. To update later, repeat the same `scp`
-command and run `./deploy/install.sh` again from `~/homehub-starter`. An
-existing database is backed up and verified before the new service starts.
+The transfer includes application code, scripts, and deployment examples, not
+your Windows `.git` directory, virtual environment, database, or backups. The
+installer copies the application into `/opt/homehub`; it leaves the staging
+directory in your Pi home directory. An existing database is backed up and
+verified before the new service starts.
 Keep `/etc/homehub/homehub.env` private and persistent; it contains the
 session-signing secret.
 

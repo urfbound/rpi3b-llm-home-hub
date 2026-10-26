@@ -1,0 +1,48 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="panel paste-review">
+  <p class="eyebrow">Lists</p>
+  <h1>Review list changes</h1>
+  <p>Check the proposed changes before they are added to <strong>{{ target['title'] }}</strong>. Existing item owners and text stay as they are.</p>
+  {% if stale %}
+  <p class="notice">This list changed after the preview. Review the updated changes before applying them.</p>
+  {% endif %}
+
+  {% if issues %}
+  <div class="callout">
+    <strong>Some lines need attention</strong>
+    <ul>
+      {% for line_number, line, message in issues %}
+      <li>{% if line_number %}Line {{ line_number }}: {% endif %}{{ message }} <span class="muted">{{ line }}</span></li>
+      {% endfor %}
+    </ul>
+    <p>Correct the text below and update the review. Nothing has been changed yet.</p>
+  </div>
+  {% endif %}
+
+  <ul class="paste-preview">
+    {% for item in preview %}
+    <li><span>{{ item['text'] }}</span><small>{{ item['action'] }}</small></li>
+    {% else %}
+    <li>No items to merge.</li>
+    {% endfor %}
+  </ul>
+
+  <form method="post" action="{{ url_for('paste_list', list_id=target['id']) }}" class="paste-edit">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <label for="paste-review-text">List text</label>
+    <textarea id="paste-review-text" name="text" rows="8" maxlength="65536" required>{{ raw_text }}</textarea>
+    <button>Update review</button>
+  </form>
+
+  {% if not issues and preview %}
+  <form method="post" action="{{ url_for('apply_pasted_list', list_id=target['id']) }}" class="dialog-actions">
+    <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+    <input type="hidden" name="text" value="{{ raw_text }}">
+    <input type="hidden" name="review_token" value="{{ signature }}">
+    <button class="primary">Merge list</button>
+  </form>
+  {% endif %}
+  <a class="button" href="{{ url_for('index', kind=target['kind'], list_id=target['id']) }}">Cancel</a>
+</section>
+{% endblock %}

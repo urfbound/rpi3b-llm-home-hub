@@ -7,11 +7,12 @@ import json
 import re
 import secrets
 
-from flask import Blueprint, abort, g, redirect, render_template, request, url_for
+from flask import Blueprint, abort, flash, g, redirect, render_template, request, url_for
 from . import game_ladder, game_grids, game_wumpus
 
 
 games = Blueprint('games', __name__)
+INVALID_WORD_NOTICE = 'Enter a valid five-letter word from the offline word list.'
 
 WORD_BANK = (
     'APPLE', 'BLOOM', 'CLOUD', 'DREAM', 'EMBER', 'FLAME', 'GRAPE', 'HEART',
@@ -249,7 +250,8 @@ def _submit_guess(db, attempt, guess):
         abort(HTTPStatus.CONFLICT)
     guess = guess.strip().upper()
     if not re.fullmatch(r'[A-Z]{5}', guess) or guess not in VALID_WORDS:
-        abort(HTTPStatus.BAD_REQUEST, description='Enter a valid five-letter word.')
+        flash(INVALID_WORD_NOTICE)
+        return False
     guesses = json.loads(attempt['guesses'])
     guesses.append(guess)
     won = guess == attempt['answer']
@@ -259,6 +261,7 @@ def _submit_guess(db, attempt, guess):
                "finished_at=CASE WHEN ?='playing' THEN NULL ELSE CURRENT_TIMESTAMP END WHERE id=?",
                (json.dumps(guesses), status, points, status, attempt['id']))
     db.commit()
+    return True
 
 
 @games.post('/games/word/guess')
@@ -270,7 +273,8 @@ def daily_guess():
     _expire(db, today)
     guess = request.form.get('guess', '').strip().upper()
     if not re.fullmatch(r'[A-Z]{5}', guess) or guess not in VALID_WORDS:
-        abort(HTTPStatus.BAD_REQUEST, description='Enter a valid five-letter word.')
+        flash(INVALID_WORD_NOTICE)
+        return redirect(url_for('games.page'))
     attempt = _attempt(db, g.user['id'], today)
     if attempt is None:
         db.execute("INSERT INTO game_attempts(user_id,game,mode,puzzle_date,answer) VALUES(?,'word','daily',?,?)",
