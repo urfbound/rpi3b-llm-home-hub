@@ -22,6 +22,12 @@ without modifying it. Migration errors roll back the schema change.
 4. Start the service and confirm that login, recipes, shopping items, and
    calendar events are present. Check service logs if startup fails.
 
+Once GitHub releases are published, the latest release can also be installed
+or applied with the public `deploy/upgrade.sh` bootstrap. It downloads and
+checks the release bundle, then invokes the same installer described above;
+the service installer makes a verified backup before activating the new app.
+Do not run the release upgrade bootstrap until at least one release exists.
+
 Schema version 2 adds the persistent login-attempt table and indexes.
 Schema version 3 adds the named-list and private-access tables, then links
 existing shopping items to a shared **Groceries** list without changing their

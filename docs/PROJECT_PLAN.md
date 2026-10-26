@@ -39,6 +39,25 @@ initial model-only Raspberry Pi 3B benchmarks support an optional feature.
   screens. Each feature has its own main navigation tab. Weather and RSS may
   use cards within their tabs. Use the balanced desktop layout: 32 px side
   margins up to a 1440 px content width.
+- Home includes a Contacts card. Each account owns up to 128 contacts with a
+  required name and optional phone, email, organization, and home address. Contacts are
+  private by default or can be shared read-only with the household. Owners can
+  add, edit, change visibility, and delete contacts. Phone import is one
+  contact at a time from the browser's contact picker, with a review step;
+  manual entry always remains available. Import name, phone, email,
+  organization, and home address when the device and browser support it;
+  duplicate phone/email matches warn but do not block save.
+- Add a Sticky Notes tab with up to 32 active notes authored per user. Notes
+  are limited to 128 characters, use one of eight fixed named colors, and are
+  sent at creation to individually selected users or everyone. Each author's
+  tab shows their notes; recipients' tabs show notes addressed to them. Everyone
+  includes the author. Notes can optionally expire 1 to 365 days after
+  creation. Expired notes disappear from all walls and no longer count toward
+  the active limit. Notes cannot be edited after creation and can only be
+  deleted by their author. Render notes as responsive
+  bento cards with author and creation date. Deleting a note frees its active
+  slot. Home remains first and Admin last; Sticky Notes is reorderable with the
+  other feature tabs.
 - An admin can set one household-wide order of feature tabs from the Admin tab
   only. Keep Home fixed at the start and Admin fixed at the end; the feature
   tabs between them can be reordered. The control's visual design is approved.

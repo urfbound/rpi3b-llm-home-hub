@@ -45,6 +45,28 @@ installs the web service and systemd backup timer, and prompts to install
 `python3-venv` if needed. Run it as your normal Pi login; do not prefix it
 with `sudo`. The app listens on loopback only.
 
+### Install from a published release
+
+After the first GitHub release is published, a fresh Raspberry Pi OS install
+can use this bootstrap command as the regular Pi login:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/urfbound/rpi3b-llm-home-hub/main/deploy/install-release.sh | sh
+```
+
+It downloads the latest published release bundle and checks its SHA-256
+checksum before running the existing installer. To upgrade an existing
+installation to the latest release, run:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/urfbound/rpi3b-llm-home-hub/main/deploy/upgrade.sh | sh
+```
+
+These commands are not usable until a release has been published. For a
+version-specific install or upgrade, download the matching release bundle and
+run `deploy/install.sh` from its extracted directory. The installer continues
+to create and verify a database backup before activating the updated service.
+
 ### Transfer files from Windows
 
 Open PowerShell in the project folder on Windows. Replace `username` and
