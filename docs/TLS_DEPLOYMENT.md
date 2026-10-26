@@ -15,37 +15,32 @@ devices to use that local name. The name must resolve to the Pi on the LAN.
 Replace it in [Caddyfile.example](../deploy/Caddyfile.example) if you choose a
 different name.
 
-## 2. Bind Home Hub to loopback and enable secure cookies
-
-Set these values in `/etc/homehub/homehub.env`:
-
-```ini
-HOMEHUB_BIND=127.0.0.1
-HOMEHUB_PORT=8080
-HOMEHUB_COOKIE_SECURE=true
-```
-
-Keep `HOMEHUB_SECRET_KEY` persistent and private. Restrict the environment
-file, for example with owner `root`, group `homehub`, and mode `0640`. Restart
-Home Hub after changing it:
-
-```sh
-sudo systemctl restart homehub
-sudo systemctl status homehub
-```
-
-Waitress now accepts requests only from the Pi itself. Caddy will be the only
-LAN-facing web service.
-
-## 3. Install and configure Caddy
+## 2. Install and configure Caddy
 
 Install the current stable Caddy package for Raspberry Pi OS using the
 [official Caddy installation instructions](https://caddyserver.com/docs/install).
-The official Debian-family package includes a systemd service. Copy
-[Caddyfile.example](../deploy/Caddyfile.example) to `/etc/caddy/Caddyfile` and
-replace `homehub.home.arpa` with the local name configured in step 1.
+The official Debian-family package includes a systemd service. From the
+transferred Home Hub repository on the Pi, check whether
+`/etc/caddy/Caddyfile` already exists. The setup command refuses to replace
+any existing file by default. If it contains only the package's default site,
+or you have decided to replace the existing sites, run:
 
-The example configuration is:
+```sh
+./deploy/enable_https.sh --replace-existing-caddyfile homehub.home.arpa
+```
+
+The script refuses to replace an existing Caddyfile unless you pass
+`--replace-existing-caddyfile`. The opt-in replaces the entire Caddyfile and
+saves a timestamped backup, so use it only when replacing existing Caddy
+sites is intended. For a custom Caddy setup you want to retain, merge the
+generated site into that configuration yourself instead of running the
+replacement command. The script generates and validates a configuration using
+Caddy's internal CA, restricts Waitress to loopback, enables secure session
+cookies, then restarts Home Hub and Caddy. It preserves other Home Hub
+environment settings and secrets. Pass a different local hostname as the
+argument if needed.
+
+The generated configuration follows this pattern:
 
 ```caddyfile
 homehub.home.arpa {

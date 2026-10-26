@@ -10,7 +10,8 @@ to `main` only after the user approves the completed change.
 ## Current status
 
 - **Foundations mostly in place:** account administration, roles and sessions,
-  CSRF, login rate limiting, verified backup/restore, TLS deployment guidance,
+  CSRF, login rate limiting, verified backup/restore, LAN HTTPS setup with
+  loopback-only Waitress and Caddy, TLS deployment guidance,
   and schema versioning are implemented. Initial Ollama latency and memory
   measurements on the Raspberry Pi 3B are recorded in
   [CHAT_PI_BENCHMARK.md](CHAT_PI_BENCHMARK.md). App and app-plus-model profiles

@@ -124,9 +124,11 @@ ssh -N -L 8080:127.0.0.1:8080 username@hostname
 ```
 
 Then open <http://127.0.0.1:8080> on the Windows PC. Stop the tunnel with
-Ctrl+C. For access from other household devices, follow
-[the TLS guide](docs/TLS_DEPLOYMENT.md) and keep access restricted to the
-household LAN; do not expose the service through a router port.
+Ctrl+C. For access from other household devices, install Caddy and run
+[`deploy/enable_https.sh`](deploy/enable_https.sh) as described in
+[the TLS guide](docs/TLS_DEPLOYMENT.md). This keeps Waitress on loopback and
+serves HTTPS on the household LAN; do not expose the service through a router
+port.
 
 ## Uninstall from Raspberry Pi OS
 
