@@ -42,6 +42,13 @@ to `main` only after the user approves the completed change.
   jobs. Manually verify repeat install and uninstall prompts, the systemd
   timers, and retained data/config ownership on a Pi using the regular-user/sudo
   flow on the target hostname.
+- Release installation path is prepared: tagged GitHub releases build a
+  versioned source bundle with a SHA-256 manifest; install and upgrade
+  bootstraps fetch the latest release and run the existing backup-preserving
+  installer. Before the first release, verify a clean Pi install, an upgrade
+  from the previous supported release, checksum failure handling, and the
+  public `curl | sh` instructions. The repository must remain public for
+  unauthenticated release downloads.
 - Complete the Lists migration and test each supported upgrade path, including
   pre-upgrade backup creation, data preservation, rollback, and newer-schema
   refusal.
@@ -338,6 +345,19 @@ to `main` only after the user approves the completed change.
   flow without introducing a separate always-on indexing service. Test CPU,
   memory, response time, and quality on the Pi before enabling tools; tool use
   must remain behind the existing admin controls.
+- Investigate downloadable Project Gutenberg collections and size. Kiwix's
+  English all-books ZIM was about 206 GB in the 2025-11 catalog, versus about
+  72 GiB for an older 2023-08 edition. Compare the
+  full collection with practical subsets and direct ebook formats; establish
+  current sizes, licensing/redistribution constraints, serving approach, and
+  whether this merits a separate opt-in library.
+- Investigate free/open offline dictionaries and thesauri, including English
+  Wiktionary (full and smaller/simple editions), WordNet/Open English WordNet,
+  and OpenThesaurus. Compare data sizes, language coverage, licenses, update
+  needs, and simple lookup integration for household users and the local LLM.
+  Prefer compact machine-readable datasets and a lightweight local lookup
+  implementation where practical; do not assume a general Kiwix service is
+  needed for dictionary or thesaurus lookup.
 
 ## Post-R1.0
 
