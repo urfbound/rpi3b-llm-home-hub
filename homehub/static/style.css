@@ -34,3 +34,24 @@ select{font:inherit;color:var(--ink);background:var(--bg);border:1px solid var(-
 .list-transfer{display:flex;align-items:center;gap:.5rem;flex-wrap:wrap;margin-top:1rem}.list-transfer dialog{margin:auto}.list-transfer textarea{resize:vertical}.list-transfer [role=status]{min-height:1.4em}
 .paste-review{max-width:760px;margin:1rem auto}.paste-review h1{font-family:Georgia,serif}.paste-review .paste-edit{margin:1rem 0}.paste-preview{list-style:none;padding:0!important;border-top:1px solid var(--line)}.paste-preview li{display:flex;justify-content:space-between;gap:1rem;padding:.65rem .2rem;border-bottom:1px solid var(--line)}.paste-preview small{color:var(--muted);text-align:right}.paste-review .callout ul{margin:.4rem 0}.paste-review .callout li{margin:.25rem 0}@media(max-width:550px){.paste-preview li{align-items:start;flex-direction:column;gap:.1rem}.paste-preview small{text-align:left}}
 .chat-prompt-form button:disabled{opacity:.58;cursor:wait}.chat-working-ellipsis{display:inline-block;width:1.3em;overflow:hidden;vertical-align:bottom;white-space:nowrap;animation:chat-ellipsis 1.2s steps(4,end) infinite}@keyframes chat-ellipsis{from{width:0}to{width:1.3em}}@media(prefers-reduced-motion:reduce){.chat-working-ellipsis{animation:none;width:1.3em}}
+
+/* Keep dashboard cards independent and fit the approved 1440px / 32px layout. */
+.grid{align-items:start}.grid>.panel{min-width:0}
+.calendar-month-grid{container-type:inline-size}.weekday-short,.weekday-narrow{display:none}
+@container (max-width:560px){.weekday-full{display:none}.weekday-short{display:inline}}
+@container (max-width:390px){.weekday-short{display:none}.weekday-narrow{display:inline}}
+.calendar-month-grid th{white-space:nowrap}
+.calendar-downloads p{margin:.35rem 0}
+.list-picker-form{display:grid!important;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:.55rem;max-width:100%}
+.list-picker-form label{display:flex;align-items:center;white-space:nowrap;margin:0}
+.list-picker-form select{min-width:0;width:100%}
+.checks.list-items>li{display:flex;align-items:center;gap:.4rem;flex-wrap:wrap;min-width:0}
+.checks.list-items>li>form{flex:1 1 12rem;min-width:0}
+.checks.list-items>li>form span{overflow-wrap:anywhere}
+.checks.list-items>li>button{flex:0 0 auto;white-space:nowrap}
+.checks.list-items>li>.todo-metadata{flex:1 0 100%;margin:.05rem 0 .1rem 2.45rem}
+.recipe-ingredient-row{grid-template-columns:minmax(60px,.55fr) minmax(65px,.6fr) minmax(100px,1.3fr) minmax(80px,1fr) auto;align-items:center}
+.recipe-ingredient-row button,.recipe-step-row button{white-space:nowrap;align-self:center}
+.recipe-step-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:.45rem;align-items:center}
+@media(max-width:700px){.recipe-ingredient-row{grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto}.recipe-ingredient-row input[name=ingredient_name]{grid-column:1/-1}.recipe-ingredient-row input[name=ingredient_note]{grid-column:1/3}.recipe-ingredient-row button{grid-column:3;grid-row:2}.list-picker-form{grid-template-columns:1fr auto}.list-picker-form label{grid-column:1/-1}.list-picker-form select{grid-column:1}.list-picker-form>button{grid-column:2;grid-row:2}}
+.cpu-bars{gap:clamp(1px,.25vw,3px)}.cpu-bar{flex:1 1 0;min-width:0;max-width:none}

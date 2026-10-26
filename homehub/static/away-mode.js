@@ -9,6 +9,10 @@
     return `${PREFIX}:${userId}:${listId}`;
   }
 
+  function snapshotUrl(listId) {
+    return `/shopping/sync?list_id=${encodeURIComponent(listId)}`;
+  }
+
   function newState(userId, list, items) {
     const byId = {};
     for (const item of items) byId[String(item.id)] = { ...item };
@@ -81,7 +85,7 @@
     return state;
   }
 
-  const API = { storageKey, newState, queueCheckbox, applySyncResults,
+  const API = { storageKey, snapshotUrl, newState, queueCheckbox, applySyncResults,
     resolveWithServer, keepPhoneChoice };
   global.HomeHubAway = API;
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
@@ -284,7 +288,7 @@
         .map(([id, pending]) => ({ id: Number(id), done: pending.done,
           base_done: pending.base_done, base_updated_at: pending.base_updated_at }));
       try {
-        const response = await global.fetch('/shopping/sync', {
+        const response = await global.fetch(changes.length ? '/shopping/sync' : API.snapshotUrl(list.id), {
           method: changes.length ? 'POST' : 'GET',
           credentials: 'same-origin',
           headers: changes.length ? {

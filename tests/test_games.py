@@ -81,8 +81,10 @@ def test_daily_attempt_is_private_resumable_and_scored_once(game_app):
     alex = sign_in(game_app, 'alex')
     sam = sign_in(game_app, 'sam')
     assert alex.post('/games/word/guess', data={'guess': answer}).status_code == 400
-    assert alex.post('/games/word/guess', data={'_csrf': token_for(alex),
-                                                'guess': '1bad!'}).status_code == 400
+    invalid = alex.post('/games/word/guess', data={'_csrf': token_for(alex),
+                                                   'guess': '1bad!'})
+    assert invalid.status_code == 302
+    assert b'Enter a valid five-letter word from the offline word list' in alex.get('/games').data
     assert alex.post('/games/word/guess', data={'_csrf': token_for(alex),
                                                 'guess': answer}).status_code == 302
     resumed = alex.get('/games').data
@@ -120,6 +122,35 @@ def test_word_garden_accepts_common_offline_guesses(game_app):
         assert alex.post('/games/word/guess', data={
             '_csrf': token_for(alex), 'guess': guess
         }).status_code == 302
+
+def test_invalid_word_gives_prompt_without_spending_a_turn(game_app):
+    from homehub.games import daily_answer
+    alex = sign_in(game_app, 'alex')
+    answer = daily_answer(date(2026, 10, 24))
+
+    assert alex.post('/games/word/guess', data={
+        '_csrf': token_for(alex), 'guess': 'SMILE'
+    }).status_code == 302
+    invalid = alex.post('/games/word/guess', data={
+        '_csrf': token_for(alex), 'guess': 'ZZZZZ'
+    })
+
+    assert invalid.status_code == 302
+    page = alex.get('/games').data
+    assert b'Enter a valid five-letter word from the offline word list' in page
+    with sqlite3.connect(game_app.config['DATABASE']) as db:
+        guesses = json.loads(db.execute(
+            "SELECT guesses FROM game_attempts WHERE mode='daily'"
+        ).fetchone()[0])
+    assert guesses == ['SMILE']
+    assert alex.post('/games/word/guess', data={
+        '_csrf': token_for(alex), 'guess': answer
+    }).status_code == 302
+    with sqlite3.connect(game_app.config['DATABASE']) as db:
+        guesses = json.loads(db.execute(
+            "SELECT guesses FROM game_attempts WHERE mode='daily'"
+        ).fetchone()[0])
+    assert guesses == ['SMILE', answer]
 
 
 def test_practice_never_changes_daily_score(game_app):
@@ -343,9 +374,13 @@ def test_wumpus_map_shows_topology_and_only_visited_clues(game_app):
     assert set(rooms) == set(ROOMS)
     assert rooms[start] == ', '.join(warnings_for(start, game['placements']))
     assert all(not clues for room, clues in rooms.items() if room != start)
-    assert f'class="wumpus-room-number" x="30">{start}</text>' in page
-    assert all(f'class="wumpus-room-number" x="30">{room}</text>' not in page
-               for room in ROOMS if room != start)
+    visible_numbers = {int(room) for room in re.findall(
+        r'class="wumpus-room-number" x="30">(\d+)</text>', page)}
+    assert visible_numbers == {start, *ROOMS[start]}
+    assert '.wumpus-room.unseen .wumpus-room-number{fill:var(--muted)}' in page
+    assert all(f'class="wumpus-room unseen"' in re.search(
+        rf'<g class="([^"]+)"[^>]*id="wumpus-room-{room}".*?</g>', page).group()
+               for room in ROOMS[start])
     assert len(re.findall(r'class="wumpus-room unseen"', page)) == 19
     start_markup = re.search(rf'id="wumpus-room-{start}".*?</g>', page).group()
     assert ('🍃' in start_markup) == ('You feel a draft.' in warnings_for(start, game['placements']))
@@ -363,7 +398,14 @@ def test_wumpus_map_shows_topology_and_only_visited_clues(game_app):
     assert rooms[start] == ', '.join(warnings_for(start, game['placements']))
     assert rooms[safe] == ', '.join(warnings_for(safe, game['placements']))
     assert all(not clues for room, clues in rooms.items() if room not in (start, safe))
-    assert f'class="wumpus-room-number" x="30">{safe}</text>' in page
+    newly_visible = {start, safe} | {neighbor for visited in (start, safe)
+                                     for neighbor in ROOMS[visited]}
+    visible_numbers = {int(room) for room in re.findall(
+        r'class="wumpus-room-number" x="30">(\d+)</text>', page)}
+    assert visible_numbers == newly_visible
+    assert all(f'class="wumpus-room unseen"' in re.search(
+        rf'<g class="([^"]+)"[^>]*id="wumpus-room-{room}".*?</g>', page).group()
+               for room in newly_visible - {start, safe})
     corridors = [(classes, int(a), int(b)) for classes, a, b in
                  re.findall(r'<line class="([^"]+)" data-a="(\d+)" data-b="(\d+)"', page)]
     assert all(('dashed' in classes) == (a not in (start, safe) or b not in (start, safe))

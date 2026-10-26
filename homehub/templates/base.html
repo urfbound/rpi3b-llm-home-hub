@@ -22,6 +22,8 @@
     {% if current_user %}
     <nav class="site-nav" aria-label="Main navigation">
       <a href="{{ url_for('index') }}" {% if request.endpoint == 'index' %}aria-current="page"{% endif %}>Home</a>
+      <a href="/lists" {% if request.path == '/lists' %}aria-current="page"{% endif %}>Lists</a>
+      <a href="/calendar" {% if request.path == '/calendar' %}aria-current="page"{% endif %}>Calendar</a>
       {% for tab in feature_tabs if tab['visible'] %}
       <a href="{{ tab['href'] }}" {% if tab['active'] %}aria-current="page"{% endif %}>{{ tab['label'] }}</a>
       {% endfor %}
@@ -29,7 +31,7 @@
     </nav>
     {% endif %}
     <div class="toolbar">
-      <button type="button" onclick="toggleTheme()" aria-label="Toggle light and dark theme">Light / Dark</button>
+      <button type="button" onclick="toggleTheme()" aria-label="Toggle light and dark theme">◐ Theme</button>
       {% if current_user %}
       <a href="{{ url_for('change_password') }}">{{ current_user['display_name'] }}</a>
       <form method="post" action="{{ url_for('logout') }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><button>Log out</button></form>

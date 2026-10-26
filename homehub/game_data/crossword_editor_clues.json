@@ -1,0 +1,514 @@
+{
+  "SEA": {
+    "larry": ["A body that needs no arms", "It has a shore but no house", "Where a wave can make a scene"],
+    "moe": ["Saltwater expanse", "Ocean or one of its parts", "Large body of salt water"],
+    "curly": ["The biggest splash beyond the beach", "Where waves keep trying to clap", "A boat's very roomy driveway"],
+    "shemp": ["The wide blue view from a beach blanket", "Where the fishing boats went this morning", "Water all the way to the horizon"]
+  },
+  "AGO": {
+    "larry": ["A little before the present", "How yesterday relates to now", "Word after 'a while' or 'years'"],
+    "moe": ["Before the present", "In the past"],
+    "curly": ["Put it after 'a minute' and time flies", "The word that sends 'years' backward", "Yesterday? That's one day ___"],
+    "shemp": ["How we describe a visit from years past", "The word after 'long' in an old story", "What follows 'a while' in a memory"]
+  },
+  "SEN": {
+    "larry": ["A lawmaker's title in three letters", "Title before a name on Capitol mail", "Abbreviated member of an upper house"],
+    "curly": ["Short title for someone voting up high", "Three-letter title for an upper-house member", "A lawmaker's tiny title"],
+    "shemp": ["Title on a letter to a senator, briefly", "Abbreviation before an upper-house member's name", "A short title on a lawmaker's envelope"]
+  },
+  "TEA": {
+    "larry": ["Leaves that can fill a cup", "A steeped answer to a chilly day", "It starts as leaves and ends as a drink"],
+    "curly": ["Leafy brew that warms your hands", "A drink made by dunking a little bag", "What a kettle helps turn leaves into"],
+    "shemp": ["A warm cup beside the morning paper", "What we steep while a friend visits", "The drink waiting beside a biscuit"]
+  },
+  "SPA": {
+    "larry": ["Place to get wrapped up in relaxation", "A retreat with more towels than meetings", "Where a facial is on the schedule"],
+    "curly": ["Where cucumbers may land on your eyes", "A place to soak away the grumps", "A retreat with fluffy robes"],
+    "shemp": ["A quiet retreat for a massage", "Where someone might book a soothing bath", "A day of pampering away from chores"]
+  },
+  "EGO": {
+    "larry": ["The self that may get inflated", "A small word for a big self-image", "What praise might swell"],
+    "curly": ["A head that got too big, figuratively", "What needs deflating after too much bragging", "The 'me' in a big-headed boast"],
+    "shemp": ["What a little praise can quietly lift", "A sense of self that may need checking", "The pride behind a boast at supper"]
+  },
+  "EAR": {
+    "larry": ["It may be lent but not handed over", "An organ you can lend to a friend", "A corn feature that can listen, in a pun"],
+    "curly": ["What wiggles when a good song starts", "A listener's handy side piece"],
+    "shemp": ["What you lend to a friend's story", "A place to tuck a pencil while working"]
+  },
+  "ARE": {
+    "larry": ["Plural partner of 'is'", "What 'we' may do simply by existing"],
+    "curly": ["What 'they' do when they're here", "The bit of 'we ___' that says we exist"],
+    "shemp": ["The middle word in 'we ___ home'", "What follows 'you' in a greeting"]
+  },
+  "LIE": {
+    "larry": ["Something you might tell or do on a couch", "It might be told or lain in", "A fib, or a position on the sofa"],
+    "curly": ["A fib that refuses to stand up", "What the couch potato does, or tells"],
+    "shemp": ["An untruth told at the kitchen table", "What a tired guest may do on the couch"]
+  },
+  "AVE": {
+    "larry": ["A street that ends before the address does", "A road shortened on an envelope"],
+    "curly": ["The little road word after a street name", "An address ending with just three letters"],
+    "shemp": ["Street suffix on the mail carrier's route", "An abbreviated road on a home address"]
+  },
+  "EVE": {
+    "larry": ["A night before, or a first woman", "Before the day, in more ways than one"],
+    "curly": ["The night when tomorrow steals the show", "A holiday's dress rehearsal"],
+    "shemp": ["The night before a family celebration", "When the holiday dinner is almost here"]
+  },
+  "SEE": {
+    "larry": ["Perceive a point, or a painting", "What eyes do and minds sometimes manage"],
+    "curly": ["What your eyes do at a surprise party", "Take a look and say 'Oh!'"],
+    "shemp": ["What you do when the lights come on", "Visit someone, or look their way"]
+  },
+  "AGE": {
+    "larry": ["Number that grows without exercise", "Years earned just by waiting"],
+    "curly": ["The number that adds one on your birthday", "What candles tell you, more or less"],
+    "shemp": ["The years behind a birthday wish", "What the family counts with candles"]
+  },
+  "DIE": {
+    "larry": ["A cube that can be cast", "One chance in six, if it's fair"],
+    "curly": ["Little cube rattling on game night", "Roll this and hope for six"],
+    "shemp": ["The small cube from the board-game box", "One piece rattling beside the game board"]
+  },
+  "OAR": {
+    "larry": ["A paddle with a fixed point", "Boat mover that works by hand"],
+    "curly": ["The splashy lever in a rowboat", "What makes a boat go without a motor"],
+    "shemp": ["What we pulled through the lake water", "A rower's tool beside the dock"]
+  },
+  "ORE": {
+    "larry": ["Rock with more in it than meets the eye", "Something valuable before refining"],
+    "curly": ["Treasure hiding inside a chunk of rock", "What a miner hopes the shovel finds"],
+    "shemp": ["Mineral-rich rock hauled from a mine", "Rock sent off to be refined"]
+  },
+  "TIE": {
+    "larry": ["Neckwear that can also end a match", "It may be knotted or scored"],
+    "curly": ["What hangs at a collar or ends a match", "A knot around your neck, perhaps"],
+    "shemp": ["What Dad straightened before the wedding", "A match with no winner, or neckwear"]
+  },
+  "YEA": {
+    "larry": ["The affirmative side of a vote", "A yes cast in formal company"],
+    "curly": ["A loud little yes in the voting room", "A vote that sounds like a cheer"],
+    "shemp": ["A yes counted at the meeting", "The approving vote at the town hall"]
+  },
+  "TEN": {
+    "larry": ["Base for our number system", "The count after all your fingers"],
+    "curly": ["How many fingers join a full hand count", "The number you reach with both hands"],
+    "shemp": ["The last count in a game of hide-and-seek", "A perfect score on a little test"]
+  },
+  "HEN": {
+    "larry": ["A mother with feathers", "A layer that isn't on a cake"],
+    "curly": ["The clucker responsible for breakfast", "A bird with an egg to brag about"],
+    "shemp": ["The bird tending eggs in the coop", "A laying bird on a neighbour's farm"]
+  },
+  "ACE": {
+    "larry": ["A card that tops the king", "Top mark, top card, or top player"],
+    "curly": ["The card you hope to find hiding in a sleeve", "A tennis serve nobody touches"],
+    "shemp": ["The highest card in Grandma's hand", "A star player everyone wants on the team"]
+  },
+  "SET": {
+    "larry": ["A collection that can be arranged", "Put in place, or the place for a play"],
+    "curly": ["What a jelly does when it stops wobbling", "A whole matching bunch"],
+    "shemp": ["What the table is before supper", "A matching group kept in one box"]
+  },
+  "LEE": {
+    "larry": ["A side that dodges the wind", "Where a sailor gets out of the breeze"],
+    "curly": ["The side of the boat that avoids a faceful of wind", "A sheltered spot when the gusts arrive"],
+    "shemp": ["The sheltered side of the garden wall", "Where we stood to escape the wind"]
+  },
+  "ALE": {
+    "larry": ["A brew with a pub address", "What may come in a pint, not a cup"],
+    "curly": ["A foamy pint after a long walk", "The drink in a tavern mug"],
+    "shemp": ["A malt brew ordered at the local pub", "What an old tavern might serve in a pint"]
+  },
+  "ALL": {
+    "larry": ["Nothing left out", "Every last one, with none to spare"],
+    "curly": ["The whole gang, right down to the dog", "Every single one, even the straggler"],
+    "shemp": ["Everyone at the family table", "The entire amount, down to the last crumb"]
+  },
+  "LOT": {
+    "larry": ["A parcel or a crowd", "Where cars gather, or how much there is"],
+    "curly": ["A big bunch, or a place to park", "What you win at auction in one bundle"],
+    "shemp": ["The patch of land beside the house", "A whole bunch of old photos in one box"]
+  },
+  "SPY": {
+    "larry": ["One who watches without being seen", "A secret watcher or a secret worker"],
+    "curly": ["Someone peeking through a tiny hole", "The sneaky watcher in a mystery game"],
+    "shemp": ["A hidden observer in the old adventure book", "Someone watching quietly from a distance"]
+  },
+  "ICE": {
+    "larry": ["Water that got hard", "A rink's floor or a cake's finish"],
+    "curly": ["The slippery stuff beneath skates", "What turns a drink cold and a pavement slick"],
+    "shemp": ["Frozen cubes waiting in the tray", "What we put in lemonade on a hot day"]
+  },
+  "DUE": {
+    "larry": ["Owed, whether it's money or time", "Expected soon, like a baby or a bill"],
+    "curly": ["What the library book is tomorrow", "Expected at any moment, maybe with balloons"],
+    "shemp": ["What the rent is at the start of the month", "Expected to arrive by Friday"]
+  },
+  "NAH": {
+    "larry": ["The unofficial negative", "A no that skipped the tie"],
+    "curly": ["How you might refuse another scoop", "A shrugging, informal no"],
+    "shemp": ["The casual answer when supper is offered twice", "What someone says instead of a formal no"]
+  },
+  "AIR": {
+    "larry": ["Something you can breathe or broadcast", "What carries a song and fills a room"],
+    "curly": ["The invisible stuff filling a balloon", "What a radio show goes on"],
+    "shemp": ["What came in through the open kitchen window", "The fresh breeze after a long rain"]
+  },
+  "LAD": {
+    "larry": ["A young fellow in an old tale", "A boy by another name"],
+    "curly": ["The youngster with mud on his shoes", "A boy out for an adventure"],
+    "shemp": ["A young fellow helping with the chores", "What a grandparent might call a boy"]
+  },
+  "UGH": {
+    "larry": ["A word for an unwelcome surprise", "Disgust in three letters"],
+    "curly": ["The noise after tasting burnt toast", "What a muddy shoe might make you say"],
+    "shemp": ["The groan on finding a mess in the kitchen", "An annoyed sound when the bus is late"]
+  },
+  "SAT": {
+    "larry": ["Took a seat, in the past", "What a sitter did yesterday"],
+    "curly": ["What the tired dog did on command", "The move after standing too long"],
+    "shemp": ["Took a chair by the fire", "What we did around the dinner table"]
+  },
+  "HAS": {
+    "larry": ["Owns, when the subject is one person", "What 'she' does with a possession"],
+    "curly": ["What he does with the last biscuit", "The word in 'she ___ the keys'"],
+    "shemp": ["Possesses, as in 'Dad ___ the map'", "What a neighbour does with a spare key"]
+  },
+  "ERA": {
+    "larry": ["A long stretch with a short name", "A chapter in history without pages"],
+    "curly": ["A whole age squeezed into three letters", "What historians put between two dates"],
+    "shemp": ["A period remembered for its music", "A named stretch of years in history"]
+  },
+  "PEA": {
+    "larry": ["A tiny green sphere at supper", "Seed that can sit in a pod"],
+    "curly": ["A green marble you can eat", "A little green stowaway in a pod"],
+    "shemp": ["A small vegetable rolling across the plate", "One green seed in the garden row"]
+  },
+  "EAT": {
+    "larry": ["Make a meal disappear", "What a fork helps you do"],
+    "curly": ["What you do before asking for seconds", "The reason the cookies vanished"],
+    "shemp": ["Have supper together", "Take food at the family table"]
+  },
+  "ILL": {
+    "larry": ["Not feeling at one's best", "Under the weather, but not outside"],
+    "curly": ["How you feel when the soup stays untouched", "Not well enough for the playground"],
+    "shemp": ["Feeling sick on a school morning", "Under the weather and resting at home"]
+  },
+  "TOE": {
+    "larry": ["A digit that counts beneath a shoe", "It can stub itself on the furniture"],
+    "curly": ["What finds the table leg in the dark", "One little piggy's address"],
+    "shemp": ["A foot digit peeking from a sandal", "What Grandpa stubbed on the chair"]
+  },
+  "SON": {
+    "larry": ["A boy in a family tree", "A male descendant"],
+    "curly": ["The young fellow in the family photo", "A boy addressed by his parents"],
+    "shemp": ["A parent's boy, however grown", "The male child in a family story"]
+  },
+  "GET": {
+    "larry": ["Obtain, or finally understand", "What may happen to a joke after a pause"],
+    "curly": ["What you do when the punchline clicks", "Fetch it, grasp it, bring it home"],
+    "shemp": ["Bring home the milk from the shop", "Understand what a friend meant at last"]
+  },
+  "OIL": {
+    "larry": ["A slippery answer to a squeak"],
+    "curly": ["What keeps the frying pan from grumbling"],
+    "shemp": ["A little of this quieted the old hinge"]
+  },
+  "SHY": {
+    "larry": ["Not eager to take the stage"],
+    "curly": ["The one hiding behind the birthday cake"],
+    "shemp": ["How a child may feel meeting new neighbours"]
+  },
+  "DEATH": {
+    "larry": ["Life's final full stop"],
+    "curly": ["What the villain narrowly escapes in a cartoon"],
+    "shemp": ["The end of a life, mourned by loved ones"]
+  },
+  "HAT": {
+    "larry": ["A cap by another name"],
+    "curly": ["What flies off in a sudden gust"],
+    "shemp": ["What Grandpa hung beside the front door"]
+  },
+  "YET": {
+    "larry": ["Still to come, in a small word"],
+    "curly": ["The last word in 'not finished ___!'"],
+    "shemp": ["What follows 'not ready' while dinner cooks"]
+  },
+  "PLAYS": {
+    "larry": ["Stage works, or a game's moves"],
+    "curly": ["What the pup does with a squeaky toy"],
+    "shemp": ["Takes part when the family game begins"]
+  },
+  "LET": {
+    "larry": ["Allow, or rent out"],
+    "curly": ["What you do when the dog begs to come in"],
+    "shemp": ["Allow a friend to borrow the spare chair"]
+  },
+  "ADS": {
+    "larry": ["Messages that pay to interrupt"],
+    "curly": ["The little pitches between the songs"],
+    "shemp": ["Paid notices tucked into the newspaper"]
+  },
+  "ACT": {
+    "larry": ["A deed, or a piece of a play"],
+    "curly": ["What the school-show star gets up to"],
+    "shemp": ["A kind deed done without fanfare"]
+  },
+  "DUO": {
+    "larry": ["A pair that can share the spotlight"],
+    "curly": ["Two voices trying to sing one song"],
+    "shemp": ["Two friends performing together"]
+  },
+  "WAS": {
+    "larry": ["Past partner of 'is'"],
+    "curly": ["The word in 'that ___ a surprise!'"],
+    "shemp": ["What follows 'it' in an old story"]
+  },
+  "SEW": {
+    "larry": ["Join without glue"],
+    "curly": ["What fixes a runaway shirt button"],
+    "shemp": ["Mend a tear with needle and thread"]
+  },
+  "LIP": {
+    "larry": ["A mouth's edge or a cheeky remark"],
+    "curly": ["The part that starts a whistle"],
+    "shemp": ["Where the soup spoon touches your mouth"]
+  },
+  "RIP": {
+    "larry": ["Tear that may come from a snag"],
+    "curly": ["What happens when the wrapping paper gives way"],
+    "shemp": ["A tear in an old pair of jeans"]
+  },
+  "DEALS": {
+    "larry": ["Bargains, or passes out cards"],
+    "curly": ["What the dealer does before the fun starts"],
+    "shemp": ["Good bargains found at the weekend market"]
+  },
+  "SAY": {
+    "larry": ["Speak, or have a voice in a decision"],
+    "curly": ["What you do when a secret slips out"],
+    "shemp": ["Tell the family what you think"]
+  },
+  "GLASS": {
+    "larry": ["A pane that could hold a drink"],
+    "curly": ["The clear stuff a ball mustn't hit"],
+    "shemp": ["A drinking vessel set beside each plate"]
+  },
+  "SUE": {
+    "larry": ["Take a complaint to court"],
+    "curly": ["What a cartoon lawyer threatens to do"],
+    "shemp": ["Bring a claim before a judge"]
+  },
+  "LED": {
+    "larry": ["Went first, and others followed"],
+    "curly": ["What the guide did at the front of the hike"],
+    "shemp": ["Showed the way along the trail"]
+  },
+  "RAP": {
+    "larry": ["A sharp knock or a style of music"],
+    "curly": ["Knock-knock, but just one beat"],
+    "shemp": ["The quick knock at the back door"]
+  },
+  "MEN": {
+    "larry": ["Plural of a fellow"],
+    "curly": ["The grown fellows on the soccer team"],
+    "shemp": ["Adult males gathered for a photo"]
+  },
+  "MET": {
+    "larry": ["Encountered, once upon a time"],
+    "curly": ["What two lost friends finally did"],
+    "shemp": ["Ran into a neighbour at the shop"]
+  },
+  "READS": {
+    "larry": ["Turns pages into meaning"],
+    "curly": ["What the child does with a flashlight under the blanket"],
+    "shemp": ["Looks through a book before bed"]
+  },
+  "SAP": {
+    "larry": ["Tree fluid, or a foolish fellow"],
+    "curly": ["The sticky stuff inside a maple tree"],
+    "shemp": ["What the maple gave us before the syrup"]
+  },
+  "REALM": {
+    "larry": ["A kingdom without a map, perhaps"],
+    "curly": ["The land inside a make-believe castle"],
+    "shemp": ["A whole world in a bedtime story"]
+  },
+  "HAD": {
+    "larry": ["Owned, back when"],
+    "curly": ["What you did with the last cookie yesterday"],
+    "shemp": ["Possessed once, as in 'we ___ a dog'"]
+  },
+  "DEALT": {
+    "larry": ["Handed out cards or handled trouble"],
+    "curly": ["What the card player did before the game"],
+    "shemp": ["Passed the playing cards around the table"]
+  },
+  "THE": {
+    "larry": ["Tiny word pointing to a particular one"],
+    "curly": ["Little word in '___ big surprise'"],
+    "shemp": ["Word before 'family' in a familiar phrase"]
+  },
+  "SHE": {
+    "larry": ["A pronoun for the heroine"],
+    "curly": ["What the story says before 'won the race'"],
+    "shemp": ["Word used for a woman in a story"]
+  },
+  "STATS": {
+    "larry": ["Figures that don't need drawing"],
+    "curly": ["Numbers a sports fan can rattle off"],
+    "shemp": ["The figures on the back of a baseball card"]
+  },
+  "TOO": {
+    "larry": ["Also, or excessively"],
+    "curly": ["The word after 'me' when everyone joins in"],
+    "shemp": ["What a sibling says when asking for a turn as well"]
+  },
+  "DIP": {
+    "larry": ["A brief plunge or a bowl for chips"],
+    "curly": ["What a chip takes before disappearing"],
+    "shemp": ["The sauce beside the vegetable tray"]
+  },
+  "TENDS": {
+    "larry": ["Usually does, or takes care of"],
+    "curly": ["What the gardener does for thirsty plants"],
+    "shemp": ["Looks after the roses each morning"]
+  },
+  "NET": {
+    "larry": ["What catches a ball, or remains after deductions"],
+    "curly": ["A mesh trap for a runaway soccer ball"],
+    "shemp": ["Mesh stretched across the backyard goal"]
+  },
+  "TEETH": {
+    "larry": ["A comb has some, but never brushes them"],
+    "curly": ["What the dentist counts while you say 'ah'"],
+    "shemp": ["What we brush before bed"]
+  },
+  "SAW": {
+    "larry": ["Noticed, or a toothed cutting tool"],
+    "curly": ["The tool that makes a board shorter"],
+    "shemp": ["What Grandpa used to cut the old plank"]
+  },
+  "LAP": {
+    "larry": ["One circuit, or a seat for a child"],
+    "curly": ["A cat's favourite human landing pad"],
+    "shemp": ["Where the sleepy kitten curled up"]
+  },
+  "AND": {
+    "larry": ["The small bridge between two nouns"],
+    "curly": ["The word that lets both cookies come along"],
+    "shemp": ["What joins 'tea' to 'toast' at breakfast"]
+  },
+  "READY": {
+    "larry": ["All set without being placed anywhere"],
+    "curly": ["What everyone shouts before the race begins"],
+    "shemp": ["Prepared to leave, with coat and shoes on"]
+  },
+  "END": {
+    "larry": ["Finish, or a book's final page"],
+    "curly": ["Where the story runs out of pages"],
+    "shemp": ["The point when the bedtime story is over"]
+  },
+  "TON": {
+    "larry": ["A weight that is no small amount"],
+    "curly": ["A whole heap, even when nothing is weighed"],
+    "shemp": ["A very large amount of chores, informally"]
+  },
+  "LEAST": {
+    "larry": ["The smallest of the lot"],
+    "curly": ["The answer when you pick the tiniest slice"],
+    "shemp": ["The smallest amount left in the jar"]
+  },
+  "TAP": {
+    "larry": ["A faucet, or a light knock"],
+    "curly": ["A tiny knock with one finger"],
+    "shemp": ["What we turn to fill the kettle"]
+  },
+  "LOG": {
+    "larry": ["A record that can also burn"],
+    "curly": ["A piece of wood for a roaring fire"],
+    "shemp": ["What we added to the fireplace"]
+  },
+  "CAB": {
+    "larry": ["A taxi, or a truck driver's room"],
+    "curly": ["The car you hail with a wave"],
+    "shemp": ["What took us home after the concert"]
+  },
+  "ITS": {
+    "larry": ["Possessive for something, not someone"],
+    "curly": ["The word in 'the pup wagged ___ tail'"],
+    "shemp": ["What belongs to the family dog in a sentence"]
+  },
+  "BEAST": {
+    "larry": ["A creature of more than mild manners"],
+    "curly": ["The monster hiding in a storybook cave"],
+    "shemp": ["A large wild animal in a tale"]
+  },
+  "GAS": {
+    "larry": ["A state of matter, or fuel for a car"],
+    "curly": ["The fuel the old car drinks"],
+    "shemp": ["Fuel put in the car before the drive"]
+  },
+  "BEATS": {
+    "larry": ["Wins against, or keeps time with"],
+    "curly": ["What a drum does in a marching song"],
+    "shemp": ["Rhythms we tapped on the kitchen table"]
+  },
+  "FEE": {
+    "larry": ["The price of getting in"],
+    "curly": ["The little charge that makes the bill bigger"],
+    "shemp": ["What the club collected for membership"]
+  },
+  "ASH": {
+    "larry": ["What's left after the flames leave"],
+    "curly": ["The gray dust hiding in the fireplace"],
+    "shemp": ["What we swept from the hearth in the morning"]
+  },
+  "LAB": {
+    "larry": ["A test site, or a short name for a dog"],
+    "curly": ["Where the science experiment bubbles"],
+    "shemp": ["The room where a sample is tested"]
+  },
+  "SAD": {
+    "larry": ["The feeling after an unhappy ending"],
+    "curly": ["How the pup looks when the ball is lost"],
+    "shemp": ["How a friend may feel after a loss"]
+  },
+  "HAY": {
+    "larry": ["Dried grass with a barn address"],
+    "curly": ["The horse's crunchy-looking supper"],
+    "shemp": ["Dried grass stacked in the barn"]
+  },
+  "MAC": {
+    "larry": ["A raincoat or a computer, briefly"],
+    "curly": ["What you might put on in the rain, informally"],
+    "shemp": ["A raincoat hanging by the door, briefly"]
+  },
+  "TRIAL": {
+    "larry": ["A test that may also happen in court"],
+    "curly": ["The first wobbly try before getting it right"],
+    "shemp": ["A test run before the family event"]
+  },
+  "TAN": {
+    "larry": ["A pale brown shade, or its sunny cause"],
+    "curly": ["What too much sun leaves on a forearm"],
+    "shemp": ["A light brown colour on the garden fence"]
+  },
+  "SAG": {
+    "larry": ["Droop under the weight of things"],
+    "curly": ["What a tired hammock does in the middle"],
+    "shemp": ["How an old shelf may bend in the centre"]
+  },
+  "MOB": {
+    "larry": ["A crowd with no neat queue"],
+    "curly": ["A crowd that all rushes for the last slice"],
+    "shemp": ["A large crowd outside the theatre"]
+  },
+  "NAP": {
+    "larry": ["A short sleep that can stretch"],
+    "curly": ["What the cat calls an afternoon plan"],
+    "shemp": ["A little rest on the sofa after lunch"]
+  }
+}

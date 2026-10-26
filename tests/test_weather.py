@@ -7,7 +7,8 @@ import pytest
 from homehub.constants import WEATHER_FORECAST_DAYS_DEFAULT, WEATHER_FORECAST_DAYS_MAXIMUM
 from homehub.weather import (
     WeatherError, fetch_forecast, format_weather_time, forecast_request_url, geocode_location,
-    get_cached_forecast, moon_illumination_percent, pressure_trend, weather_code_label,
+    get_cached_forecast, moon_illumination_percent, moon_phase_path,
+    pressure_trend, weather_code_label,
     next_named_full_moon,
 )
 from homehub.app import create_app
@@ -163,6 +164,24 @@ def test_app_database_initializes_weather_cache_table(tmp_path):
 ])
 def test_moon_illumination_approximates_open_meteo_phase(phase, expected):
     assert moon_illumination_percent(phase) == expected
+
+def test_new_moon_icon_has_no_illuminated_area():
+    assert moon_phase_path(0) == ''
+    assert moon_phase_path(1) == ''
+
+def test_full_moon_icon_illuminates_the_complete_disk():
+    assert moon_phase_path(0.5) == (
+        'M 50 6 A 44 44 0 0 1 50 94 A 44 44 0 0 1 50 6 Z'
+    )
+
+def test_quarter_moon_icons_illuminate_opposite_sides():
+    waxing = moon_phase_path(0.25)
+    waning = moon_phase_path(0.75)
+
+    assert waxing.startswith('M 50 6 A 44 44 0 0 1 50 94')
+    assert waxing.endswith('A 0.0 44 0 0 0 50 6 Z')
+    assert waning.startswith('M 50 6 A 44 44 0 0 0 50 94')
+    assert waning.endswith('A 0.0 44 0 0 0 50 6 Z')
 
 
 @pytest.mark.parametrize(('change', 'expected'), [

@@ -7,6 +7,15 @@ ladder puzzles stores a shortest route through this dictionary. Difficulty is
 estimated from the shortest route length: easy is two to three changes,
 medium is four, and hard is five or more.
 
+The Mini Crossword fill pool in `crossword_fill_words.json` uses three- and
+five-letter words from the same Canadian English release. Its offline
+preparation script keeps lowercase alphabetic source words with an English
+`wordfreq` 3.1.1 Zipf score of at least 4.0, retains the existing crossword
+vocabulary, and excludes a short list of unsuitable entries. The resulting
+fill pool is checked in; `wordfreq` and the source download are not needed at
+application runtime. New answers selected for the bank have manually written
+definitions in `crossword_vocabulary_additions.json`.
+
 Source: <https://github.com/en-wl/wordlist-diff/tree/rel-2026.02.25/en_CA.txt>
 Project: <https://wordlist.aspell.net/>
 
