@@ -18,8 +18,8 @@ def test_install_and_upgrade_entrypoints_select_the_expected_mode():
     install = (ROOT / 'deploy' / 'install-release.sh').read_text(encoding='utf-8')
     upgrade = (ROOT / 'deploy' / 'upgrade.sh').read_text(encoding='utf-8')
 
-    assert 'sh "$bootstrap" install' in install
-    assert 'sh "$bootstrap" upgrade' in upgrade
+    assert 'bash "$bootstrap" install' in install
+    assert 'bash "$bootstrap" upgrade' in upgrade
 
 
 def test_release_archive_workflow_publishes_a_checked_bundle():

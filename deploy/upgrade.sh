@@ -5,4 +5,4 @@ url='https://raw.githubusercontent.com/urfbound/rpi3b-llm-home-hub/main/deploy/r
 bootstrap=$(mktemp)
 trap 'rm -f "$bootstrap"' EXIT HUP INT TERM
 curl -fsSL "$url" -o "$bootstrap"
-sh "$bootstrap" upgrade
+bash "$bootstrap" upgrade
