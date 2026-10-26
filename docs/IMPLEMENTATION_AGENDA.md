@@ -254,6 +254,58 @@ to `main` only after the user approves the completed change.
 - Inbound email controls.
 - Multiple daily puzzles, locally generated puzzle banks, weather almanac,
   on-demand historical weather, and alternate weather providers.
+- Investigate and plan an optional offline full-text English Wikipedia library
+  using the no-picture edition. Store downloaded archives outside the
+  repository and outside the existing application/data storage budget; do not
+  ship content in the repository. Enabling it must be an explicit admin action
+  that triggers the initial download, with a configurable 3–12-month refresh
+  interval and no refresh more frequently than quarterly. In-place replacement
+  is acceptable; keeping the old archive during an update is not required.
+  Compare an existing reader/server (including Kiwix) with direct archive
+  reading through libzim or another maintained reader, and a small dedicated
+  server only if it is more efficient. Prioritize low idle RSS and CPU, bounded
+  concurrent access, low update-time resource use, ARM Pi 3B compatibility,
+  and maintainability; measure these on the target before enablement. Current
+  Kiwix catalog reference: English all-articles no-picture is 49 GB (2026-06).
+  Its FAQ says ZIM updates are not incremental, so storage and failure/recovery
+  behavior for in-place replacement must be documented. Kiwix describes
+  `kiwix-serve` as lightweight and Pi-capable, but its actual RSS and CPU for
+  this archive and household concurrency remain unmeasured. Sources:
+  [Kiwix catalog](https://download.kiwix.org/zim/wikipedia/),
+  [Kiwix FAQ](https://get.kiwix.org/en/faq/),
+  [kiwix-serve documentation](https://github.com/kiwix/kiwix-tools/blob/main/docs/kiwix-serve.rst),
+  [libzim](https://github.com/openzim/libzim).
+- Add an opt-in offline OpenStreetMap feature. Keep map files outside the
+  repository and existing application/data storage budget. Require explicit
+  admin enablement and a selected Home location before any download; provide
+  robust area controls, including radius around a chosen location and
+  selectable municipality/city, region, province/state, and country coverage,
+  with clear area previews and size estimates where the source permits. Define
+  whether multiple areas can be combined and how overlapping coverage is
+  handled. Updates must be admin-configurable from 3–12 months and never run
+  more frequently than quarterly. Choose data and serving formats with low
+  Pi 3B idle memory and CPU use in mind; document attribution/licensing,
+  update failure behavior, and the storage needed for downloads and temporary
+  files. Detailed comparisons of Ontario/Quebec extracts and Toronto-radius
+  packs (100/500/1,000 km) are dropped; the household accepts the likely larger
+  packs, subject to displaying estimates before download and keeping those
+  files outside the application's existing storage budget. Initial references:
+  Geofabrik lists Ontario at 984 MB and Quebec at 1.1 GB raw PBF; IIAB reports
+  13–39 MB of vector data for example 100 × 100 km regions at zoom 14. These are
+  contextual references, not user-facing pack guarantees. The standard OSM
+  tile.openstreetmap.org service prohibits offline/bulk tile downloads; use
+  self-hosted extracts or an explicitly permitted source. Sources:
+  [Geofabrik Canada](https://download.geofabrik.de/north-america/canada.html),
+  [IIAB maps](https://github.com/iiab/iiab/blob/master/roles/maps/README.md),
+  [OSM tile usage policy](https://operations.osmfoundation.org/policies/tiles/).
+- Add a feasibility work item for local Chat agent tools over the Wikipedia
+  library. Consider bounded, read-only retrieval with article citations,
+  authorization, prompt-injection resistance, and strict result/context caps.
+  Review title search versus full-text search, relevant passage extraction, and
+  whether this can use the existing single Chat worker and loopback-only model
+  flow without introducing a separate always-on indexing service. Test CPU,
+  memory, response time, and quality on the Pi before enabling tools; tool use
+  must remain behind the existing admin controls.
 
 ## Release gates
 
