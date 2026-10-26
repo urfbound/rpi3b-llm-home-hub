@@ -3,7 +3,7 @@ import sqlite3
 
 from homehub.app import create_app
 from homehub.rss import RSSFeedError
-from homehub.rss_scheduler import refresh_due_feeds
+from homehub.rss_scheduler import main, refresh_due_feeds
 from homehub.rss_store import store_feed_articles
 
 
@@ -43,6 +43,15 @@ def test_refresh_obeys_outbound_toggle_before_any_network_request(tmp_path):
 
     assert result == {'disabled': True, 'checked': 0, 'refreshed': 0, 'failed': 0}
     assert remaining == 0
+
+
+def test_scheduler_entrypoint_sets_database_path_outside_request_context(
+        tmp_path, monkeypatch, capsys):
+    app = make_app(tmp_path / 'rss-entrypoint.sqlite3', outbound='0')
+    monkeypatch.setattr('homehub.app.create_app', lambda: app)
+
+    assert main() == 0
+    assert 'RSS refresh: 0 checked, 0 refreshed, 0 failed.' in capsys.readouterr().out
 
 
 def test_refresh_fetches_due_feed_once_and_respects_configured_interval(tmp_path):

@@ -127,10 +127,14 @@ def refresh_due_feeds(db, *, now=None, fetcher=fetch_feed):
 
 def main():
     """Entry point for the short-lived systemd service."""
+    from flask import g
     from .app import create_app, get_db
 
     app = create_app()
     with app.app_context():
+        # The request hook normally supplies this path, but a systemd
+        # scheduler runs in an app context without an HTTP request.
+        g.app_db_path = app.config['DATABASE']
         db = get_db()
         result = refresh_due_feeds(db)
         db.commit()
