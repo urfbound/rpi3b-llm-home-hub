@@ -74,8 +74,29 @@ fi
 homehub_update_environment_file /etc/homehub/homehub.env homehub sudo \
   HOMEHUB_BIND=127.0.0.1 HOMEHUB_COOKIE_SECURE=1
 sudo systemctl restart homehub.service
-sudo systemctl enable --now caddy
-sudo systemctl restart caddy
+
+recover_caddy_after_activation_failure() {
+  echo "Caddy could not activate the new configuration; restoring its previous configuration." >&2
+  if ! homehub_restore_caddyfile_after_activation_failure \
+    /etc/caddy/Caddyfile "/etc/caddy/Caddyfile.homehub-backup-$timestamp" \
+    "$had_caddyfile" sudo; then
+    echo "Automatic Caddyfile restoration failed. Restore the timestamped backup manually." >&2
+    exit 1
+  fi
+  if sudo systemctl restart caddy; then
+    echo "Caddy restarted with its previous configuration." >&2
+  else
+    echo "Caddy still cannot restart. Check /etc/caddy/Caddyfile and the timestamped backup." >&2
+  fi
+  exit 1
+}
+
+if ! sudo systemctl enable caddy; then
+  recover_caddy_after_activation_failure
+fi
+if ! sudo systemctl restart caddy; then
+  recover_caddy_after_activation_failure
+fi
 
 cat <<EOF
 LAN HTTPS is configured for https://$host

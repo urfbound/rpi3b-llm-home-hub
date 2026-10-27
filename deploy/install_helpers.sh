@@ -79,6 +79,31 @@ homehub_require_caddyfile_replacement() {
   fi
 }
 
+homehub_restore_caddyfile_after_activation_failure() {
+  local caddyfile=$1
+  local backup_file=$2
+  local had_caddyfile=$3
+  local privilege=${4:-sudo}
+
+  if [[ $had_caddyfile == 1 ]]; then
+    [[ -f $backup_file ]] || {
+      echo "Caddyfile backup is missing: $backup_file" >&2
+      return 1
+    }
+    if [[ $privilege == sudo ]]; then
+      sudo cp -a -- "$backup_file" "$caddyfile"
+    else
+      cp -a -- "$backup_file" "$caddyfile"
+    fi
+  else
+    if [[ $privilege == sudo ]]; then
+      sudo rm -f -- "$caddyfile"
+    else
+      rm -f -- "$caddyfile"
+    fi
+  fi
+}
+
 homehub_update_environment_file() (
   local env_file=$1
   local service_group=$2

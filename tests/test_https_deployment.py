@@ -107,12 +107,47 @@ homehub_require_caddyfile_replacement {shlex.quote(str(caddyfile))} 1
     assert caddyfile.read_text(encoding='utf-8') == original
 
 
+def test_caddy_activation_failure_restores_prior_configuration(tmp_path):
+    caddyfile = tmp_path / 'Caddyfile'
+    backup = tmp_path / 'Caddyfile.backup'
+    caddyfile.write_text('homehub.home.arpa { tls internal }\n', encoding='utf-8')
+    previous_config = 'other-service.home.arpa { reverse_proxy 127.0.0.1:9000 }\n'
+    backup.write_text(previous_config, encoding='utf-8')
+
+    result = subprocess.run([_bash(), '-c', f'''\
+set -euo pipefail
+source {shlex.quote(str(HELPER))}
+homehub_restore_caddyfile_after_activation_failure \\
+  {shlex.quote(str(caddyfile))} {shlex.quote(str(backup))} 1 direct
+'''], capture_output=True, text=True)
+
+    assert result.returncode == 0, result.stderr
+    assert caddyfile.read_text(encoding='utf-8') == previous_config
+
+
+def test_caddy_activation_failure_removes_config_when_none_existed(tmp_path):
+    caddyfile = tmp_path / 'Caddyfile'
+    caddyfile.write_text('homehub.home.arpa { tls internal }\n', encoding='utf-8')
+
+    result = subprocess.run([_bash(), '-c', f'''\
+set -euo pipefail
+source {shlex.quote(str(HELPER))}
+homehub_restore_caddyfile_after_activation_failure \\
+  {shlex.quote(str(caddyfile))} '' 0 direct
+'''], capture_output=True, text=True)
+
+    assert result.returncode == 0, result.stderr
+    assert not caddyfile.exists()
+
+
 def test_https_setup_script_is_opt_in_and_keeps_service_upstream_private():
     source = ENABLE_HTTPS.read_text(encoding='utf-8')
     assert 'HOMEHUB_BIND=127.0.0.1' in source
     assert 'HOMEHUB_COOKIE_SECURE=1' in source
     assert 'systemctl restart homehub.service' in source
-    assert 'systemctl enable --now caddy' in source
+    assert 'systemctl enable caddy' in source
+    assert 'homehub_restore_caddyfile_after_activation_failure' in source
+    assert 'systemctl restart caddy' in source
     assert 'HOMEHUB_DB' not in source
     assert 'router' not in source.lower()
     assert '--replace-existing-caddyfile' in source
