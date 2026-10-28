@@ -259,6 +259,9 @@ approves the completed change.
   filtering. This slice is merged to `main`, alongside the Home weather and
   system-status cards. Continue visual review of the responsive two-column
   desktop and single-column narrow-phone layouts.
+- UX follow-up: Home's Just my chores and Just my events filters now submit
+  immediately when changed, with their Apply buttons retained as a no-JavaScript
+  fallback. Other Home hierarchy and contact-card recommendations remain open.
 - **Contacts:** The Home card now supports up to 128 owner-managed contacts
   with name, phone, email, organization, and home address. Private/shared
   visibility is enforced server-side; shared contacts are read-only to others.

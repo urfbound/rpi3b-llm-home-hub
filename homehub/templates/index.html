@@ -12,7 +12,7 @@
     {% if current_user['account_kind'] == 'person' %}
     <form method="get" action="{{ url_for('index') }}" class="home-chore-filter">
       <input type="hidden" name="kind" value="shopping">
-      <label class="checkbox-line"><input type="checkbox" name="just_my_chores" value="1" {% if just_my_chores %}checked{% endif %}> Just my chores</label>
+      <label class="checkbox-line"><input type="checkbox" name="just_my_chores" value="1" onchange="this.form.requestSubmit()" {% if just_my_chores %}checked{% endif %}> Just my chores</label>
       <button>Apply</button>
     </form>
     {% endif %}
@@ -51,7 +51,7 @@
       <h2>This weekend</h2>
       {% if current_user['account_kind'] == 'person' %}
       <form method="get" action="{{ url_for('index') }}" class="home-weekend-filter">
-        <label class="checkbox-line"><input type="checkbox" name="just_my_events" value="1" {% if just_my_events %}checked{% endif %}> Just my events</label>
+        <label class="checkbox-line"><input type="checkbox" name="just_my_events" value="1" onchange="this.form.requestSubmit()" {% if just_my_events %}checked{% endif %}> Just my events</label>
         <button>Apply</button>
       </form>
       {% endif %}
