@@ -65,6 +65,27 @@ def test_admin_can_reorder_feature_tabs_without_moving_home_or_admin(app):
     assert nav.index('href="/sticky-notes"') < nav.index('>Admin</a>')
 
 
+def test_shared_shell_has_collapsible_navigation_and_breadcrumb(app):
+    client = app.test_client()
+    sign_in(client)
+    page = client.get('/').data
+    assert b'aria-controls="site-menu"' in page
+    assert b'aria-label="Breadcrumb"' in page
+    assert b'id="breadcrumb-page"' in page
+    assert b'id="breadcrumb-tab" href="/"' in page
+    assert b'app-shell.js' in page
+
+
+def test_shared_shell_marks_user_scope_for_card_layout(app):
+    client = app.test_client()
+    sign_in(client)
+    page = client.get('/').data
+    assert b'<main data-user-id="1">' in page
+    shell = client.get('/static/app-shell.js').data
+    assert b'homehub-card-layout:${main.dataset.userId}:${location.pathname}' in shell
+    assert b'layout.__orders' in shell
+
+
 def test_feature_tab_order_rejects_invalid_order_and_non_admins(app):
     admin = app.test_client()
     sign_in(admin)
@@ -158,7 +179,9 @@ def test_session_expiry_and_settings(app):
     client = app.test_client()
     sign_in(client)
     assert post(client, '/admin/session-settings', idle_hours='0', absolute_days='7').status_code == HTTPStatus.BAD_REQUEST
-    assert post(client, '/admin/session-settings', idle_hours='2', absolute_days='3').status_code == HTTPStatus.FOUND
+    saved = post(client, '/admin/session-settings', idle_hours='2', absolute_days='3')
+    assert saved.status_code == HTTPStatus.FOUND
+    assert saved.headers['Location'].endswith('/admin/accounts#access-section')
     with client.session_transaction() as session:
         session['last_seen'] = int(time.time()) - 3 * 3600
     assert client.get('/admin/accounts').status_code == HTTPStatus.FOUND

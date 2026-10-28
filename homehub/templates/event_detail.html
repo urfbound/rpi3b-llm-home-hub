@@ -18,7 +18,7 @@
 <dialog id="delete-event-dialog"><form method="post" action="{{ url_for('delete_event', event_id=event['id']) }}" class="dialog-form">
   <input type="hidden" name="_csrf" value="{{ csrf_token }}"><p class="eyebrow">Permanent removal</p><h2>Delete this event?</h2>
   <p>{{ event['title'] }} will be removed from the household calendar.</p>
-  {% if recurring %}<label>Delete<select name="delete_scope"><option value="occurrence">Only this occurrence</option><option value="series">Entire series</option></select></label>{% endif %}
+  {% if recurring %}<label>Delete<select name="delete_scope"><option value="occurrence">Only this occurrence</option><option value="series">Entire series</option></select></label><p class="muted">Deleting the series removes every occurrence from the calendar.</p>{% endif %}
   <div class="dialog-actions"><button type="button" onclick="this.closest('dialog').close()">Keep event</button><button class="danger">Delete event</button></div>
 </form></dialog>
 {% endif %}

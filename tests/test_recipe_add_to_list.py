@@ -85,6 +85,14 @@ def test_recipe_detail_offers_selected_visible_shopping_list_and_keeps_servings(
     assert b'Carol only' not in response.data
 
 
+def test_recipe_serving_scale_updates_when_count_changes(app):
+    recipe_id = add_recipe(app)
+    bob = signed_in(app, 'bob', 'bob recipe password')
+    page = bob.get(f'/recipes/{recipe_id}').data
+    assert (b'id="recipe-serving-count" name="servings" type="number" min="1" '
+            b'max="99" value="4" onchange="this.form.requestSubmit()"' in page)
+
+
 def test_add_to_list_scales_combines_convertible_units_and_keeps_uncertain_items_separate(app):
     recipe_id = add_recipe(app, ingredients=[
         ('1', 'cup', 'beans', 'rinsed'), ('2', 'tbsp', 'Beans', 'rinsed'),

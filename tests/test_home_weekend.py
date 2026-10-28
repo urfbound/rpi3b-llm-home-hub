@@ -113,6 +113,18 @@ def test_weekend_card_hides_private_details_and_just_my_events_filters(app):
     assert 'Just my events' in all_card
 
 
+def test_home_filters_apply_immediately_when_javascript_is_available(app):
+    bob = sign_in(app, 'bob', 'bob weekend password')
+    page = bob.get('/').data.decode()
+    assert 'name="just_my_events" value="1" onchange="this.form.requestSubmit()"' in page
+    assert 'name="just_my_chores" value="1" onchange="this.form.requestSubmit()"' in page
+
+
+def test_home_page_contains_no_unicode_replacement_characters(app):
+    client = sign_in(app, 'bob', 'bob weekend password')
+    assert b'\xef\xbf\xbd' not in client.get('/').data
+
+
 def test_weekend_card_on_saturday_stops_at_sunday(app, monkeypatch):
     monkeypatch.setattr(app_module, 'household_today', lambda: date(2026, 10, 24))
     add_event(app, title='Friday already passed', event_date='2026-10-23')

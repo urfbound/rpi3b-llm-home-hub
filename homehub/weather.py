@@ -37,6 +37,8 @@ WEATHER_CODES = {
     82: 'Heavy rain showers', 85: 'Light snow showers', 86: 'Heavy snow showers',
     95: 'Thunderstorm', 96: 'Thunderstorm with hail', 99: 'Heavy thunderstorm with hail',
 }
+WIND_COMPASS_POINTS = ('N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE',
+                       'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW')
 
 
 class WeatherError(Exception):
@@ -48,6 +50,16 @@ def weather_code_label(code):
         return WEATHER_CODES.get(int(code), 'Unknown conditions')
     except (TypeError, ValueError):
         return 'Unknown conditions'
+
+
+def wind_compass(degrees):
+    """Return a sixteen-point compass label and normalized bearing."""
+    try:
+        bearing = float(degrees) % 360
+    except (TypeError, ValueError):
+        return {'label': 'Unavailable', 'bearing': None}
+    index = int((bearing + 11.25) // 22.5) % 16
+    return {'label': WIND_COMPASS_POINTS[index], 'bearing': round(bearing, 1)}
 
 
 def moon_illumination_percent(phase):
@@ -181,6 +193,7 @@ def present_forecast(payload):
             'precipitation': _at(hourly.get('precipitation', []), index),
             'wind_speed': _at(hourly.get('wind_speed_10m', []), index),
             'wind_direction': _at(hourly.get('wind_direction_10m', []), index),
+            'wind_compass': wind_compass(_at(hourly.get('wind_direction_10m', []), index)),
             'pressure': hourly_pressure,
             'pressure_trend': pressure_trend(hourly_pressure, previous),
             'weather': weather_code_label(_at(hourly.get('weather_code', []), index)),
@@ -200,6 +213,7 @@ def present_forecast(payload):
             'precipitation_sum': _at(daily.get('precipitation_sum', []), index),
             'wind_speed': _at(daily.get('wind_speed_10m_max', []), index),
             'wind_direction': _at(daily.get('wind_direction_10m_dominant', []), index),
+            'wind_compass': wind_compass(_at(daily.get('wind_direction_10m_dominant', []), index)),
         })
     today = daily_rows[0] if daily_rows else {}
     phase = today.get('moon_phase')
@@ -235,6 +249,7 @@ def present_forecast(payload):
         'moon_path': moon_phase_path(today['moon_phase']) if phase is not None else '',
         'next_named_full_moon': named_full_moon,
         'condition': weather_code_label(current.get('weather_code')),
+        'current_wind_compass': wind_compass(current.get('wind_direction_10m')),
     }
 
 

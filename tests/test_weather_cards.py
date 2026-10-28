@@ -116,6 +116,7 @@ def test_weather_home_summary_and_detail_use_shared_forecast(app, monkeypatch):
     assert b'Pressure: 1008.0 hPa' in detail.data
     assert b'Sunrise' in detail.data and b'Sunset' in detail.data
     assert b'High / Low' in detail.data and b'Wind' in detail.data
+    assert b'from SW' in detail.data
     assert b'Precipitation chance' in detail.data
     assert b'Precipitation accumulation' in detail.data
     assert b'None' in detail.data

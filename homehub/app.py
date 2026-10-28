@@ -2431,6 +2431,8 @@ def create_app(test_config=None):
         conversations = db.execute(
             'SELECT c.id,c.title,c.is_pinned,c.created_at,c.updated_at,'
             '(SELECT COUNT(*) FROM chat_pairs p WHERE p.conversation_id=c.id) AS pair_count '
+            ',(SELECT p.prompt FROM chat_pairs p WHERE p.conversation_id=c.id '
+            'ORDER BY p.position DESC,p.id DESC LIMIT 1) AS last_prompt '
             'FROM chat_conversations c WHERE c.owner_user_id=? '
             'ORDER BY c.is_pinned DESC,c.updated_at DESC,c.id DESC', (owner_id,),
         ).fetchall()
@@ -2837,11 +2839,11 @@ def create_app(test_config=None):
         except (ValueError, BackupError):
             flash('Enter a writable absolute backup folder, an interval from 1 to 31 days, '
                   'and a retention count from 1 to 365, or turn automatic backups off.')
-            return redirect(url_for('accounts'))
+            return redirect(url_for('accounts') + '#backup-restore-section')
         if ((not backups_off and not limits.BACKUP_INTERVAL_DAYS_MINIMUM <= frequency <= limits.BACKUP_INTERVAL_DAYS_MAXIMUM)
                 or not limits.BACKUP_RETENTION_MINIMUM <= retention <= limits.BACKUP_RETENTION_MAXIMUM):
             flash('Enter a backup interval from 1 to 31 days and a retention count from 1 to 365.')
-            return redirect(url_for('accounts'))
+            return redirect(url_for('accounts') + '#backup-restore-section')
         with db:
             db.executemany('INSERT INTO app_settings(key,value) VALUES(?,?) '
                            'ON CONFLICT(key) DO UPDATE SET value=excluded.value',
@@ -2849,7 +2851,7 @@ def create_app(test_config=None):
                             ('backup_interval_days', str(frequency)),
                             ('backup_retention', str(retention))))
         flash('Backup settings updated.')
-        return redirect(url_for('accounts'))
+        return redirect(url_for('accounts') + '#backup-restore-section')
 
     @app.post('/admin/backups/create')
     @admin_required
@@ -3012,7 +3014,7 @@ def create_app(test_config=None):
                            (('session_idle_hours', str(idle)),
                             ('session_absolute_days', str(absolute))))
         flash('Session settings updated.')
-        return redirect(url_for('accounts'))
+        return redirect(url_for('accounts') + '#access-section')
 
     @app.post('/lists')
     @login_required

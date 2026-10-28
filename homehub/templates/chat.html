@@ -11,6 +11,7 @@
       {% for chat in conversations %}<li class="{% if conversation and conversation.id == chat.id %}selected{% endif %}">
         <a class="chat-list-title" href="{{ url_for('view_chat', conversation_id=chat.id) }}">{{ chat.title }}{% if chat.is_pinned %}<span aria-label="Pinned">★</span>{% endif %}</a>
         <small>{{ chat.pair_count }} prompt-and-response pairs</small>
+        {% if chat.last_prompt %}<small class="chat-list-preview">{{ chat.last_prompt }}</small>{% endif %}
         {% if chat_enabled and (not conversation or conversation.owner_user_id == current_user['id']) %}<div class="chat-list-actions"><form method="post" action="{{ url_for('toggle_chat_pin', conversation_id=chat.id) }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><button class="quiet">{{ 'Unpin' if chat.is_pinned else 'Pin' }}</button></form><form method="post" action="{{ url_for('delete_own_chat', conversation_id=chat.id) }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><button class="quiet">Delete</button></form></div>{% endif %}
       </li>{% endfor %}
     </ul>{% else %}<p class="empty-state">Start a private chat when you are ready.</p>{% endif %}

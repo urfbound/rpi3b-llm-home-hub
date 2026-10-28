@@ -39,6 +39,11 @@ approves the completed change.
   Weather, RSS, Games, and Chat are approved. App-only and app-plus-model Pi
   profiles are recorded. Chat answer-quality review and manual browser review
   remain before household rollout.
+- UX follow-up: the shared shell now keeps parent tabs active on nested list,
+  recipe, and event pages, links the tab level in the breadcrumb, and restores
+  the submitting section after a short form-post redirect. Card order and width
+  preferences are scoped to the signed-in user, page, and card group. The full
+  visual and keyboard review remains a release gate.
 
 ## Shared foundations and Admin
 
@@ -73,6 +78,9 @@ approves the completed change.
 - Complete Admin settings as each feature arrives: vertical cards, section
   jump links, fixed Home/Admin ends with reorderable middle tabs, backup and
   restore, account/session controls, and feature-specific settings.
+- UX follow-up: saving session settings returns to the Access section, and
+  backup setting saves return to Backup and restore. Dialog styling is shared
+  across admin actions; responsive review of the long settings page remains.
 - Pi app-only and app-plus-model resource profiles are recorded in
   [CHAT_PI_BENCHMARK.md](CHAT_PI_BENCHMARK.md). Targets are under 256 MB
   application RSS where practical and under 10 GB for app, dependencies, and
@@ -116,6 +124,10 @@ approves the completed change.
   count and private-title protection are also merged; calendar event detail
   links back to the recipe with servings. Sharing changes preserve authorized
   notes and prompt before removing notes belonging to users who lose access.
+- UX follow-up: changing the serving count now recalculates the recipe
+  immediately, with the Scale recipe button retained as a no-JavaScript
+  fallback. Shopping-list confirmation and responsive recipe browsing still
+  need visual review.
 
 ### Calendar
 
@@ -133,6 +145,8 @@ approves the completed change.
   visibility filtering, per-user daily/monthly occurrence budgets, and Admin
   limit settings are merged to `main`, along with recipe/meal-prep links,
   Calendar retention, and Home weekend summaries.
+- UX follow-up: recurring-event edit and delete controls now explain the
+  effect of applying an action to one occurrence or the full series.
 - The implementation on `main` derives the household calendar timezone from the
   admin-selected weather location (falling back to the Pi's local timezone).
   It configures zero to ten previous calendar years, archives years to ICS
@@ -160,6 +174,10 @@ approves the completed change.
   60–80% and red above-80% thresholds.
 - Deferred weather work: almanac, on-demand historical data, and alternate
   providers. Historical pulls stay off unless enabled by an admin.
+- UX follow-up: current, hourly, and daily wind direction now includes a
+  sixteen-point compass label and bearing arrow; no forecast fields were
+  removed. Responsive visual review and the remaining weather-page UX review
+  are still open.
 
 ### RSS
 
@@ -210,6 +228,9 @@ approves the completed change.
   offline puzzles, and Wumpus has 365 nonrepeating seeded maps. Practice uses
   past puzzles for the word and grid games; Wumpus offers a chosen or random
   seed. A v17 upgrade preserves v16 Word Garden attempts.
+- UX follow-up: the Yesterday's solutions section now sits below the active
+  daily challenge and is collapsed by default, keeping today's play path first.
+  Full household playtesting and narrow-phone review remain open.
 - Expanded offline content banks now include 5,000 word ladders, 5,000 unique
   8 × 8 nonograms, 5,000 unique 9 × 9 Sudoku puzzles, and 5,000 5 × 5 mini
   crosswords. The crosswords rotate among four distinct editors—Larry, Moe,
@@ -259,12 +280,17 @@ approves the completed change.
   filtering. This slice is merged to `main`, alongside the Home weather and
   system-status cards. Continue visual review of the responsive two-column
   desktop and single-column narrow-phone layouts.
+- UX follow-up: Home's Just my chores and Just my events filters now submit
+  immediately when changed, with their Apply buttons retained as a no-JavaScript
+  fallback. Other Home hierarchy and contact-card recommendations remain open.
 - **Contacts:** The Home card now supports up to 128 owner-managed contacts
   with name, phone, email, organization, and home address. Private/shared
   visibility is enforced server-side; shared contacts are read-only to others.
   Owners can edit and delete contacts. The card has search, duplicate warnings,
   scrollable results, and one-at-a-time phone import when supported. Browser
   device verification and visual review on phone/light/dark remain.
+- UX follow-up: possible duplicate contacts now use a Home Hub confirmation
+  dialog instead of the browser's native confirmation popup.
 - **Sticky Notes:** The page supports 32 active notes per author, 128
   characters per note, eight colors, direct recipients or everyone, optional
   1-to-365-day expiry, and author-only editing/deletion. Expired notes stop
@@ -275,6 +301,8 @@ approves the completed change.
   limits, migration, and navigation tests pass. Phone/browser review and visual
   light/dark review remain. Add an optional sticky-note stacking layout after a
   later design review.
+- UX follow-up: deleting a sticky note now uses a themed dialog and states that
+  the note will be removed from everyone it was shared with.
 
 ### Chat
 
@@ -297,6 +325,9 @@ approves the completed change.
   Qwen3 0.6b dropped to 32 MiB and is not recommended on 1 GB hardware.
   Representative answer-quality review and manual browser review of the
   approved design remain before household rollout.
+- UX follow-up: each private chat entry now includes its own latest-prompt
+  preview so people can recognize a conversation before opening it. Recent
+  mobile readability review and persistent running-request navigation remain.
 - Add a provider interface for possible remote models, off by default. If
   database tools are enabled, enforce the approved read-only per-user scope
   and resource budget; require explicit confirmation and fresh authorization
@@ -397,6 +428,9 @@ approves the completed change.
   mode, check items, then reconnect and test login expiry, concurrent changes,
   deleted items, and list access changes. Pending changes must remain visible
   until they are synced or explicitly discarded.
+- UX follow-up: changing the selected list now opens it immediately; the Open
+  button remains as a no-JavaScript fallback. Phone review of item density,
+  sharing context, and offline sync status remains open.
 - Profile deployment, backup/restore and recovery, TLS and LAN-only
   exposure, and the LLM separately and alongside the app. Do not release until
   account, data, resource, and upgrade checks pass.

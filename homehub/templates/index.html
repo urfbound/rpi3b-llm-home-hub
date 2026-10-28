@@ -12,7 +12,7 @@
     {% if current_user['account_kind'] == 'person' %}
     <form method="get" action="{{ url_for('index') }}" class="home-chore-filter">
       <input type="hidden" name="kind" value="shopping">
-      <label class="checkbox-line"><input type="checkbox" name="just_my_chores" value="1" {% if just_my_chores %}checked{% endif %}> Just my chores</label>
+      <label class="checkbox-line"><input type="checkbox" name="just_my_chores" value="1" onchange="this.form.requestSubmit()" {% if just_my_chores %}checked{% endif %}> Just my chores</label>
       <button>Apply</button>
     </form>
     {% endif %}
@@ -51,7 +51,7 @@
       <h2>This weekend</h2>
       {% if current_user['account_kind'] == 'person' %}
       <form method="get" action="{{ url_for('index') }}" class="home-weekend-filter">
-        <label class="checkbox-line"><input type="checkbox" name="just_my_events" value="1" {% if just_my_events %}checked{% endif %}> Just my events</label>
+        <label class="checkbox-line"><input type="checkbox" name="just_my_events" value="1" onchange="this.form.requestSubmit()" {% if just_my_events %}checked{% endif %}> Just my events</label>
         <button>Apply</button>
       </form>
       {% endif %}
@@ -153,6 +153,10 @@
       {% else %}<li class="muted">No contacts yet.</li>{% endfor %}
     </ul>
   </section>
+  <dialog id="duplicate-contact-dialog" class="rss-dialog"><form method="dialog" class="dialog-form">
+    <h2>This contact may be a duplicate</h2><p>A contact already uses this phone number or email. Do you still want to save it?</p>
+    <div class="dialog-actions"><button value="cancel">Cancel</button><button type="button" id="save-duplicate-contact" class="primary">Save duplicate</button></div>
+  </form></dialog>
 
   {% endif %}
 
@@ -213,7 +217,7 @@
     <form method="get" action="{{ list_page_url }}" class="inline list-picker-form">
       <input type="hidden" name="kind" value="{{ list_kind }}">
       <label for="list-picker">Choose a list</label>
-      <select id="list-picker" name="list_id">
+      <select id="list-picker" name="list_id" onchange="this.form.requestSubmit()">
         {% if list_kind == 'shopping' %}
           {% for category in shopping_categories %}{% set category_lists = lists|selectattr('category', 'equalto', category)|list %}{% if category_lists %}<optgroup label="{{ category }}">{% for list in category_lists %}<option value="{{ list['id'] }}" {% if selected_list and selected_list['id'] == list['id'] %}selected{% endif %}>{{ list['title'] }}{% if list['visibility'] == 'private' %} · Private{% endif %}</option>{% endfor %}</optgroup>{% endif %}{% endfor %}
         {% else %}
@@ -521,7 +525,17 @@ document.getElementById('add-recipe-step')?.addEventListener('click', () => {
     const duplicate = [...document.querySelectorAll('.contact-list > li[data-own="true"]')].some(row =>
       (candidatePhone && phone(row.dataset.phone) === candidatePhone) ||
       (candidateEmail && email(row.dataset.email) === candidateEmail));
-    if (duplicate && !window.confirm('A contact already uses this phone number or email. Save this duplicate anyway?')) event.preventDefault();
+    if (duplicate && form.dataset.duplicateConfirmed !== '1') {
+      event.preventDefault();
+      document.getElementById('duplicate-contact-dialog')?.showModal();
+    }
+  });
+  document.getElementById('save-duplicate-contact')?.addEventListener('click', () => {
+    const form = document.getElementById('contact-form');
+    if (!form) return;
+    form.dataset.duplicateConfirmed = '1';
+    document.getElementById('duplicate-contact-dialog')?.close();
+    form.requestSubmit();
   });
   const button = document.getElementById('phone-contact-import');
   if (!button || !('contacts' in navigator)) return;

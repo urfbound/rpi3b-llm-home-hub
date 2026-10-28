@@ -1,4 +1,5 @@
 from http import HTTPStatus
+import re
 import sqlite3
 from datetime import date
 
@@ -80,7 +81,7 @@ def test_home_chore_card_groups_today_and_filters_to_signed_in_user(household, m
     filtered = client.get('/?just_my_chores=1')
     assert b'Put clothes away</span>' in filtered.data
     assert b'Feed dog</span>' not in filtered.data
-    assert b'name="just_my_chores" value="1" checked' in filtered.data
+    assert re.search(rb'name="just_my_chores" value="1"[^>]*checked', filtered.data)
 
 
 def test_everyone_chore_is_grouped_per_person_and_excludes_house_account(household):

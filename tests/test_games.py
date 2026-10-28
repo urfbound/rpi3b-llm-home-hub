@@ -54,6 +54,12 @@ def test_games_page_requires_login_and_keeps_solution_private(game_app):
     assert daily_answer(date(2026, 10, 24)).encode() not in page.data
 
 
+def test_games_landing_puts_daily_play_before_yesterdays_solutions(game_app):
+    alex = sign_in(game_app, 'alex')
+    page = alex.get('/games').data
+    assert page.index(b'id="word-title"') < page.index(b"Yesterday's solutions")
+
+
 def test_games_hub_is_reachable_from_main_navigation_and_stays_active_on_game_pages(game_app):
     alex = sign_in(game_app, 'alex')
 

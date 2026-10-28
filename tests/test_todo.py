@@ -71,6 +71,13 @@ def test_todo_creation_saves_optional_due_date_and_assignee(client):
     assert row == ('2026-10-25', bob_id)
 
 
+def test_list_picker_opens_selection_immediately(client):
+    sign_in(client)
+    _, _, list_id, _ = setup_todo(client)
+    page = client.get(f'/lists?kind=todo&list_id={list_id}').data
+    assert b'<select id="list-picker" name="list_id" onchange="this.form.requestSubmit()">' in page
+
+
 @pytest.mark.parametrize('fields', [
     {'due_date': 'next Friday', 'assignee_id': ''},
     {'due_date': '', 'assignee_id': '99999'},

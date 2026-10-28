@@ -107,6 +107,7 @@ def test_backup_settings_validate_and_allow_turning_automatic_backups_off(tmp_pa
         '_csrf': token(client), 'backups_off': 'on', 'backup_folder': str(folder),
     })
     assert response.status_code == HTTPStatus.FOUND
+    assert response.headers['Location'].endswith('/admin/accounts#backup-restore-section')
     with closing(sqlite3.connect(database)) as db:
         settings = dict(db.execute('SELECT key,value FROM app_settings'))
     assert settings['backup_folder'] == str(folder)
