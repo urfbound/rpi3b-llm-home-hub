@@ -53,6 +53,7 @@
       <option value="occurrence">Only this occurrence</option>
       <option value="series" selected>Entire series</option>
     </select></label>
+    <p class="muted recurrence-scope-help">Changes to the series update every occurrence. Choosing one occurrence keeps the rest of the series unchanged.</p>
     {% endif %}
     <div class="actions"><a class="button" href="{{ url_for('index') }}#calendar">Cancel</a><button class="primary">{{ 'Save event' if editing else 'Add event' }}</button></div>
   </form>

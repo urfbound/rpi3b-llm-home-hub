@@ -297,6 +297,7 @@ def test_recurring_events_appear_on_calendar_and_offer_occurrence_or_series_acti
     assert b'Entire series' in detail.data
     assert b'name="edit_scope"' in edit.data
     assert b'name="recurrence_frequency"' in edit.data
+    assert b'Changes to the series update every occurrence.' in edit.data
 
 
 def test_other_user_cannot_edit_or_cancel_recurring_series(app):

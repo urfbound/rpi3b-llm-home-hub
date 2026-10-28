@@ -137,6 +137,8 @@ approves the completed change.
   visibility filtering, per-user daily/monthly occurrence budgets, and Admin
   limit settings are merged to `main`, along with recipe/meal-prep links,
   Calendar retention, and Home weekend summaries.
+- UX follow-up: recurring-event edit and delete controls now explain the
+  effect of applying an action to one occurrence or the full series.
 - The implementation on `main` derives the household calendar timezone from the
   admin-selected weather location (falling back to the Pi's local timezone).
   It configures zero to ten previous calendar years, archives years to ICS
