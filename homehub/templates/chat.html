@@ -70,9 +70,9 @@
   form.addEventListener('submit', event => {
     event.preventDefault();
     if (sendButton.disabled) return;
-    setBusy(true);
+    const formData = window.HomeHubChatUI.beginSubmission(form, prompt, sendButton);
     setStatus('Adding your request to the queue');
-    fetch(form.action, {method: 'POST', body: new FormData(form), headers: {'X-Requested-With': 'XMLHttpRequest'}})
+    fetch(form.action, {method: 'POST', body: formData, headers: {'X-Requested-With': 'XMLHttpRequest'}})
       .then(async response => {
         if (response.status === 202) return response.json();
         if (response.redirected) { location.href = response.url; return null; }

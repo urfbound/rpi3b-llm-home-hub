@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { setBusy, setWorkingStatus } = require('../homehub/static/chat-ui.js');
+const { beginSubmission, setBusy, setWorkingStatus } = require('../homehub/static/chat-ui.js');
 
 test('a queued or running request disables the prompt and send button', () => {
   const prompt = { disabled: false };
@@ -8,6 +8,28 @@ test('a queued or running request disables the prompt and send button', () => {
 
   setBusy(prompt, sendButton, true);
 
+  assert.equal(prompt.disabled, true);
+  assert.equal(sendButton.disabled, true);
+});
+
+test('submission captures form data before disabling the prompt', () => {
+  const prompt = { disabled: false };
+  const sendButton = { disabled: false };
+  const form = {};
+  let capturedWhileEnabled = false;
+  const expected = { prompt: 'What is the weather?' };
+  class StubFormData {
+    constructor(submittedForm) {
+      assert.equal(submittedForm, form);
+      capturedWhileEnabled = !prompt.disabled;
+      return expected;
+    }
+  }
+
+  const data = beginSubmission(form, prompt, sendButton, StubFormData);
+
+  assert.equal(data, expected);
+  assert.equal(capturedWhileEnabled, true);
   assert.equal(prompt.disabled, true);
   assert.equal(sendButton.disabled, true);
 });
