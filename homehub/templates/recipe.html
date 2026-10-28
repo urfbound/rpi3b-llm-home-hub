@@ -11,7 +11,7 @@
   {% if recipe['description'] %}<p class="muted">{{ recipe['description'] }}</p>{% endif %}
   <p class="recipe-servings">Default recipe makes <strong>{{ recipe['default_servings'] }}</strong> servings.</p>
   <form class="recipe-scale" method="get" action="{{ url_for('recipe_detail', recipe_id=recipe['id']) }}">
-    <label for="recipe-serving-count">Scale to servings<input id="recipe-serving-count" name="servings" type="number" min="1" max="99" value="{{ selected_servings }}" required></label>
+    <label for="recipe-serving-count">Scale to servings<input id="recipe-serving-count" name="servings" type="number" min="1" max="99" value="{{ selected_servings }}" onchange="this.form.requestSubmit()" required></label>
     <button class="primary">Scale recipe</button>
   </form>
   <p class="muted recipe-scaled-count">Showing quantities for {{ selected_servings }} servings.</p>

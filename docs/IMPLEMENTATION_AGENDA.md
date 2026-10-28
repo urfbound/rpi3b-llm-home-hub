@@ -116,6 +116,10 @@ approves the completed change.
   count and private-title protection are also merged; calendar event detail
   links back to the recipe with servings. Sharing changes preserve authorized
   notes and prompt before removing notes belonging to users who lose access.
+- UX follow-up: changing the serving count now recalculates the recipe
+  immediately, with the Scale recipe button retained as a no-JavaScript
+  fallback. Shopping-list confirmation and responsive recipe browsing still
+  need visual review.
 
 ### Calendar
 
