@@ -100,6 +100,21 @@ def test_users_can_only_view_and_delete_their_own_conversations(app):
         assert db.execute('SELECT count(*) FROM chat_conversations').fetchone()[0] == 1
 
 
+def test_chat_list_shows_a_private_last_prompt_preview(app):
+    make_chats(app, 'alice', 1)
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        db.execute(
+            'INSERT INTO chat_pairs(conversation_id,position,prompt,response,model,created_at) '
+            'VALUES(1,0,?,?,?,?)',
+            ('What can I cook with lentils?', 'Try soup.', 'local-test',
+             datetime.now(timezone.utc).isoformat()),
+        )
+    alice = sign_in(app, 'alice', 'alice chat password')
+    page = alice.get('/chat').data
+    listing = page.split(b'<ul class="chat-list">', 1)[1].split(b'</ul>', 1)[0]
+    assert b'What can I cook with lentils?' in listing
+
+
 def test_admin_can_view_and_delete_any_users_conversations(app):
     make_chats(app, 'alice', 1)
     admin = sign_in(app, 'admin', 'admin chat password')

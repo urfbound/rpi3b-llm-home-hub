@@ -2431,6 +2431,8 @@ def create_app(test_config=None):
         conversations = db.execute(
             'SELECT c.id,c.title,c.is_pinned,c.created_at,c.updated_at,'
             '(SELECT COUNT(*) FROM chat_pairs p WHERE p.conversation_id=c.id) AS pair_count '
+            ',(SELECT p.prompt FROM chat_pairs p WHERE p.conversation_id=c.id '
+            'ORDER BY p.position DESC,p.id DESC LIMIT 1) AS last_prompt '
             'FROM chat_conversations c WHERE c.owner_user_id=? '
             'ORDER BY c.is_pinned DESC,c.updated_at DESC,c.id DESC', (owner_id,),
         ).fetchall()

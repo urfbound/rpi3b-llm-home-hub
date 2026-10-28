@@ -313,6 +313,9 @@ approves the completed change.
   Qwen3 0.6b dropped to 32 MiB and is not recommended on 1 GB hardware.
   Representative answer-quality review and manual browser review of the
   approved design remain before household rollout.
+- UX follow-up: each private chat entry now includes its own latest-prompt
+  preview so people can recognize a conversation before opening it. Recent
+  mobile readability review and persistent running-request navigation remain.
 - Add a provider interface for possible remote models, off by default. If
   database tools are enabled, enforce the approved read-only per-user scope
   and resource budget; require explicit confirmation and fresh authorization
