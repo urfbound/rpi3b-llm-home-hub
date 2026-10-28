@@ -43,10 +43,11 @@
     !card.parentElement.closest('.panel') && card.closest('main') === main
   );
   const parents = [...new Set(cards.map(card => card.parentElement))];
+  const groupId = parent => parent.id || [...parent.classList].sort().join('.') || parent.tagName;
   parents.forEach(parent => {
     const siblings = cards.filter(card => card.parentElement === parent);
     if (siblings.length < 2) return;
-    const orderedIds = layout.__order || [];
+    const orderedIds = (layout.__orders || {})[groupId(parent)] || [];
     siblings.sort((a, b) => {
       const aId = a.id || a.dataset.cardIndex;
       const bId = b.id || b.dataset.cardIndex;
@@ -93,7 +94,8 @@
           if (target < 0 || target >= siblings.length) return;
           [siblings[position], siblings[target]] = [siblings[target], siblings[position]];
           siblings.forEach(item => card.parentElement.append(item));
-          layout.__order = siblings.map(item => item.id || item.dataset.cardIndex);
+          layout.__orders ||= {};
+          layout.__orders[groupId(card.parentElement)] = siblings.map(item => item.id || item.dataset.cardIndex);
           localStorage.setItem(key, JSON.stringify(layout));
         });
         moveRow.append(move);

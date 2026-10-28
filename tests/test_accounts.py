@@ -83,6 +83,7 @@ def test_shared_shell_marks_user_scope_for_card_layout(app):
     assert b'<main data-user-id="1">' in page
     shell = client.get('/static/app-shell.js').data
     assert b'homehub-card-layout:${main.dataset.userId}:${location.pathname}' in shell
+    assert b'layout.__orders' in shell
 
 
 def test_feature_tab_order_rejects_invalid_order_and_non_admins(app):
