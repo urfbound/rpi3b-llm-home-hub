@@ -24,15 +24,15 @@
     <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-menu">Menu</button>
     <nav class="site-nav" id="site-menu" aria-label="Main navigation" hidden>
       <a href="{{ url_for('index') }}" {% if request.endpoint == 'index' %}aria-current="page"{% endif %}>Home</a>
-      <a href="/lists" {% if request.path == '/lists' %}aria-current="page"{% endif %}>Lists</a>
-      <a href="/recipes" {% if request.path == '/recipes' %}aria-current="page"{% endif %}>Recipes</a>
-      <a href="/calendar" {% if request.path == '/calendar' %}aria-current="page"{% endif %}>Calendar</a>
+      <a href="/lists" {% if request.path.startswith('/lists') %}aria-current="page"{% endif %}>Lists</a>
+      <a href="/recipes" {% if request.path.startswith('/recipes') %}aria-current="page"{% endif %}>Recipes</a>
+      <a href="/calendar" {% if request.path.startswith('/calendar') or request.path.startswith('/events') %}aria-current="page"{% endif %}>Calendar</a>
       {% for tab in feature_tabs if tab['visible'] %}
       <a href="{{ tab['href'] }}" {% if tab['active'] %}aria-current="page"{% endif %}>{{ tab['label'] }}</a>
       {% endfor %}
       {% if current_user['role'] == 'admin' %}<a href="{{ url_for('accounts') }}" {% if request.endpoint == 'accounts' %}aria-current="page"{% endif %}>Admin</a>{% endif %}
     </nav>
-    <nav class="breadcrumb-nav" aria-label="Breadcrumb"><a href="{{ url_for('index') }}">Home</a><span aria-hidden="true">›</span><span id="breadcrumb-tab">{{ 'Admin' if request.endpoint == 'accounts' else 'Home' }}</span><span id="breadcrumb-page"></span></nav>
+    <nav class="breadcrumb-nav" aria-label="Breadcrumb"><a href="{{ url_for('index') }}">Home</a><span aria-hidden="true">›</span><a id="breadcrumb-tab" href="{{ url_for('index') }}">{{ 'Admin' if request.endpoint == 'accounts' else 'Home' }}</a><span id="breadcrumb-page"></span></nav>
     {% endif %}
     <div class="toolbar">
       <button type="button" onclick="toggleTheme()" aria-label="Toggle light and dark theme">◐ Theme</button>

@@ -72,6 +72,7 @@ def test_shared_shell_has_collapsible_navigation_and_breadcrumb(app):
     assert b'aria-controls="site-menu"' in page
     assert b'aria-label="Breadcrumb"' in page
     assert b'id="breadcrumb-page"' in page
+    assert b'id="breadcrumb-tab" href="/"' in page
     assert b'app-shell.js' in page
 
 

@@ -300,6 +300,14 @@ def test_recurring_events_appear_on_calendar_and_offer_occurrence_or_series_acti
     assert b'Changes to the series update every occurrence.' in edit.data
 
 
+def test_event_detail_keeps_calendar_as_the_active_tab(app):
+    bob = signed_in(app, 'bob', 'bob calendar password')
+    bob.post('/events', data=event_form(bob))
+    page = bob.get('/events/1').data
+    nav = page.split(b'<nav class="site-nav"', 1)[1].split(b'</nav>', 1)[0]
+    assert b'href="/calendar" aria-current="page">Calendar</a>' in nav
+
+
 def test_other_user_cannot_edit_or_cancel_recurring_series(app):
     bob = signed_in(app, 'bob', 'bob calendar password')
     carol = signed_in(app, 'carol', 'carol calendar password')

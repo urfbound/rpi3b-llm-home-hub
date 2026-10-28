@@ -39,6 +39,10 @@ approves the completed change.
   Weather, RSS, Games, and Chat are approved. App-only and app-plus-model Pi
   profiles are recorded. Chat answer-quality review and manual browser review
   remain before household rollout.
+- UX follow-up: the shared shell now keeps parent tabs active on nested list,
+  recipe, and event pages, links the tab level in the breadcrumb, and restores
+  the submitting section after a short form-post redirect. The full visual and
+  keyboard review remains a release gate.
 
 ## Shared foundations and Admin
 
