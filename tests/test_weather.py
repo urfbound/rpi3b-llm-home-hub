@@ -8,7 +8,7 @@ from homehub.constants import WEATHER_FORECAST_DAYS_DEFAULT, WEATHER_FORECAST_DA
 from homehub.weather import (
     WeatherError, fetch_forecast, format_weather_time, forecast_request_url, geocode_location,
     get_cached_forecast, moon_illumination_percent, moon_phase_path,
-    pressure_trend, weather_code_label,
+    pressure_trend, weather_code_label, wind_compass,
     next_named_full_moon,
 )
 from homehub.app import create_app
@@ -193,6 +193,14 @@ def test_pressure_trend_labels_hourly_change(change, expected):
 
     assert result['change_hpa'] == change
     assert result['label'] == expected
+
+
+@pytest.mark.parametrize(('degrees', 'label'), [
+    (0, 'N'), (22.5, 'NNE'), (45, 'NE'), (90, 'E'), (135, 'SE'),
+    (180, 'S'), (225, 'SW'), (270, 'W'), (315, 'NW'), (359, 'N'),
+])
+def test_wind_compass_maps_degrees_to_sixteen_points(degrees, label):
+    assert wind_compass(degrees)['label'] == label
 
 
 def test_weather_code_label_has_fallback_for_unknown_provider_code():

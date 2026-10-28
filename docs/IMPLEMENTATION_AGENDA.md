@@ -160,6 +160,10 @@ approves the completed change.
   60–80% and red above-80% thresholds.
 - Deferred weather work: almanac, on-demand historical data, and alternate
   providers. Historical pulls stay off unless enabled by an admin.
+- UX follow-up: current, hourly, and daily wind direction now includes a
+  sixteen-point compass label and bearing arrow; no forecast fields were
+  removed. Responsive visual review and the remaining weather-page UX review
+  are still open.
 
 ### RSS
 
