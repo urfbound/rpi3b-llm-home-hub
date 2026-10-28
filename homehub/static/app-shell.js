@@ -36,7 +36,7 @@
     crumbPage.textContent = ` › ${title.textContent.trim()}`;
   }
 
-  const key = `homehub-card-layout:${main.dataset.userId}`;
+  const key = `homehub-card-layout:${main.dataset.userId}:${location.pathname}`;
   let layout = {};
   try { layout = JSON.parse(localStorage.getItem(key) || '{}'); } catch (_) { layout = {}; }
   const cards = [...main.querySelectorAll('.panel')].filter(card =>

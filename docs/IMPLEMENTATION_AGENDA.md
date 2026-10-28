@@ -41,7 +41,8 @@ approves the completed change.
   remain before household rollout.
 - UX follow-up: the shared shell now keeps parent tabs active on nested list,
   recipe, and event pages, links the tab level in the breadcrumb, and restores
-  the submitting section after a short form-post redirect. The full visual and
+  the submitting section after a short form-post redirect. Card order and width
+  preferences are scoped to the signed-in user and page. The full visual and
   keyboard review remains a release gate.
 
 ## Shared foundations and Admin
