@@ -220,6 +220,9 @@ approves the completed change.
   offline puzzles, and Wumpus has 365 nonrepeating seeded maps. Practice uses
   past puzzles for the word and grid games; Wumpus offers a chosen or random
   seed. A v17 upgrade preserves v16 Word Garden attempts.
+- UX follow-up: the Yesterday's solutions section now sits below the active
+  daily challenge and is collapsed by default, keeping today's play path first.
+  Full household playtesting and narrow-phone review remain open.
 - Expanded offline content banks now include 5,000 word ladders, 5,000 unique
   8 × 8 nonograms, 5,000 unique 9 × 9 Sudoku puzzles, and 5,000 5 × 5 mini
   crosswords. The crosswords rotate among four distinct editors—Larry, Moe,
