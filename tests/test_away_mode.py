@@ -156,6 +156,7 @@ def test_away_mode_offline_shell_and_service_worker_are_available(client):
     assert worker.status_code == HTTPStatus.OK
     assert worker.headers['Service-Worker-Allowed'] == '/'
     assert b'offline.html' in worker.data
+    assert b"homehub-away-v3" in worker.data
 
 
 def test_away_mode_snapshot_respects_private_allowlist(client):
