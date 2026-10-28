@@ -65,6 +65,23 @@ def test_admin_can_reorder_feature_tabs_without_moving_home_or_admin(app):
     assert nav.index('href="/sticky-notes"') < nav.index('>Admin</a>')
 
 
+def test_shared_shell_has_collapsible_navigation_and_breadcrumb(app):
+    client = app.test_client()
+    sign_in(client)
+    page = client.get('/').data
+    assert b'aria-controls="site-menu"' in page
+    assert b'aria-label="Breadcrumb"' in page
+    assert b'id="breadcrumb-page"' in page
+    assert b'app-shell.js' in page
+
+
+def test_shared_shell_marks_user_scope_for_card_layout(app):
+    client = app.test_client()
+    sign_in(client)
+    page = client.get('/').data
+    assert b'<main data-user-id="1">' in page
+
+
 def test_feature_tab_order_rejects_invalid_order_and_non_admins(app):
     admin = app.test_client()
     sign_in(admin)

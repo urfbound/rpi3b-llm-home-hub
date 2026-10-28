@@ -6,6 +6,7 @@
   <title>Home Hub</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='contacts-sticky.css') }}">
+  <script src="{{ url_for('static', filename='app-shell.js') }}" defer></script>
   <script>
     document.documentElement.dataset.theme=localStorage.getItem('theme')||'light';
     function toggleTheme(){const t=document.documentElement.dataset.theme==='light'?'dark':'light';document.documentElement.dataset.theme=t;localStorage.setItem('theme',t)}
@@ -20,7 +21,8 @@
   <header>
     <a class="brand" href="{{ url_for('index') }}">⌂ Home Hub</a>
     {% if current_user %}
-    <nav class="site-nav" aria-label="Main navigation">
+    <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-menu">Menu</button>
+    <nav class="site-nav" id="site-menu" aria-label="Main navigation" hidden>
       <a href="{{ url_for('index') }}" {% if request.endpoint == 'index' %}aria-current="page"{% endif %}>Home</a>
       <a href="/lists" {% if request.path == '/lists' %}aria-current="page"{% endif %}>Lists</a>
       <a href="/recipes" {% if request.path == '/recipes' %}aria-current="page"{% endif %}>Recipes</a>
@@ -30,6 +32,7 @@
       {% endfor %}
       {% if current_user['role'] == 'admin' %}<a href="{{ url_for('accounts') }}" {% if request.endpoint == 'accounts' %}aria-current="page"{% endif %}>Admin</a>{% endif %}
     </nav>
+    <nav class="breadcrumb-nav" aria-label="Breadcrumb"><a href="{{ url_for('index') }}">Home</a><span aria-hidden="true">›</span><span id="breadcrumb-tab">{{ 'Admin' if request.endpoint == 'accounts' else 'Home' }}</span><span id="breadcrumb-page"></span></nav>
     {% endif %}
     <div class="toolbar">
       <button type="button" onclick="toggleTheme()" aria-label="Toggle light and dark theme">◐ Theme</button>
@@ -39,7 +42,7 @@
       {% endif %}
     </div>
   </header>
-  <main>
+  <main data-user-id="{{ current_user['id'] if current_user else '' }}">
     {% for msg in get_flashed_messages() %}<p class="notice">{{ msg }}</p>{% endfor %}
     {% block content %}{% endblock %}
   </main>
