@@ -213,7 +213,7 @@
     <form method="get" action="{{ list_page_url }}" class="inline list-picker-form">
       <input type="hidden" name="kind" value="{{ list_kind }}">
       <label for="list-picker">Choose a list</label>
-      <select id="list-picker" name="list_id">
+      <select id="list-picker" name="list_id" onchange="this.form.requestSubmit()">
         {% if list_kind == 'shopping' %}
           {% for category in shopping_categories %}{% set category_lists = lists|selectattr('category', 'equalto', category)|list %}{% if category_lists %}<optgroup label="{{ category }}">{% for list in category_lists %}<option value="{{ list['id'] }}" {% if selected_list and selected_list['id'] == list['id'] %}selected{% endif %}>{{ list['title'] }}{% if list['visibility'] == 'private' %} · Private{% endif %}</option>{% endfor %}</optgroup>{% endif %}{% endfor %}
         {% else %}

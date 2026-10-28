@@ -404,6 +404,9 @@ approves the completed change.
   mode, check items, then reconnect and test login expiry, concurrent changes,
   deleted items, and list access changes. Pending changes must remain visible
   until they are synced or explicitly discarded.
+- UX follow-up: changing the selected list now opens it immediately; the Open
+  button remains as a no-JavaScript fallback. Phone review of item density,
+  sharing context, and offline sync status remains open.
 - Profile deployment, backup/restore and recovery, TLS and LAN-only
   exposure, and the LLM separately and alongside the app. Do not release until
   account, data, resource, and upgrade checks pass.
