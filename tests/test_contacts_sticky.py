@@ -82,6 +82,13 @@ def test_contact_owner_can_edit_contact_and_visibility(app):
     assert b'8 Cedar Lane' in sign_in(app, 'bob').get('/').data
 
 
+def test_home_contact_duplicate_confirmation_uses_a_styled_dialog(app):
+    alex = sign_in(app, 'alex')
+    page = alex.get('/').data
+    assert b'id="duplicate-contact-dialog"' in page
+    assert b'window.confirm' not in page
+
+
 def test_contact_limit_and_input_validation_are_enforced(app):
     alex = sign_in(app, 'alex')
     bad = alex.post('/contacts', data={

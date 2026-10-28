@@ -288,6 +288,8 @@ approves the completed change.
   Owners can edit and delete contacts. The card has search, duplicate warnings,
   scrollable results, and one-at-a-time phone import when supported. Browser
   device verification and visual review on phone/light/dark remain.
+- UX follow-up: possible duplicate contacts now use a Home Hub confirmation
+  dialog instead of the browser's native confirmation popup.
 - **Sticky Notes:** The page supports 32 active notes per author, 128
   characters per note, eight colors, direct recipients or everyone, optional
   1-to-365-day expiry, and author-only editing/deletion. Expired notes stop
