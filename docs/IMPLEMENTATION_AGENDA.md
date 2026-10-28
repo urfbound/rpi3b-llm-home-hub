@@ -73,6 +73,9 @@ approves the completed change.
 - Complete Admin settings as each feature arrives: vertical cards, section
   jump links, fixed Home/Admin ends with reorderable middle tabs, backup and
   restore, account/session controls, and feature-specific settings.
+- UX follow-up: saving session settings returns to the Access section, and
+  backup setting saves return to Backup and restore. Dialog styling is shared
+  across admin actions; responsive review of the long settings page remains.
 - Pi app-only and app-plus-model resource profiles are recorded in
   [CHAT_PI_BENCHMARK.md](CHAT_PI_BENCHMARK.md). Targets are under 256 MB
   application RSS where practical and under 10 GB for app, dependencies, and

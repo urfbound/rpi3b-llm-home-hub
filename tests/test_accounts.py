@@ -175,7 +175,9 @@ def test_session_expiry_and_settings(app):
     client = app.test_client()
     sign_in(client)
     assert post(client, '/admin/session-settings', idle_hours='0', absolute_days='7').status_code == HTTPStatus.BAD_REQUEST
-    assert post(client, '/admin/session-settings', idle_hours='2', absolute_days='3').status_code == HTTPStatus.FOUND
+    saved = post(client, '/admin/session-settings', idle_hours='2', absolute_days='3')
+    assert saved.status_code == HTTPStatus.FOUND
+    assert saved.headers['Location'].endswith('/admin/accounts#access-section')
     with client.session_transaction() as session:
         session['last_seen'] = int(time.time()) - 3 * 3600
     assert client.get('/admin/accounts').status_code == HTTPStatus.FOUND
