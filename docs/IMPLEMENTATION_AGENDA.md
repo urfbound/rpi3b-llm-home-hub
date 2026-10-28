@@ -3,44 +3,55 @@
 This agenda condenses the approved product scope in
 [PROJECT_PLAN.md](PROJECT_PLAN.md) into implementation work. All tab designs
 listed here are approved. Initial Pi 3B Chat benchmarks support an optional
-feature; combined app/model profiling remains before enablement. Work proceeds
-in small feature branches, test-first; merge
-to `main` only after the user approves the completed change.
+feature; representative answer-quality review remains before household
+enablement. Implementations described below are merged to `main` unless called
+out as remaining validation or deferred work. Continue using small feature
+branches and test-first development; merge to `main` only after the user
+approves the completed change.
 
 ## Current status
 
-- **Foundations mostly in place:** account administration, roles and sessions,
+- **Foundations:** account administration, roles and sessions,
   CSRF, login rate limiting, verified backup/restore, LAN HTTPS setup with
   loopback-only Waitress and Caddy, TLS deployment guidance,
   and schema versioning are implemented. Initial Ollama latency and memory
   measurements on the Raspberry Pi 3B are recorded in
   [CHAT_PI_BENCHMARK.md](CHAT_PI_BENCHMARK.md). App and app-plus-model profiles
-  are now recorded; answer-quality review remains.
-- **Lists and Recipes:** Shopping, To-do, Chores, recipe privacy/notes,
-  serving scaling, and Add to list snapshots are merged to main. Copy/Paste is
-  awaiting review. Weekend, weather, and system status cards remain.
-- **Calendar:** Month navigation, event details, daily/weekly/monthly/yearly
-  recurrence, and their data-preserving schema upgrades are merged to main.
-  Event participants, private-event access, and ICS filtering are committed
-  for review. Per-user daily/monthly budget enforcement and Admin limits are
-  implemented on a dependent feature branch. Recipe links, Home summaries,
-  and retention settings remain.
-- **Current app prototype:** login/admin, a single shopping list, recipe
-  create/view, basic event creation and ICS export, and light/dark theme exist.
-  The approved full tab designs are not yet implemented as complete features.
-- **Design reviews:** account administration, Home, Lists, Recipes, Calendar,
-  Weather, RSS, Games, and Chat are approved. Initial Pi 3B benchmarking
-  supports optional Chat; combined app/model profiling and answer-quality
-  review remain before enabling it for a household.
+  are recorded. Remaining foundation work is target-Pi deployment and release
+  verification; Chat remains hidden pending answer-quality review.
+- **Lists and Recipes:** Shopping, To-do, Chores, copy/paste, recipe privacy and
+  notes, sharing safeguards, serving scaling, calendar links, and Add to list
+  snapshots are on `main`. Automated authorization, migration, and workflow
+  coverage is in place. Remaining work is phone/browser visual review and the
+  away-mode offline verification below.
+- **Calendar:** Month navigation, event details, recurrence, participants,
+  private-event access, ICS filtering, per-user budgets, recipe links, Home
+  weekend summaries, and retention/archive controls are on `main`. Remaining
+  work is manual deployment and browser validation.
+- **Weather, RSS, Home, and Games:** Their feature implementations and the
+  associated Admin controls are on `main`. Remaining work is listed under
+  each feature below: browser/device review, Pi profiling, and household
+  playtesting where applicable.
+- **Next validation:** complete the target-Pi install, upgrade, and uninstall
+  checks, then continue phone/browser review of offline mode and responsive
+  feature pages.
+- **Design reviews:** Account administration, Home, Lists, Recipes, Calendar,
+  Weather, RSS, Games, and Chat are approved. App-only and app-plus-model Pi
+  profiles are recorded. Chat answer-quality review and manual browser review
+  remain before household rollout.
 
 ## Shared foundations and Admin
 
 - Finish Raspberry Pi install/uninstall hardening. Tests now cover venv
   permissions, private environment-file mode and preservation, repeated runtime
   replacement without touching the checkout/database/backups, and uninstall's
-  file-deletion boundary. Tests also verify that a database backup precedes
-  service activation and that repeated legacy-cron cleanup preserves unrelated
-  jobs. Manually verify repeat install and uninstall prompts, the systemd
+  file-deletion boundary. The uninstaller now offers explicit data deletion;
+  `--no-prompt`/`--yes` modes default to preserving data unless
+  `--delete-data` or `--delete-backups` is specified. The installer supports
+  noninteractive setup and first-admin password input through standard input.
+  Tests also verify that a database backup precedes service activation and that
+  repeated legacy-cron cleanup preserves unrelated jobs. Manually verify
+  repeat install/uninstall, both preservation and deletion choices, the systemd
   timers, and retained data/config ownership on a Pi using the regular-user/sudo
   flow on the target hostname.
 - Release installation path is prepared: tagged GitHub releases build a
@@ -75,22 +86,22 @@ to `main` only after the user approves the completed change.
    v5 structured recipe tables are merged to main. The v6 recipe privacy and
    notes migration is merged to main; continue adding tests for every future
    upgrade.
-2. Complete Shopping and To-do flows: list creation, selection, sharing,
+2. Shopping and To-do flows are implemented: list creation, selection, sharing,
    private allowlists, static shopping categories, item ownership, To-do
    assignment/due dates, collaborative editing, and item/list deletion
    authorization. Creation, selection, access controls, item assignment/due
-   dates, and collaborative To-do editing are merged to main; deletion edge
-   cases and responsive visual review remain.
-3. Copy/Paste implementation is ready for review: matching ignores case and
+   dates, collaborative To-do editing, and deletion authorization are merged to
+   `main` and covered by tests; responsive visual review remains.
+3. Copy/Paste is merged to `main`: matching ignores case and
    repeated whitespace; checked imports complete unique matches without
    changing ownership, while new items belong to the importing user. Malformed
    or ambiguous imports require correction, and changed lists require a fresh
-   review before apply.
+   review before apply. Focused automated tests cover these safeguards.
 4. Weekly Chores and the Home chores card are merged to main: seven weekday
    lists, per-person and Everyone assignments,
    independent completion, creator/admin deletion, Sunday reset based on the
-   Pi's configured local date, and Just my chores filtering. The remaining Home
-   cards depend on calendar, weather, and system-status work.
+   Pi's configured local date, and Just my chores filtering. Weekend summaries,
+   weather, and system-status cards are also implemented on `main`.
 5. Phone away-mode caching and checkmark-only sync by stable item ID are
    implemented and merged: pending changes persist across reconnects, while
    sync rechecks login and list permissions and reports concurrent edits and
@@ -100,19 +111,18 @@ to `main` only after the user approves the completed change.
 ### Recipes
 
 - Structured recipe creation, editing, deletion, privacy, per-user notes,
-  serving scaling, and Add to list snapshots are merged to main, including an
+  serving scaling, and Add to list snapshots are merged to `main`, including an
   upgrade that preserves existing recipe text. Add to calendar with serving
-  count and private-title protection are implemented on the current review
-  branch; calendar event detail links back to the recipe with servings.
-- Preserve authorized notes when sharing changes; prompt before removing notes
-  belonging to users who lose access.
+  count and private-title protection are also merged; calendar event detail
+  links back to the recipe with servings. Sharing changes preserve authorized
+  notes and prompt before removing notes belonging to users who lose access.
 
 ### Calendar
 
 - Month grid, month/year selectors, previous/next navigation, Today, and the
-  retained-year dropdown are merged to main. The year range defaults to three
+  retained-year dropdown are merged to `main`. The year range defaults to three
   previous years plus ten future years. Calendar retention and archive controls
-  are implemented on the current review branch.
+  are also merged to `main`.
 - Event details, all-day/timed entry, edit/delete controls, title/description
   validation, and v7-to-v8 migration preserving existing events are merged.
   Timed events export to floating local times in ICS.
@@ -121,10 +131,9 @@ to `main` only after the user approves the completed change.
   are materialized so they appear in month views and ICS downloads.
 - Event participants, private-event details, Busy placeholders, ICS
   visibility filtering, per-user daily/monthly occurrence budgets, and Admin
-  limit settings are implemented on dependent review branches. Recipe/meal-prep
-  links and Calendar retention are implemented on their current review
-  branches. Home weekend summaries remain.
-- The current review branch derives the household calendar timezone from the
+  limit settings are merged to `main`, along with recipe/meal-prep links,
+  Calendar retention, and Home weekend summaries.
+- The implementation on `main` derives the household calendar timezone from the
   admin-selected weather location (falling back to the Pi's local timezone).
   It configures zero to ten previous calendar years, archives years to ICS
   before deleting on a deliberate retention reduction, and automatically
@@ -134,18 +143,18 @@ to `main` only after the user approves the completed change.
 
 ### Weather and system status
 
-- The Open-Meteo client and shared SQLite cache are implemented on the current
-  review branch. The provider request covers current, hourly, and daily fields;
+- The Open-Meteo client and shared SQLite cache are implemented on `main`. The
+  provider request covers current, hourly, and daily fields;
   the cache refreshes after 30 minutes and can serve stale data while outbound
   access is disabled or a refresh fails. Admin location search/selection,
   outbound-access control, configurable 1–15-day forecast, and metric/imperial
-  units are implemented on dependent review branches. Current conditions,
+  units are implemented on `main`. Current conditions,
   hourly/daily cards, pressure change/trend, wind and precipitation,
   sunrise/sunset, moon illumination and named full moons, and stale-cache age
-  are implemented on the current review branch. Tides remain hidden unless a
+  are implemented on `main`. Tides remain hidden unless a
   supported station can be determined for the configured location.
 - Disk, RAM, normalized CPU, one-hour CPU history, board temperature, and app
-  RSS are implemented on the current review branch. Disk and RAM lead the
+  RSS are implemented on `main`. Disk and RAM lead the
   system card; Admin can hide it from household users while optionally
   allowing the house-wide account. CPU history bars use the approved yellow
   60–80% and red above-80% thresholds.
@@ -154,14 +163,14 @@ to `main` only after the user approves the completed change.
 
 ### RSS
 
-- The RSS/Atom parsing and feed URL safety foundation is implemented on the
-  current review branch. It normalizes URLs, rejects non-public destinations,
+- The RSS/Atom parsing and feed URL safety foundation is implemented on
+  `main`. It normalizes URLs, rejects non-public destinations,
   parses bounded article sets, strips HTML summaries, and resolves safe links.
-- The personal/household feed registry schema is also implemented on the
-  current review branch, with URL uniqueness across scopes and a tested v12
+- The personal/household feed registry schema is also implemented on
+  `main`, with URL uniqueness across scopes and a tested v12
   upgrade that preserves existing household data.
 - Personal feed add/remove/reordering and admin-managed house-wide feed
-  add/remove/reordering are implemented on the current review branch. The
+  add/remove/reordering are implemented on `main`. The
   server enforces duplicate checks across scopes, admin-only household changes,
   and a three-feed household limit. Adding a feed triggers an immediate first
   refresh; failures are shown to the user, recorded, and retried after the
@@ -235,6 +244,9 @@ to `main` only after the user approves the completed change.
   pages in light and dark themes found no horizontal overflow. Sudoku was played
   through its server-rendered form without JavaScript. Pi resource profiling
   and broader household playtesting remain before release.
+- Game text inputs disable browser autofill. Sudoku and mini crossword entries
+  advance across editable cells in row order; Backspace on an empty cell moves
+  to the preceding editable cell.
 - Deferred game work: more than one daily puzzle per game and Pi-generated
   puzzle content. Broader playtesting should assess whether the Sudoku
   difficulty estimate matches household experience.
@@ -244,30 +256,31 @@ to `main` only after the user approves the completed change.
 - The Chores and This weekend cards now occupy the first dashboard row. The
   weekend summary includes Friday through Sunday, invitee and description
   sub-lines, timed-event ranges, private-event placeholders, and Just my events
-  filtering. This slice is implemented on the current review branch. Weather
-  and system status cards remain; keep the responsive two-column desktop
-  layout and single-column narrow-phone layout.
+  filtering. This slice is merged to `main`, alongside the Home weather and
+  system-status cards. Continue visual review of the responsive two-column
+  desktop and single-column narrow-phone layouts.
 - **Contacts:** The Home card now supports up to 128 owner-managed contacts
   with name, phone, email, organization, and home address. Private/shared
   visibility is enforced server-side; shared contacts are read-only to others.
   Owners can edit and delete contacts. The card has search, duplicate warnings,
   scrollable results, and one-at-a-time phone import when supported. Browser
   device verification and visual review on phone/light/dark remain.
-- **Sticky Notes:** The new page supports 32 active notes per author, 128
+- **Sticky Notes:** The page supports 32 active notes per author, 128
   characters per note, eight colors, direct recipients or everyone, optional
-  1-to-365-day expiry, and author-only deletion. Expired notes stop displaying
-  and no longer use quota. Responsive bento cards show author/date and audience.
-  Sticky Notes is in the shared feature-tab order. Admins can move feature tabs;
-  Home remains first and Admin last. Automated privacy, limits, migration, and
-  navigation tests pass. Phone/browser review and visual light/dark review
-  remain. Add an optional sticky-note stacking layout after a later design
-  review.
+  1-to-365-day expiry, and author-only editing/deletion. Expired notes stop
+  displaying and no longer use quota. Responsive bento cards show author/date
+  and audience; owners can copy note text to the clipboard, and deletion asks
+  for confirmation. Sticky Notes is in the shared feature-tab order. Admins can
+  move feature tabs; Home remains first and Admin last. Automated privacy,
+  limits, migration, and navigation tests pass. Phone/browser review and visual
+  light/dark review remain. Add an optional sticky-note stacking layout after a
+  later design review.
 
 ### Chat
 
 - Keep Chat hidden by default. Initial Pi 3B warm latency and model-only memory
   are measured; see [CHAT_PI_BENCHMARK.md](CHAT_PI_BENCHMARK.md). The
-  `feature/chat-initial-release` branch now has test-verified admin-only
+  implementation on `main` has test-verified admin-only
   enable/model settings, loopback-only Ollama model discovery, configurable
   queue and pair limits, and private conversation history with pin/delete
   rules, history caps, account isolation, admin visibility, and a schema

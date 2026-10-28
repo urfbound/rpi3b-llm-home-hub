@@ -296,6 +296,14 @@ def test_crossword_daily_puzzle_displays_its_editor(game_app):
     assert f"Edited by {puzzle['editor']}".encode() in page.data
 
 
+@pytest.mark.parametrize('game', ['crossword', 'sudoku'])
+def test_letter_and_digit_grid_inputs_disable_autofill_and_load_navigation(game_app, game):
+    page = sign_in(game_app, 'alex').get(f'/games/{game}')
+    assert page.status_code == 200
+    assert b'autocomplete="off"' in page.data
+    assert b'game-grid.js' in page.data
+
+
 @pytest.mark.parametrize('game', ['crossword', 'nonogram', 'sudoku'])
 def test_grid_games_validate_moves_hints_and_score(game_app, game):
     from homehub.game_grids import daily_puzzle
@@ -361,6 +369,7 @@ def test_wumpus_map_shows_topology_and_only_visited_clues(game_app):
     page = alex.get('/games/wumpus').data.decode()
     assert 'id="hide-wumpus-map"' in page
     assert 'wumpus-map.js' in page
+    assert 'id="arrow-path" name="rooms" required placeholder="2, 3" autocomplete="off"' in page
     assert page.index('<section class="panel"><div class="wumpus-map-wrap">') < page.index('<h2>Room ')
     assert (page.index('Drag to rotate the cave.') < page.index('id="hide-wumpus-map"')
             < page.index('<svg id="wumpus-map"'))

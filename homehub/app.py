@@ -10,6 +10,7 @@ import secrets
 import sqlite3
 import threading
 import time
+import click
 from contextlib import closing
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
@@ -4046,11 +4047,16 @@ def create_app(test_config=None):
         return Response('\r\n'.join(lines)+'\r\n',mimetype='text/calendar',headers={'Content-Disposition':'attachment; filename="homehub.ics"'})
 
     @app.cli.command('create-admin')
-    def create_admin():
+    @click.option('--username', 'provided_username', default=None)
+    @click.option('--password-stdin', is_flag=True,
+                  help='Read the administrator password from standard input.')
+    def create_admin(provided_username, password_stdin):
         import getpass
         db=sqlite3.connect(db_path)
-        username=input('Admin username: ').strip()
-        password=getpass.getpass('Admin password (12+ chars): ')
+        username=(provided_username if provided_username is not None
+                  else input('Admin username: ')).strip()
+        password=(input() if password_stdin
+                  else getpass.getpass('Admin password (12+ chars): '))
         if not username or len(password)<limits.PASSWORD_MINIMUM:
             raise SystemExit('Username required; password must be at least 12 characters')
         if db.execute('SELECT COUNT(*) FROM users WHERE active=1').fetchone()[0]>=limits.USER_MAXIMUM:

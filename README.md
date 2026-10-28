@@ -130,6 +130,18 @@ Ctrl+C. For access from other household devices, install Caddy and run
 serves HTTPS on the household LAN; do not expose the service through a router
 port.
 
+The installer accepts `--no-prompt` (also `--yes` or `-y`) to accept its
+confirmation prompts, including installing the Python venv package if needed.
+For a first install with no administrator, provide a username and one line of
+password input without putting the password in the command line:
+
+```sh
+./deploy/install.sh --no-prompt --admin-username household-admin --admin-password-stdin < /path/to/protected-password-file
+```
+
+The password must be at least 12 characters. System authorization through
+`sudo` may still request your Pi password.
+
 ## Uninstall from Raspberry Pi OS
 
 Run the uninstaller as your regular Pi login from the transferred repository:
@@ -142,10 +154,27 @@ It creates an immediate verified database backup first. If that backup fails,
 uninstallation stops before removing services or files. It then disables and
 removes the backup timer and web service, removes Home Hub's cron entries,
 installed application and configuration, and deletes the dedicated service
-account. It preserves your repository, database, calendar archives, and backup
-files. The script asks before deleting recognized Home Hub backup files; it
-never removes the repository. Preserved files under `/var/lib/homehub` become
-root-owned and are assigned back to the service account if you reinstall.
+account. With no flags, it asks whether to delete the database, application
+data, archives, and verified backups; the default answer preserves them. It
+also offers separate backup deletion when application data is kept. The source
+repository is always preserved.
+
+Use `--no-prompt` (also `--yes` or `-y`) for unattended confirmation choices;
+this defaults to keeping data and backups. Add `--delete-data` to remove the
+database, SQLite sidecar files, `/var/lib/homehub`, calendar archives, and
+recognized Home Hub backups. Use `--delete-backups` to remove only recognized
+backup files while keeping the database. For example:
+
+```sh
+./deploy/uninstall.sh --no-prompt --delete-data
+```
+
+`--keep-data` and `--keep-backups` can make preservation explicit. The
+uninstaller still creates and verifies a fresh backup before removal, then
+deletes that backup too when `--delete-data` or `--delete-backups` is selected.
+System authorization through `sudo` may still request your Pi password.
+Preserved files under `/var/lib/homehub` become root-owned and are assigned
+back to the service account if you reinstall.
 ## Important limitations / follow-up work
 
 - Admins can now create and remove accounts, reset passwords, and configure session limits. Account deletion can transfer or remove owned prototype content.

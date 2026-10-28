@@ -526,3 +526,17 @@ def test_non_owner_cannot_delete_a_list_or_cascade_its_items(client):
                           (list_id,)).fetchone() == ('Bob private list',)
         assert db.execute('SELECT text FROM shopping_items WHERE id=?',
                           (item_id,)).fetchone() == ('Keep this item',)
+
+
+def test_create_admin_accepts_password_from_stdin_for_automation(tmp_path):
+    app = create_app({'TESTING': True, 'SECRET_KEY': 'test-only-secret',
+                      'DATABASE': str(tmp_path / 'automated-admin.db')})
+    result = app.test_cli_runner().invoke(
+        args=['create-admin', '--username', 'automated-admin', '--password-stdin'],
+        input='a sufficiently long password\n',
+    )
+    assert result.exit_code == 0, result.output
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        row = db.execute('SELECT role FROM users WHERE username=?',
+                         ('automated-admin',)).fetchone()
+    assert row == ('admin',)

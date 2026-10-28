@@ -1,5 +1,34 @@
 #!/usr/bin/env bash
 
+homehub_parse_install_args() {
+  HOMEHUB_NO_PROMPT=0
+  HOMEHUB_SHOW_HELP=0
+  HOMEHUB_ADMIN_USERNAME=''
+  HOMEHUB_ADMIN_PASSWORD_STDIN=0
+  while (($#)); do
+    case $1 in
+      --no-prompt|-y|--yes) HOMEHUB_NO_PROMPT=1 ;;
+      --admin-username)
+        (($# >= 2)) || { echo '--admin-username requires a value' >&2; return 2; }
+        HOMEHUB_ADMIN_USERNAME=$2
+        shift
+        ;;
+      --admin-password-stdin) HOMEHUB_ADMIN_PASSWORD_STDIN=1 ;;
+      -h|--help)
+        printf 'Usage: install.sh [--no-prompt|--yes|-y] [--admin-username NAME] [--admin-password-stdin]\n'
+        HOMEHUB_SHOW_HELP=1
+        return 0
+        ;;
+      *) printf 'Unknown installer option: %s\n' "$1" >&2; return 2 ;;
+    esac
+    shift
+  done
+  if (( HOMEHUB_ADMIN_PASSWORD_STDIN )) && [[ -z $HOMEHUB_ADMIN_USERNAME ]]; then
+    echo '--admin-password-stdin requires --admin-username' >&2
+    return 2
+  fi
+}
+
 homehub_ensure_environment_file() (
   local env_file=$1
   local data_root=$2

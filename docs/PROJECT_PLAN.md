@@ -222,8 +222,9 @@ initial model-only Raspberry Pi 3B benchmarks support an optional feature.
 - Support all-day and timed events, plus daily, weekly, monthly, and yearly
   recurrence. Edit or cancel a single occurrence or the entire series.
   Recurrence requires an end date, defaulting to one year.
-- Admins set the household time zone. Calendar views and event budgets use
-  that zone. Add month view and local, one-way downloadable ICS; no cloud
+- The household calendar time zone is derived from the admin-selected weather
+  location, falling back to the Pi's local time zone. Calendar views and event
+  budgets use that zone. Add month view and local, one-way downloadable ICS; no cloud
   synchronization in the first release. The month view has month and year
   dropdowns, with previous/next buttons around the month on the left, the year
   dropdown centered, and Today on the right. The year dropdown covers every
@@ -473,7 +474,9 @@ are recorded in [CHAT_PI_BENCHMARK.md](CHAT_PI_BENCHMARK.md).
 1. Finish shared foundations: schema migrations, roles and permissions,
    sessions, CSRF, login rate limiting, backup/restore, TLS deployment, and
    baseline app memory measurement. Account, backup, TLS, and schema versioning
-   foundations are implemented; schema version 3 for Lists is in progress.
+   foundations are implemented. The Lists schema migration and subsequent
+   feature migrations are implemented; target-Pi deployment and release
+   verification remain.
 2. Implement Lists, then Recipes and Calendar, because recipes and events
    connect to shopping lists and to each other.
 3. Implement Weather, RSS, and all six Games, each in focused test-driven

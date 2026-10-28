@@ -24,6 +24,17 @@ def test_uninstall_backs_up_before_stopping_and_removing_scheduled_work():
     assert 'homehub-backup' in UNINSTALL and 'backup_scheduler' in UNINSTALL
 
 
+def test_installer_and_uninstaller_expose_noninteractive_choices():
+    install_helpers = (ROOT / 'deploy' / 'install_helpers.sh').read_text()
+    uninstall_helpers = (ROOT / 'deploy' / 'uninstall_helpers.sh').read_text()
+    assert 'homehub_parse_install_args "$@"' in INSTALL
+    assert '--no-prompt' in install_helpers and '--yes' in install_helpers
+    assert 'homehub_parse_uninstall_args "$@"' in UNINSTALL
+    assert '--no-prompt' in uninstall_helpers and '--yes' in uninstall_helpers
+    assert '--delete-data' in uninstall_helpers
+    assert 'HOMEHUB_DATA_CHOICE=keep' in uninstall_helpers
+
+
 def test_install_verifies_existing_database_backup_before_service_activation():
     backup = INSTALL.index('homehub-backup" --force')
     activate_services = INSTALL.index('sudo systemctl enable --now homehub.service')

@@ -64,6 +64,20 @@ homehub_replace_runtime_tree "$source_tree" "$root/homehub" direct
     assert result.returncode == 0, result.stderr
 
 
+def test_installer_parser_accepts_noninteractive_admin_options():
+    helper = Path(__file__).parents[1] / 'deploy' / 'install_helpers.sh'
+    script = f'''\
+set -euo pipefail
+source {shlex.quote(_bash_path(helper))}
+homehub_parse_install_args --no-prompt --admin-username household-admin --admin-password-stdin
+[[ $HOMEHUB_NO_PROMPT == 1 ]]
+[[ $HOMEHUB_ADMIN_USERNAME == household-admin ]]
+[[ $HOMEHUB_ADMIN_PASSWORD_STDIN == 1 ]]
+'''
+    result = subprocess.run([_bash(), '-c', script], capture_output=True, text=True)
+    assert result.returncode == 0, result.stderr
+
+
 @pytest.mark.skipif(os.name == 'nt', reason='Windows does not preserve POSIX modes')
 def test_new_environment_file_has_private_mode(tmp_path):
     helper = Path(__file__).parents[1] / 'deploy' / 'install_helpers.sh'
