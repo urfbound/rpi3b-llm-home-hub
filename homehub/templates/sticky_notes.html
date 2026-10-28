@@ -27,17 +27,28 @@
     <div class="sticky-actions">
       <button type="button" class="sticky-copy" data-copy-text="{{ note['text']|e }}" aria-label="Copy to clipboard" title="Copy to clipboard">▣</button>
       <details><summary>Edit sticky note</summary><form method="post" action="{{ url_for('edit_sticky_note', note_id=note['id']) }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><label>Note<textarea name="text" maxlength="128" required>{{ note['text'] }}</textarea></label><label>Color<select name="color">{% for color in colors %}<option value="{{ color }}" {% if color == note['color'] %}selected{% endif %}>{{ color|capitalize }}</option>{% endfor %}</select></label><button>Save changes</button></form></details>
-      <form method="post" action="{{ url_for('delete_sticky_note', note_id=note['id']) }}" onsubmit="return confirm('Delete this sticky note?')"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><button aria-label="Delete sticky note">Delete</button></form>
+      <button type="button" class="danger" data-delete-action="{{ url_for('delete_sticky_note', note_id=note['id']) }}">Delete</button>
     </div>
     {% endif %}
     <footer><span>From {{ note['author_name'] or 'Household member' }} · <time datetime="{{ note['created_at'] }}">{{ note['created_at'][:10] }}</time> · {{ note['recipient_scope'] }}{% if note['expires_at'] %} · Expires {{ note['expires_at'][:10] }}{% endif %}</span>
-      {% if note['author_user_id'] == current_user['id'] %}<form method="post" action="{{ url_for('delete_sticky_note', note_id=note['id']) }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><button aria-label="Delete sticky note">Delete</button></form>{% endif %}
     </footer>
   </article>
   {% else %}<p class="muted">No sticky notes for you yet.</p>{% endfor %}
 </section>
+<dialog id="sticky-delete-dialog"><form id="sticky-delete-form" method="post" class="dialog-form">
+  <input type="hidden" name="_csrf" value="{{ csrf_token }}"><h2>Delete this note?</h2>
+  <p>The note will be removed from everyone it was shared with.</p>
+  <div class="dialog-actions"><button type="button" data-close-sticky-dialog>Cancel</button><button class="danger">Delete note</button></div>
+</form></dialog>
 <style>.sticky-card footer{color:#30302b}.sticky-card footer form{display:none}.sticky-actions{display:flex;align-items:center;gap:.4rem;flex-wrap:wrap}.sticky-actions details form{display:grid;gap:.5rem}.sticky-actions details label{display:grid;gap:.2rem}</style>
 <script>
+const stickyDeleteDialog = document.getElementById('sticky-delete-dialog');
+const stickyDeleteForm = document.getElementById('sticky-delete-form');
+document.querySelectorAll('[data-delete-action]').forEach(button => button.addEventListener('click', () => {
+  stickyDeleteForm.action = button.dataset.deleteAction;
+  stickyDeleteDialog.showModal();
+}));
+document.querySelector('[data-close-sticky-dialog]').addEventListener('click', () => stickyDeleteDialog.close());
 document.querySelectorAll('.sticky-copy').forEach(button => button.addEventListener('click', async () => {
   try { await navigator.clipboard.writeText(button.dataset.copyText); button.title = 'Copied'; }
   catch (_) { button.title = 'Clipboard unavailable'; }

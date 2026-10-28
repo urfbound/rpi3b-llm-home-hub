@@ -300,6 +300,8 @@ approves the completed change.
   limits, migration, and navigation tests pass. Phone/browser review and visual
   light/dark review remain. Add an optional sticky-note stacking layout after a
   later design review.
+- UX follow-up: deleting a sticky note now uses a themed dialog and states that
+  the note will be removed from everyone it was shared with.
 
 ### Chat
 

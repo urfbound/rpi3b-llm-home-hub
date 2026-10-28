@@ -164,7 +164,8 @@ def test_sticky_notes_offer_owner_edit_copy_and_delete_confirmation(app):
     page = alex.get('/sticky-notes')
     assert b'Edit sticky note' in page.data
     assert b'Copy to clipboard' in page.data
-    assert b'confirm(' in page.data
+    assert b'id="sticky-delete-dialog"' in page.data
+    assert b'confirm(' not in page.data
     assert b'.sticky-card footer{color:#30302b}' in page.data
 
 def test_only_sticky_note_owner_can_edit(app):
