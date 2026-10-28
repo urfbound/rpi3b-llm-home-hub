@@ -7,6 +7,10 @@ readonly DATA_ROOT=/var/lib/homehub
 readonly CONFIG_ROOT=/etc/homehub
 readonly ENV_FILE=/etc/homehub/homehub.env
 readonly SERVICE_USER=homehub
+readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+source "$SCRIPT_DIR/install_helpers.sh"
+if ! homehub_parse_install_args "$@"; then exit 2; fi
+if (( HOMEHUB_SHOW_HELP )); then exit 0; fi
 
 if [[ ${EUID:-$(id -u)} -eq 0 ]]; then
   printf 'Run this script as your regular Pi user; it will request sudo when needed.\n' >&2
@@ -17,7 +21,6 @@ if ! command -v sudo >/dev/null 2>&1; then
   exit 1
 fi
 
-readonly SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 readonly REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 for required in "$REPO_ROOT/homehub" "$REPO_ROOT/pyproject.toml" \
                 "$SCRIPT_DIR/install_helpers.sh" \
@@ -32,7 +35,6 @@ for required in "$REPO_ROOT/homehub" "$REPO_ROOT/pyproject.toml" \
     exit 1
   fi
 done
-source "$SCRIPT_DIR/install_helpers.sh"
 source "$SCRIPT_DIR/venv_permissions.sh"
 
 python_ok=0
@@ -46,8 +48,10 @@ if (( ! python_ok )); then
 fi
 if ! python3 -c 'import venv' >/dev/null 2>&1; then
   printf 'The Python venv module is missing. Install it with: sudo apt install python3-venv\n' >&2
-  read -r -p 'Install python3-venv now with apt? [Y/n] ' answer
-  if [[ $answer =~ ^[Nn]$ ]]; then exit 1; fi
+  if (( ! HOMEHUB_NO_PROMPT )); then
+    read -r -p 'Install python3-venv now with apt? [Y/n] ' answer
+    if [[ $answer =~ ^[Nn]$ ]]; then exit 1; fi
+  fi
   sudo -v
   sudo apt-get update
   sudo apt-get install -y python3-venv
@@ -130,8 +134,30 @@ else:
         print(db.execute("SELECT count(*) FROM users WHERE active=1 AND role=?", ("admin",)).fetchone()[0] if table else 0)
 ')"
 if [[ $admin_count == 0 ]]; then
-  printf 'Create the first Home Hub administrator now. Use a unique username and a password of at least 12 characters.\n'
-  as_homehub "$INSTALL_ROOT/.venv/bin/flask" --app homehub.app:create_app create-admin
+  if (( HOMEHUB_NO_PROMPT )); then
+    if [[ -z $HOMEHUB_ADMIN_USERNAME || $HOMEHUB_ADMIN_PASSWORD_STDIN != 1 ]]; then
+      printf 'Noninteractive first install needs --admin-username NAME --admin-password-stdin; provide the password on standard input.\n' >&2
+      exit 2
+    fi
+    if [[ -t 0 ]]; then
+      printf 'No password was piped to standard input. Pipe one line containing the administrator password and retry.\n' >&2
+      exit 2
+    fi
+    printf 'Create the first Home Hub administrator. Enter a password of at least 12 characters on standard input.\n'
+    as_homehub "$INSTALL_ROOT/.venv/bin/flask" --app homehub.app:create_app \
+      create-admin --username "$HOMEHUB_ADMIN_USERNAME" --password-stdin
+  else
+    printf 'Create the first Home Hub administrator now. Use a unique username and a password of at least 12 characters.\n'
+    if (( HOMEHUB_ADMIN_PASSWORD_STDIN )); then
+      as_homehub "$INSTALL_ROOT/.venv/bin/flask" --app homehub.app:create_app \
+        create-admin --username "$HOMEHUB_ADMIN_USERNAME" --password-stdin
+    elif [[ -n $HOMEHUB_ADMIN_USERNAME ]]; then
+      as_homehub "$INSTALL_ROOT/.venv/bin/flask" --app homehub.app:create_app \
+        create-admin --username "$HOMEHUB_ADMIN_USERNAME"
+    else
+      as_homehub "$INSTALL_ROOT/.venv/bin/flask" --app homehub.app:create_app create-admin
+    fi
+  fi
 fi
 
 sudo install -o root -g root -m 0644 "$SCRIPT_DIR/homehub.service.example" \

@@ -12,6 +12,8 @@ if [[ ! -f $SCRIPT_DIR/uninstall_helpers.sh ]]; then
   exit 1
 fi
 source "$SCRIPT_DIR/uninstall_helpers.sh"
+if ! homehub_parse_uninstall_args "$@"; then exit 2; fi
+if (( HOMEHUB_SHOW_HELP )); then exit 0; fi
 
 if [[ ${EUID:-$(id -u)} -eq 0 ]]; then
   printf 'Run this script as your regular Pi user; it will request sudo when needed.\n' >&2
@@ -27,7 +29,7 @@ if [[ ! -x $INSTALL_ROOT/.venv/bin/homehub-backup ]]; then
 fi
 
 printf 'This removes the Home Hub service, timer, installed application, and environment file.\n'
-printf 'It preserves your source repository and application data by default.\n'
+printf 'The source repository is preserved. Application data is preserved unless you choose deletion.\n'
 sudo -v
 
 as_homehub() {
@@ -41,7 +43,16 @@ as_homehub() {
 }
 
 database_path="$(as_homehub "$INSTALL_ROOT/.venv/bin/python" -c \
-  'import os; from pathlib import Path; print(os.environ.get("HOMEHUB_DB", Path.home()/".local/share/homehub/homehub.sqlite3"))')"
+  'import os; from pathlib import Path; print(Path(os.environ.get("HOMEHUB_DB", Path.home()/".local/share/homehub/homehub.sqlite3")).expanduser().resolve())')"
+if [[ $HOMEHUB_DATA_CHOICE == ask ]]; then
+  read -r -p "Delete the database at $database_path and Home Hub data under $DATA_ROOT, including archives and verified backups? [y/N] " answer
+  if [[ $answer =~ ^[Yy]$ ]]; then
+    HOMEHUB_DATA_CHOICE=delete
+    HOMEHUB_BACKUP_CHOICE=delete
+  else
+    HOMEHUB_DATA_CHOICE=keep
+  fi
+fi
 if [[ -f $database_path ]]; then
   printf 'Creating an immediate verified backup before stopping Home Hub.\n'
   if ! as_homehub "$INSTALL_ROOT/.venv/bin/homehub-backup" --force; then
@@ -65,9 +76,9 @@ print(Path(row[0]) if row else default_backup_directory(database))
 ')"
 fi
 
-# The only data deletion offered is explicit deletion of recognized backup
-# files. Other contents of the configured folder are never removed.
-if [[ -n $backup_directory && -d $backup_directory ]]; then
+# When only backup deletion is selected, remove recognized Home Hub backup
+# files only; leave unrelated contents of the configured folder untouched.
+if [[ -n $backup_directory && -d $backup_directory && $HOMEHUB_BACKUP_CHOICE == ask ]]; then
   backup_count="$(as_homehub "$INSTALL_ROOT/.venv/bin/python" -c '
 from pathlib import Path
 from homehub.backups import list_backups
@@ -75,16 +86,9 @@ print(len(list_backups(Path(__import__("sys").argv[1]), limit=1000000)))
 ' "$backup_directory")"
   if (( backup_count > 0 )); then
     printf 'Found %s verified Home Hub backup file(s) in: %s\n' "$backup_count" "$backup_directory"
-    read -r -p 'Delete these backup files, including the fresh uninstall backup? [y/N] ' answer
+    read -r -p 'Delete these verified backup files, including the fresh uninstall backup? [y/N] ' answer
     if [[ $answer =~ ^[Yy]$ ]]; then
-      as_homehub "$INSTALL_ROOT/.venv/bin/python" -c '
-from pathlib import Path
-from homehub.backups import delete_backup, list_backups
-folder = Path(__import__("sys").argv[1])
-for backup in list_backups(folder, limit=1000000):
-    delete_backup(folder, str(backup["name"]))
-' "$backup_directory"
-      printf 'Recognized Home Hub backup files were deleted from %s.\n' "$backup_directory"
+      HOMEHUB_BACKUP_CHOICE=delete
     else
       printf 'Backups will be preserved.\n'
     fi
@@ -112,6 +116,28 @@ if sudo systemctl is-active --quiet homehub.service; then
   exit 1
 fi
 
+if [[ $HOMEHUB_BACKUP_CHOICE == delete && -n $backup_directory && -d $backup_directory ]]; then
+  as_homehub "$INSTALL_ROOT/.venv/bin/python" -c '
+from pathlib import Path
+from homehub.backups import delete_backup, list_backups
+folder = Path(__import__("sys").argv[1])
+for backup in list_backups(folder, limit=1000000):
+    delete_backup(folder, str(backup["name"]))
+' "$backup_directory"
+  printf 'Recognized Home Hub backups were deleted from %s.\n' "$backup_directory"
+fi
+
+if [[ $HOMEHUB_DATA_CHOICE == delete ]]; then
+  archive_directory="$(as_homehub "$INSTALL_ROOT/.venv/bin/python" -c '
+from pathlib import Path
+from homehub.app import calendar_archive_directory
+import sys
+print(calendar_archive_directory(Path(sys.argv[1])))
+' "$database_path")"
+  homehub_remove_data_paths "$database_path" "$DATA_ROOT" "$archive_directory" sudo
+  printf 'Home Hub database, data directory, archives, and recognized backups were deleted.\n'
+fi
+
 # Remove only the known Home Hub cron command from root/service-account crontabs.
 for cron_user in root "$SERVICE_USER"; do
   if old_crontab="$(sudo crontab -u "$cron_user" -l 2>/dev/null)"; then
@@ -132,13 +158,17 @@ sudo rm -f -- /etc/systemd/system/homehub.service \
 sudo systemctl daemon-reload
 sudo systemctl reset-failed
 homehub_remove_installed_files "$INSTALL_ROOT" "$ENV_FILE" "$CONFIG_ROOT" sudo
-sudo chown -R root:root "$DATA_ROOT"
+if [[ $HOMEHUB_DATA_CHOICE == keep && -d $DATA_ROOT ]]; then
+  sudo chown -R root:root "$DATA_ROOT"
+fi
 if id -u "$SERVICE_USER" >/dev/null 2>&1; then
   sudo userdel "$SERVICE_USER"
 fi
 
 printf '\nHome Hub services and installed application files have been removed.\n'
-printf 'Application data and the source repository were preserved.\n'
-printf 'Preserved application data is now owned by root; reinstall will restore service ownership.\n'
+printf 'The source repository was preserved.\n'
+if [[ $HOMEHUB_DATA_CHOICE == keep ]]; then
+  printf 'Application data was preserved and is now owned by root; reinstall will restore service ownership.\n'
+fi
 printf 'Database: %s\n' "$database_path"
 if [[ -n $backup_directory ]]; then printf 'Backup folder: %s\n' "$backup_directory"; fi
