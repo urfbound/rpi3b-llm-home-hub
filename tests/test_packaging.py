@@ -22,3 +22,21 @@ def test_distribution_declares_all_templates_and_static_assets():
         any(fnmatch.fnmatchcase(filename, pattern) for pattern in package_data)
         for filename in required_files
     )
+
+
+def test_distribution_includes_third_party_notices():
+    config = tomllib.loads((PROJECT_ROOT / 'pyproject.toml').read_text())
+    package_data = config['tool']['setuptools']['package-data']['homehub']
+    notice_path = PROJECT_ROOT / 'homehub' / 'THIRD_PARTY_NOTICES.md'
+    notice = notice_path.read_text()
+
+    assert any(
+        fnmatch.fnmatchcase('THIRD_PARTY_NOTICES.md', pattern)
+        for pattern in package_data
+    )
+    assert config['project']['license'] == 'GPL-3.0-only'
+    assert 'Flask' in notice
+    assert 'pytest' in notice
+    assert 'SCOWL' in notice
+    assert 'wordfreq' in notice
+    assert 'CC BY-SA 4.0' in notice
