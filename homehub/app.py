@@ -21,13 +21,14 @@ from urllib.parse import urlsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from flask import (Flask, Response, abort, flash, g, has_app_context, jsonify, make_response, redirect,
                    render_template, request, send_file, send_from_directory, session, url_for)
+from werkzeug.middleware.proxy_fix import ProxyFix
 from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError, VerificationError
 from . import constants as limits
 from .chat import (ChatProviderError, ChatQueueFull, ChatRequestQueue,
                    OllamaProvider, list_ollama_models)
 from .chat_tools import ChatDataTools, ChatToolError
-from .backups import (BackupError, backup_filename, create_backup,
+from .backups import (BackupError, backup_filename, calendar_bundle_path, create_backup,
                       default_backup_directory, delete_backup, list_backups,
                       prune_backups, restore_backup, validate_backup_directory)
 from .weather import (WeatherError, geocode_location, get_cached_forecast,
@@ -843,7 +844,8 @@ def calendar_ics_content(events, *, viewer=None, participant_ids=(), only_requir
             continue
         can_view_details = (viewer is None or event['visibility'] == 'shared'
                             or viewer['role'] == 'admin' or required)
-        lines.extend(['BEGIN:VEVENT', f'UID:homehub-{event["id"]}@local', f'DTSTAMP:{stamp}'])
+        lines.extend(['BEGIN:VEVENT', f'UID:homehub-{event["id"]}-{event["event_date"]}@local',
+                      f'DTSTAMP:{stamp}'])
         if event['all_day']:
             lines.append(f'DTSTART;VALUE=DATE:{event["event_date"].replace("-", "")}')
         else:
@@ -867,7 +869,38 @@ def write_calendar_archive(directory, year, events):
     filename = f'homehub-calendar-{year}.ics'
     path = directory / filename
     temporary = directory / f'.{filename}.{secrets.token_hex(6)}.tmp'
-    content = calendar_ics_content(events).encode('utf-8')
+    generated = calendar_ics_content(events)
+    event_blocks = {}
+
+    def collect_event_blocks(document):
+        current = None
+        uid = None
+        blocks = []
+        for line in document.splitlines():
+            if line == 'BEGIN:VEVENT':
+                current = [line]
+                uid = None
+            elif current is not None:
+                current.append(line)
+                if line.startswith('UID:'):
+                    uid = line[4:]
+                if line == 'END:VEVENT':
+                    if uid:
+                        blocks.append((uid, current))
+                    current = None
+                    uid = None
+        return blocks
+
+    if path.is_file():
+        for uid, block in collect_event_blocks(path.read_text(encoding='utf-8')):
+            event_blocks[uid] = block
+    for uid, block in collect_event_blocks(generated):
+        event_blocks[uid] = block
+    header = generated.split('BEGIN:VEVENT', 1)[0]
+    content = header + ''.join(
+        '\r\n'.join(block) + '\r\n' for block in event_blocks.values()
+    ) + 'END:VCALENDAR\r\n'
+    content = content.encode('utf-8')
     try:
         with temporary.open('xb') as archive:
             archive.write(content)
@@ -879,7 +912,7 @@ def write_calendar_archive(directory, year, events):
             temporary.unlink()
         except FileNotFoundError:
             pass
-    return filename, len(content)
+    return filename, len(content), len(event_blocks)
 
 def process_calendar_year(db, directory, year, *, archive):
     start = f'{year:04d}-01-01'
@@ -893,13 +926,13 @@ def process_calendar_year(db, directory, year, *, archive):
     archive_details = write_calendar_archive(directory, year, events) if archive else None
     with db:
         if archive_details:
-            filename, size_bytes = archive_details
+            filename, size_bytes, event_count = archive_details
             db.execute(
                 'INSERT INTO calendar_archives(year,file_name,event_count,archived_at,size_bytes) '
                 'VALUES(?,?,?,?,?) ON CONFLICT(year) DO UPDATE SET '
                 'file_name=excluded.file_name,event_count=excluded.event_count,'
                 'archived_at=excluded.archived_at,size_bytes=excluded.size_bytes',
-                (year, filename, len(events), datetime.now(timezone.utc).isoformat(), size_bytes),
+                (year, filename, event_count, datetime.now(timezone.utc).isoformat(), size_bytes),
             )
         db.execute('DELETE FROM events WHERE event_date>=? AND event_date<?', (start, end))
         db.execute('DELETE FROM calendar_archive_failures WHERE year=?', (year,))
@@ -1204,6 +1237,9 @@ def save_recipe_content(db, recipe_id, values):
 
 def create_app(test_config=None):
     app = Flask(__name__)
+    # The supported deployment places exactly one Caddy proxy in front of
+    # loopback-only Waitress. Trust only its rightmost client address value.
+    app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1)
     app.config.update(
         SECRET_KEY=os.environ.get('HOMEHUB_SECRET_KEY'),
         DATABASE=os.environ.get('HOMEHUB_DB', str(Path.home()/'.local/share/homehub/homehub.sqlite3')),
@@ -2272,6 +2308,9 @@ def create_app(test_config=None):
         backup_frequency = setting(db, 'backup_interval_days', limits.BACKUP_INTERVAL_DAYS_MINIMUM)
         backup_retention = setting(db, 'backup_retention', limits.BACKUP_RETENTION_DEFAULT)
         backups = list_backups(backup_folder, backup_retention) if backup_folder_available else []
+        for backup in backups:
+            backup['calendar_bundle'] = calendar_bundle_path(
+                backup_folder / backup['name']).is_file()
         archive_folder = calendar_archive_directory(db_path)
         calendar_archives = db.execute(
             'SELECT year,file_name,event_count,archived_at,size_bytes '
@@ -2881,6 +2920,21 @@ def create_app(test_config=None):
         except BackupError:
             abort(HTTPStatus.NOT_FOUND)
 
+    @app.get('/admin/backups/<filename>/calendar-download')
+    @admin_required
+    def download_backup_calendar_bundle(filename):
+        try:
+            backup_filename(filename)
+            backup_path = configured_backup_directory(get_db()) / filename
+            bundle = calendar_bundle_path(backup_path)
+            if (backup_path.is_symlink() or not backup_path.is_file()
+                    or bundle.is_symlink() or not bundle.is_file()):
+                abort(HTTPStatus.NOT_FOUND)
+            return send_file(bundle, as_attachment=True, download_name=bundle.name,
+                             mimetype='application/zip', max_age=0)
+        except BackupError:
+            abort(HTTPStatus.NOT_FOUND)
+
     @app.post('/admin/backups/<filename>/delete')
     @admin_required
     def remove_backup(filename):
@@ -2986,12 +3040,32 @@ def create_app(test_config=None):
                 abort(HTTPStatus.BAD_REQUEST)
         with db:
             if choice == 'transfer':
-                for table in ('shopping_items', 'recipes', 'events'):
+                for table in ('shopping_items', 'household_lists', 'recipes', 'events', 'chores'):
                     db.execute(f'UPDATE {table} SET created_by=? WHERE created_by=?', (target_id, user_id))
+                db.execute('UPDATE contacts SET owner_user_id=? WHERE owner_user_id=?',
+                           (target_id, user_id))
+                db.execute('UPDATE sticky_notes SET author_user_id=? WHERE author_user_id=?',
+                           (target_id, user_id))
+                db.execute('INSERT OR IGNORE INTO sticky_note_recipients(note_id,user_id) '
+                           'SELECT note_id,? FROM sticky_note_recipients WHERE user_id=?',
+                           (target_id, user_id))
+                db.execute('DELETE FROM sticky_note_recipients WHERE user_id=?', (user_id,))
+                db.execute('UPDATE chores SET assignee_id=? WHERE assignee_id=?',
+                           (target_id, user_id))
+                db.execute('INSERT OR IGNORE INTO chore_completions(chore_id,user_id,completed_week) '
+                           'SELECT chore_id,?,completed_week FROM chore_completions WHERE user_id=?',
+                           (target_id, user_id))
+                db.execute('DELETE FROM chore_completions WHERE user_id=?', (user_id,))
+                db.execute('UPDATE rss_feeds SET created_by=? WHERE created_by=?',
+                           (target_id, user_id))
+                db.execute('UPDATE rss_feeds SET owner_user_id=? WHERE owner_user_id=?',
+                           (target_id, user_id))
             else:
                 db.execute('DELETE FROM events WHERE created_by=?', (user_id,))
                 db.execute('DELETE FROM recipes WHERE created_by=?', (user_id,))
                 db.execute('DELETE FROM shopping_items WHERE created_by=?', (user_id,))
+                db.execute('DELETE FROM household_lists WHERE created_by=?', (user_id,))
+                db.execute('DELETE FROM chores WHERE created_by=?', (user_id,))
             db.execute('DELETE FROM users WHERE id=?', (user_id,))
         flash(f'{user["username"]} was removed.')
         return redirect(url_for('accounts'))
@@ -4032,7 +4106,9 @@ def create_app(test_config=None):
             can_view_details = (
                 ev['visibility'] == 'shared' or g.user['role'] == 'admin' or required
             )
-            lines.extend(['BEGIN:VEVENT', f'UID:homehub-{ev["id"]}@local', f'DTSTAMP:{stamp}'])
+            lines.extend(['BEGIN:VEVENT',
+                          f'UID:homehub-{ev["id"]}-{ev["event_date"]}@local',
+                          f'DTSTAMP:{stamp}'])
             if ev['all_day']:
                 lines.append(f'DTSTART;VALUE=DATE:{ev["event_date"].replace("-", "")}')
             else:

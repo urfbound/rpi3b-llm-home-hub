@@ -38,7 +38,16 @@
       <button type="button" onclick="toggleTheme()" aria-label="Toggle light and dark theme">◐ Theme</button>
       {% if current_user %}
       <a href="{{ url_for('change_password') }}">{{ current_user['display_name'] }}</a>
-      <form method="post" action="{{ url_for('logout') }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><button>Log out</button></form>
+      <form method="post" action="{{ url_for('logout') }}" data-away-logout
+            data-away-user-id="{{ current_user['id'] }}">
+        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+        <label class="logout-offline-clear">
+          <input type="checkbox" data-away-clear-user-data>
+          Clear saved offline list
+        </label>
+        <small>Also discards pending offline changes on this device.</small>
+        <button>Log out</button>
+      </form>
       {% endif %}
     </div>
   </header>

@@ -6,8 +6,9 @@ from contextlib import closing
 
 from homehub.constants import BACKUP_INTERVAL_DAYS_MAXIMUM, BACKUP_RETENTION_DEFAULT
 from homehub.backup_scheduler import main as backup_main, run_backup_cycle
-from homehub.backups import create_backup
-from homehub.app import PH, create_app
+from homehub.backups import create_backup, prune_backups, restore_backup
+import homehub.app as app_module
+from homehub.app import PH, SCHEMA_VERSION, create_app
 
 
 def make_admin_client(tmp_path):
@@ -44,6 +45,9 @@ def test_admin_can_create_download_and_delete_verified_backup(tmp_path):
     backup_dir = tmp_path / 'backups'
     backups = list(backup_dir.glob('homehub-*.sqlite3'))
     assert len(backups) == 1
+    bundles = list(backup_dir.glob('*.calendar.zip'))
+    assert len(bundles) == 1
+    assert bundles[0].is_file()
     with closing(sqlite3.connect(backups[0])) as backup:
         assert backup.execute('PRAGMA integrity_check').fetchone()[0] == 'ok'
         assert backup.execute('SELECT username FROM users').fetchone() == ('admin',)
@@ -54,10 +58,17 @@ def test_admin_can_create_download_and_delete_verified_backup(tmp_path):
     download.get_data()
     download.close()
 
+    bundle_download = client.get(f'/admin/backups/{backups[0].name}/calendar-download')
+    assert bundle_download.status_code == HTTPStatus.OK
+    assert bundle_download.headers['Content-Disposition'].startswith('attachment;')
+    bundle_download.get_data()
+    bundle_download.close()
+
     deleted = client.post(f'/admin/backups/{backups[0].name}/delete',
                           data={'_csrf': token(client)})
     assert deleted.status_code == HTTPStatus.FOUND, deleted.data
     assert not backups[0].exists()
+    assert not bundles[0].exists()
 
 
 def test_restore_replaces_data_and_revokes_existing_sessions(tmp_path):
@@ -80,6 +91,42 @@ def test_restore_replaces_data_and_revokes_existing_sessions(tmp_path):
         assert db.execute('SELECT COUNT(*) FROM shopping_items').fetchone()[0] == 0
         assert db.execute('SELECT session_version FROM users WHERE username="admin"').fetchone()[0] == 1
         assert db.execute('PRAGMA integrity_check').fetchone()[0] == 'ok'
+
+
+def test_backup_restore_includes_calendar_archives(tmp_path):
+    app, client, database = make_admin_client(tmp_path)
+    archive_dir = tmp_path / 'calendar-archives'
+    archive_dir.mkdir()
+    archive_name = 'homehub-calendar-2020.ics'
+    (archive_dir / archive_name).write_text('BEGIN:VCALENDAR\nEND:VCALENDAR\n',
+                                             encoding='utf-8')
+    with closing(sqlite3.connect(database)) as db:
+        db.execute('INSERT INTO calendar_archives(year,file_name,event_count,archived_at,size_bytes) '
+                   'VALUES(?,?,?,?,?)', (2020, archive_name, 0, '2026-10-28T00:00:00+00:00', 30))
+        db.commit()
+
+    backup_dir = tmp_path / 'backups'
+    backup = create_backup(database, backup_dir)
+    (archive_dir / archive_name).unlink()
+    (archive_dir / 'unrelated.txt').write_text('keep out of archive bundle', encoding='utf-8')
+
+    restore_backup(database, backup_dir, backup.name,
+                   app_module.initialize_database, SCHEMA_VERSION)
+
+    assert (archive_dir / archive_name).read_text(encoding='utf-8').splitlines() == [
+        'BEGIN:VCALENDAR', 'END:VCALENDAR']
+    assert not (archive_dir / 'unrelated.txt').exists()
+
+
+def test_backup_retention_prunes_all_beyond_configured_limit(tmp_path):
+    backup_dir = tmp_path / 'backups'
+    backup_dir.mkdir()
+    for index in range(370):
+        (backup_dir / f'homehub-20260101T000000Z-{index:08x}.sqlite3').touch()
+
+    prune_backups(backup_dir, 365)
+
+    assert len(list(backup_dir.glob('homehub-*.sqlite3'))) == 365
 
 
 def test_restore_rejects_corrupt_copy_without_changing_live_database(tmp_path):

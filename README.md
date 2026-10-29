@@ -28,11 +28,12 @@ Admins can manage backups from **Admin → Backup settings**. Verified SQLite
 snapshots are created daily by default, with 14 copies retained. A systemd
 timer checks every 15 minutes whether one is due. The interval can be set
 from 1 to 31 days or disabled; the retention count can be set from 1 to 365.
-Admins can also create, download, restore, and delete backups.
-Restores are checked and upgraded before replacing the database, then all
-users are signed out. The default backup folder is `backups` beside the
-configured database; choose a protected folder with enough free space.
-Backups contain account hashes and private household data.
+Admins can also create, download, restore, and delete backups. Each backup is
+a matched SQLite snapshot and calendar archive bundle; download both files for
+an off-device copy. Restores verify and upgrade the database and replace the
+calendar archives together, then sign out all users. The default backup folder
+is `backups` beside the configured database; choose a protected folder with
+enough free space. Backups contain account hashes and private household data.
 
 ## Install on Raspberry Pi OS
 
