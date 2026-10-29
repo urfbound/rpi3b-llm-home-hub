@@ -29,6 +29,7 @@ def test_distribution_includes_third_party_notices():
     package_data = config['tool']['setuptools']['package-data']['homehub']
     notice_path = PROJECT_ROOT / 'homehub' / 'THIRD_PARTY_NOTICES.md'
     notice = notice_path.read_text()
+    dependencies = config['project']['dependencies']
 
     assert any(
         fnmatch.fnmatchcase('THIRD_PARTY_NOTICES.md', pattern)
@@ -36,7 +37,9 @@ def test_distribution_includes_third_party_notices():
     )
     assert config['project']['license'] == 'GPL-3.0-only'
     assert 'Flask' in notice
+    assert '| Click | CLI option parsing for `create-admin` | BSD-3-Clause |' in notice
     assert 'pytest' in notice
     assert 'SCOWL' in notice
     assert 'wordfreq' in notice
     assert 'CC BY-SA 4.0' in notice
+    assert any(dependency.startswith('click>=') for dependency in dependencies)

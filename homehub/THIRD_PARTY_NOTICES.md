@@ -13,6 +13,7 @@ Home Hub declares these direct dependencies in `pyproject.toml`:
 | Component | Use | License |
 | --- | --- | --- |
 | Flask | Web application framework | BSD-3-Clause |
+| Click | CLI option parsing for `create-admin` | BSD-3-Clause |
 | Waitress | WSGI server | Zope Public License 2.1 (ZPL-2.1) |
 | argon2-cffi | Password hashing | MIT |
 | pytest (development extra) | Test runner | MIT |
@@ -24,7 +25,6 @@ distribution metadata for the exact versions in a particular deployment.
 | Component | Parent dependency | License |
 | --- | --- | --- |
 | blinker | Flask | MIT |
-| click | Flask | BSD-3-Clause |
 | itsdangerous | Flask | BSD-3-Clause |
 | Jinja2 | Flask | BSD-3-Clause |
 | MarkupSafe | Jinja2 | BSD-3-Clause |
