@@ -32,6 +32,10 @@ approves the completed change.
   keeps its system service running; existing Caddy binaries, services, and
   configuration are left unchanged. Local DNS and LAN HTTPS configuration
   remain explicit follow-up steps.
+- **Installer choices:** interactive setup explains the Ollama and Caddy flags
+  before asking to begin, then offers scheduled RSS refresh (enabled by
+  default). `--no-rss` disables only the systemd refresh timer; the RSS feature
+  remains available. `--no-prompt` skips installer prompts.
 - **Bug-fix review:** a focused fix branch now covers calendar re-archive UID
   collisions, account content transfer/deletion, calendar archive backup and
   restore, offline list clearing on logout, complete backup pruning, and

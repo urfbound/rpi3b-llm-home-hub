@@ -7,6 +7,7 @@ homehub_parse_install_args() {
   HOMEHUB_ADMIN_PASSWORD_STDIN=0
   HOMEHUB_INSTALL_OLLAMA=0
   HOMEHUB_INSTALL_CADDY=0
+  HOMEHUB_NO_RSS=0
   while (($#)); do
     case $1 in
       --no-prompt|-y|--yes) HOMEHUB_NO_PROMPT=1 ;;
@@ -18,6 +19,7 @@ homehub_parse_install_args() {
       --admin-password-stdin) HOMEHUB_ADMIN_PASSWORD_STDIN=1 ;;
       --install-ollama) HOMEHUB_INSTALL_OLLAMA=1 ;;
       --install-caddy) HOMEHUB_INSTALL_CADDY=1 ;;
+      --no-rss) HOMEHUB_NO_RSS=1 ;;
       -h|--help)
         cat <<'HELP'
 Usage: install.sh [OPTIONS]
@@ -30,6 +32,7 @@ Options:
   --admin-password-stdin       Read the first administrator password from stdin
   --install-ollama             Optionally install the Ollama runtime
   --install-caddy              Optionally install Caddy from its official Debian repository
+  --no-rss                     Disable scheduled RSS feed refresh
   -h, --help                   Show this help and exit
 
 Ollama is optional and installs only on Linux x86_64 or ARM64. If Ollama
@@ -42,6 +45,10 @@ Caddy's official package repository and installs its package. The package
 starts a persistent system service. An existing Caddy installation or service
 is left unchanged. This does not configure Home Hub's Caddy site or local DNS; use
 deploy/enable_https.sh after setting up local DNS.
+
+During an interactive install, you can decline scheduled RSS refresh. The RSS
+feature remains available, including immediate refresh when a feed is added.
+Pass --no-rss to disable the scheduled systemd timer without a prompt.
 HELP
         HOMEHUB_SHOW_HELP=1
         return 0
@@ -53,6 +60,30 @@ HELP
   if (( HOMEHUB_ADMIN_PASSWORD_STDIN )) && [[ -z $HOMEHUB_ADMIN_USERNAME ]]; then
     echo '--admin-password-stdin requires --admin-username' >&2
     return 2
+  fi
+}
+
+homehub_prompt_install_choices() {
+  if (( HOMEHUB_NO_PROMPT )); then return 0; fi
+  printf 'Optional packages are installed only with command-line options: pass --install-ollama and/or --install-caddy.\n'
+  local answer=''
+  printf 'Begin Home Hub installation? [Y/n] '
+  if ! read -r answer; then return 1; fi
+  if [[ $answer =~ ^[Nn]$ ]]; then return 1; fi
+  if (( ! HOMEHUB_NO_RSS )); then
+    printf 'Enable scheduled RSS feed refresh? [Y/n] '
+    if ! read -r answer; then return 1; fi
+    if [[ $answer =~ ^[Nn]$ ]]; then HOMEHUB_NO_RSS=1; fi
+  fi
+  return 0
+}
+
+homehub_set_rss_refresh_timer() {
+  local no_rss=${1:-0}
+  if (( no_rss )); then
+    sudo systemctl disable --now homehub-rss-refresh.timer
+  else
+    sudo systemctl enable --now homehub-rss-refresh.timer
   fi
 }
 

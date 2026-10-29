@@ -67,6 +67,14 @@ To also install Caddy from its official Debian-family package repository, pass
 does not configure the Home Hub site or set up local DNS; follow
 [`TLS_DEPLOYMENT.md`](docs/TLS_DEPLOYMENT.md) to configure HTTPS afterward.
 
+On an interactive install, the installer explains that Ollama and Caddy must
+be requested with `--install-ollama` and `--install-caddy`, then asks whether
+to begin and whether to enable scheduled RSS feed refresh. Scheduled RSS
+refresh is enabled by default. Pass `--no-rss` to keep the RSS feature
+available while disabling its systemd refresh timer; adding a feed can still
+trigger an immediate refresh. The RSS prompt is skipped when `--no-rss` is
+passed, and all setup prompts are skipped with `--no-prompt`.
+
 ```sh
 curl -fsSL https://raw.githubusercontent.com/urfbound/rpi3b-llm-home-hub/main/deploy/install-release.sh | sh -s -- --install-caddy
 ```

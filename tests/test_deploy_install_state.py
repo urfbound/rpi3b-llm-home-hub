@@ -79,6 +79,78 @@ homehub_parse_install_args --no-prompt --admin-username household-admin --admin-
     assert result.returncode == 0, result.stderr
 
 
+def test_no_rss_flag_disables_scheduled_refresh_by_default_it_remains_enabled():
+    helper = Path(__file__).parents[1] / 'deploy' / 'install_helpers.sh'
+    script = f'''\
+set -euo pipefail
+source {shlex.quote(_bash_path(helper))}
+homehub_parse_install_args
+[[ $HOMEHUB_NO_RSS == 0 ]]
+homehub_parse_install_args --no-rss
+[[ $HOMEHUB_NO_RSS == 1 ]]
+'''
+    result = subprocess.run([_bash(), '-c', script], capture_output=True, text=True)
+
+    assert result.returncode == 0, result.stderr
+
+
+def test_interactive_installer_explains_optional_packages_before_begin_prompt():
+    helper = Path(__file__).parents[1] / 'deploy' / 'install_helpers.sh'
+    script = f'''\
+set -euo pipefail
+source {shlex.quote(_bash_path(helper))}
+homehub_parse_install_args
+if homehub_prompt_install_choices < <(printf 'n\\n'); then exit 1; fi
+'''
+    result = subprocess.run([_bash(), '-c', script], capture_output=True, text=True)
+
+    assert result.returncode == 0, result.stderr
+    assert '--install-ollama' in result.stdout
+    assert '--install-caddy' in result.stdout
+    assert result.stdout.index('--install-ollama') < result.stdout.index('Begin Home Hub installation?')
+
+
+def test_interactive_installer_asks_about_scheduled_rss_refresh():
+    helper = Path(__file__).parents[1] / 'deploy' / 'install_helpers.sh'
+    script = f'''\
+set -euo pipefail
+source {shlex.quote(_bash_path(helper))}
+homehub_parse_install_args
+homehub_prompt_install_choices < <(printf '\\nN\\n')
+[[ $HOMEHUB_NO_RSS == 1 ]]
+'''
+    result = subprocess.run([_bash(), '-c', script], capture_output=True, text=True)
+
+    assert result.returncode == 0, result.stderr
+    assert 'Enable scheduled RSS feed refresh?' in result.stdout
+
+
+def test_rss_timer_helper_enables_or_disables_scheduled_refresh(tmp_path):
+    helper = Path(__file__).parents[1] / 'deploy' / 'install_helpers.sh'
+    log = tmp_path / 'sudo.log'
+    fake_bin = tmp_path / 'bin'
+    fake_bin.mkdir()
+    sudo = fake_bin / 'sudo'
+    sudo.write_text(f'''#!/bin/sh
+printf '%s\\n' "$*" >> {shlex.quote(_bash_path(log))}
+''')
+    sudo.chmod(0o755)
+    script = f'''\
+set -euo pipefail
+source {shlex.quote(_bash_path(helper))}
+PATH={shlex.quote(_bash_path(fake_bin))}:$PATH
+homehub_set_rss_refresh_timer 0
+homehub_set_rss_refresh_timer 1
+'''
+    result = subprocess.run([_bash(), '-c', script], capture_output=True, text=True)
+
+    assert result.returncode == 0, result.stderr
+    assert log.read_text().splitlines() == [
+        'systemctl enable --now homehub-rss-refresh.timer',
+        'systemctl disable --now homehub-rss-refresh.timer',
+    ]
+
+
 def test_installer_ollama_option_defaults_off_and_is_shown_in_help():
     helper = Path(__file__).parents[1] / 'deploy' / 'install_helpers.sh'
     script = f'''\

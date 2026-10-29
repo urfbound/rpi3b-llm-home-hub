@@ -26,6 +26,12 @@ if ! command -v sudo >/dev/null 2>&1; then
   printf 'sudo is required for system installation steps.\n' >&2
   exit 1
 fi
+if (( ! HOMEHUB_NO_PROMPT )) && [[ -t 0 ]]; then
+  if ! homehub_prompt_install_choices; then
+    printf 'Installation cancelled.\n'
+    exit 0
+  fi
+fi
 
 readonly REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
 for required in "$REPO_ROOT/homehub" "$REPO_ROOT/pyproject.toml" \
@@ -88,6 +94,9 @@ if sudo systemctl cat homehub-backup.timer >/dev/null 2>&1; then
 fi
 if sudo systemctl is-active --quiet homehub-backup.service; then
   sudo systemctl stop homehub-backup.service
+fi
+if sudo systemctl cat homehub-rss-refresh.timer >/dev/null 2>&1; then
+  sudo systemctl stop homehub-rss-refresh.timer
 fi
 
 if ! sudo test -f "$ENV_FILE"; then
@@ -197,7 +206,8 @@ done
 sudo rm -f -- /etc/cron.d/homehub-backup
 
 sudo systemctl daemon-reload
-sudo systemctl enable --now homehub.service homehub-backup.timer homehub-rss-refresh.timer
+sudo systemctl enable --now homehub.service homehub-backup.timer
+homehub_set_rss_refresh_timer "$HOMEHUB_NO_RSS"
 
 printf '\nHome Hub is installed. It listens on the Pi loopback interface only.\n'
 printf 'For setup, open an SSH tunnel from Windows: ssh -L 8080:127.0.0.1:8080 %s@hostname\n' "$USER"
