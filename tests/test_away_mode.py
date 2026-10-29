@@ -159,6 +159,16 @@ def test_away_mode_offline_shell_and_service_worker_are_available(client):
     assert b"homehub-away-v3" in worker.data
 
 
+def test_logout_offers_to_clear_saved_offline_data_and_warns_about_pending_changes(client):
+    login(client)
+
+    page = client.get('/')
+
+    assert b'data-away-clear-user-data' in page.data
+    assert b'Clear saved offline list' in page.data
+    assert b'pending offline changes' in page.data
+
+
 def test_away_mode_snapshot_respects_private_allowlist(client):
     list_id = client.application.config['TEST_LIST_ID']
     bob = client.application.test_client()

@@ -187,3 +187,22 @@ def test_automatic_age_cleanup_can_delete_without_archive(tmp_path):
     with sqlite3.connect(app.config['DATABASE']) as db:
         assert db.execute('SELECT COUNT(*) FROM events').fetchone()[0] == 0
         assert db.execute('SELECT COUNT(*) FROM calendar_archives').fetchone()[0] == 0
+
+
+def test_rearchiving_an_expired_year_preserves_previously_archived_events(tmp_path):
+    app = make_app(tmp_path)
+    expired_year = date.today().year - 4
+    client = sign_in(app)
+    add_event(app, f'{expired_year}-05-01', 'Original archived event')
+
+    assert client.get('/').status_code == HTTPStatus.OK
+    add_event(app, f'{expired_year}-06-01', 'Late event')
+
+    assert client.get('/').status_code == HTTPStatus.OK
+    archive = (tmp_path / 'calendar-archives' /
+               f'homehub-calendar-{expired_year}.ics').read_text(encoding='utf-8')
+    assert 'SUMMARY:Original archived event' in archive
+    assert 'SUMMARY:Late event' in archive
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        assert db.execute('SELECT event_count FROM calendar_archives WHERE year=?',
+                          (expired_year,)).fetchone() == (2,)

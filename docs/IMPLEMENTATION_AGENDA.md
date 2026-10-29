@@ -19,6 +19,11 @@ approves the completed change.
   [CHAT_PI_BENCHMARK.md](CHAT_PI_BENCHMARK.md). App and app-plus-model profiles
   are recorded. Remaining foundation work is target-Pi deployment and release
   verification; Chat remains hidden pending answer-quality review.
+- **Bug-fix review:** a focused fix branch now covers calendar re-archive UID
+  collisions, account content transfer/deletion, calendar archive backup and
+  restore, offline list clearing on logout, complete backup pruning, and
+  forwarded client IP handling behind Caddy. Regression coverage is in place;
+  the full Python and JavaScript suites pass on `bugfix/review-findings`.
 - **Lists and Recipes:** Shopping, To-do, Chores, copy/paste, recipe privacy and
   notes, sharing safeguards, serving scaling, calendar links, and Add to list
   snapshots are on `main`. Automated authorization, migration, and workflow

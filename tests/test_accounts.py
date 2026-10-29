@@ -151,6 +151,54 @@ def test_removal_handles_owned_content(app, choice):
         assert rows == ([(alex,)] if choice == 'transfer' else [])
 
 
+def test_account_transfer_preserves_shared_household_content(app):
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        sam = db.execute("SELECT id FROM users WHERE username='sam'").fetchone()[0]
+        alex = db.execute("SELECT id FROM users WHERE username='alex'").fetchone()[0]
+        db.execute('INSERT INTO contacts(owner_user_id,name,visibility) VALUES(?,?,?)',
+                   (sam, 'Family doctor', 'shared'))
+        db.execute('INSERT INTO sticky_notes(author_user_id,text,color,everyone,created_at) '
+                   'VALUES(?,?,?,?,?)', (sam, 'Pick up keys', 'yellow', 1, '2026-10-28'))
+        db.execute('INSERT INTO chores(weekday,text,created_by,assignee_id,assigned_everyone) '
+                   'VALUES(?,?,?,?,?)', (1, 'Water plants', sam, sam, 0))
+        db.execute('INSERT INTO rss_feeds(normalized_url,title,scope,created_by) '
+                   'VALUES(?,?,?,?)', ('https://house.example/feed', 'House news', 'household', sam))
+        db.execute('INSERT INTO household_lists(kind,title,visibility,created_by) '
+                   'VALUES(?,?,?,?)', ('todo', 'Private chores', 'private', sam))
+
+    client = app.test_client()
+    sign_in(client)
+    response = post(client, f'/admin/accounts/{sam}/delete', content_choice='transfer',
+                    transfer_to=alex, confirm_username='sam')
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert db_rows(app, 'SELECT owner_user_id,name FROM contacts') == [(alex, 'Family doctor')]
+    assert db_rows(app, 'SELECT author_user_id,text FROM sticky_notes') == [(alex, 'Pick up keys')]
+    assert db_rows(app, 'SELECT created_by,assignee_id,text FROM chores') == [
+        (alex, alex, 'Water plants')]
+    assert db_rows(app, 'SELECT created_by,title FROM rss_feeds') == [(alex, 'House news')]
+    assert db_rows(app, 'SELECT created_by,title FROM household_lists WHERE title=?',
+                   ('Private chores',)) == [(alex, 'Private chores')]
+
+
+def test_account_deletion_removes_owned_chores_and_lists(app):
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        sam = db.execute("SELECT id FROM users WHERE username='sam'").fetchone()[0]
+        db.execute('INSERT INTO chores(weekday,text,created_by,assignee_id,assigned_everyone) '
+                   'VALUES(?,?,?,?,?)', (1, 'Water plants', sam, sam, 0))
+        db.execute('INSERT INTO household_lists(kind,title,visibility,created_by) '
+                   'VALUES(?,?,?,?)', ('todo', 'Sam list', 'private', sam))
+
+    client = app.test_client()
+    sign_in(client)
+    response = post(client, f'/admin/accounts/{sam}/delete', content_choice='delete',
+                    confirm_username='sam')
+
+    assert response.status_code == HTTPStatus.FOUND
+    assert db_rows(app, 'SELECT text FROM chores WHERE text=?', ('Water plants',)) == []
+    assert db_rows(app, 'SELECT title FROM household_lists WHERE title=?', ('Sam list',)) == []
+
+
 def test_house_account_is_read_only(app):
     admin = app.test_client()
     sign_in(admin)
@@ -218,6 +266,21 @@ def test_login_rate_limit_caps_failures_from_one_address(app):
         assert response.status_code == HTTPStatus.OK
     blocked = post(client, '/login', username='sam', password='another long password')
     assert blocked.status_code == HTTPStatus.TOO_MANY_REQUESTS
+
+
+def test_login_rate_limit_uses_forwarded_client_address_behind_loopback_proxy(app):
+    addresses = ('192.0.2.10', '192.0.2.11')
+    for address in addresses:
+        client = app.test_client()
+        client.get('/login')
+        client.post('/login', data={
+            'username': 'unknown', 'password': 'incorrect', '_csrf': csrf(client),
+        }, environ_base={'REMOTE_ADDR': '127.0.0.1'},
+           headers={'X-Forwarded-For': address})
+
+    keys = {row[0] for row in db_rows(
+        app, 'SELECT DISTINCT address_key FROM login_failures')}
+    assert len(keys) == len(addresses)
 
 
 def test_migrates_existing_user_table(tmp_path):

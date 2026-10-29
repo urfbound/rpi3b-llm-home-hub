@@ -85,8 +85,23 @@
     return state;
   }
 
+  function clearUserData(userId, storage) {
+    const targetStorage = storage || global.localStorage;
+    const prefix = `${PREFIX}:${String(userId)}:`;
+    const keys = [];
+    for (let index = 0; index < targetStorage.length; index += 1) {
+      const key = targetStorage.key(index);
+      if (key && key.startsWith(prefix)) keys.push(key);
+    }
+    for (const key of keys) targetStorage.removeItem(key);
+    if (targetStorage.getItem(ACTIVE_USER_KEY) === String(userId)) {
+      targetStorage.removeItem(ACTIVE_USER_KEY);
+      targetStorage.removeItem(ACTIVE_LIST_KEY);
+    }
+  }
+
   const API = { storageKey, snapshotUrl, newState, queueCheckbox, applySyncResults,
-    resolveWithServer, keepPhoneChoice };
+    resolveWithServer, keepPhoneChoice, clearUserData };
   global.HomeHubAway = API;
   if (typeof module !== 'undefined' && module.exports) module.exports = API;
 
@@ -340,8 +355,20 @@
     global.setInterval(sync, 60000);
   }
 
+  function bindLogoutPrivacyControl() {
+    const form = global.document.querySelector('[data-away-logout]');
+    const checkbox = form && form.querySelector('[data-away-clear-user-data]');
+    if (!form || !checkbox) return;
+    form.addEventListener('submit', () => {
+      if (checkbox.checked) {
+        API.clearUserData(form.dataset.awayUserId);
+      }
+    });
+  }
+
   if ('serviceWorker' in global.navigator) {
     global.addEventListener('load', () => global.navigator.serviceWorker.register('/service-worker.js').catch(() => {}));
   }
+  bindLogoutPrivacyControl();
   if (!bindOfflinePage()) startListPage();
 })(typeof window === 'undefined' ? globalThis : window);

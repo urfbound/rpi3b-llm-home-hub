@@ -7,6 +7,30 @@ test('offline state is separated per user and list', () => {
   assert.notEqual(away.storageKey(1, 5), away.storageKey(1, 6));
 });
 
+test('clearing offline data removes only the selected account and active selection', () => {
+  const values = new Map([
+    ['homehub-away-last-user', '1'],
+    ['homehub-away-last-list', '5'],
+    ['homehub-away-v1:1:5', JSON.stringify({ items: { 9: { text: 'Milk' } } })],
+    ['homehub-away-v1:1:6', JSON.stringify({ items: { 10: { text: 'Bread' } } })],
+    ['homehub-away-v1:2:5', JSON.stringify({ items: { 11: { text: 'Tea' } } })],
+  ]);
+  const storage = {
+    get length() { return values.size; },
+    key(index) { return [...values.keys()][index] ?? null; },
+    getItem(key) { return values.get(key) ?? null; },
+    removeItem(key) { values.delete(key); },
+  };
+
+  away.clearUserData(1, storage);
+
+  assert.equal(values.has('homehub-away-v1:1:5'), false);
+  assert.equal(values.has('homehub-away-v1:1:6'), false);
+  assert.equal(values.has('homehub-away-v1:2:5'), true);
+  assert.equal(values.has('homehub-away-last-user'), false);
+  assert.equal(values.has('homehub-away-last-list'), false);
+});
+
 test('initial snapshot request includes the selected list id', () => {
   assert.equal(away.snapshotUrl(5), '/shopping/sync?list_id=5');
 });
