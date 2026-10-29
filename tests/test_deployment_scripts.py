@@ -51,6 +51,22 @@ def test_installer_keeps_backup_schedule_in_one_systemd_timer():
     assert 'sudo systemctl enable --now homehub.service homehub-backup.timer' in INSTALL
 
 
+def test_ollama_install_is_explicit_and_precedes_home_hub_service_activation():
+    install_ollama = INSTALL.index('homehub_install_ollama_linux')
+    activate_homehub = INSTALL.index('sudo systemctl enable --now homehub.service')
+
+    assert 'if (( HOMEHUB_INSTALL_OLLAMA )); then' in INSTALL
+    assert install_ollama < activate_homehub
+
+
+def test_caddy_install_is_explicit_and_precedes_home_hub_service_activation():
+    install_caddy = INSTALL.index('homehub_install_caddy_linux')
+    activate_homehub = INSTALL.index('sudo systemctl enable --now homehub.service')
+
+    assert 'if (( HOMEHUB_INSTALL_CADDY )); then' in INSTALL
+    assert install_caddy < activate_homehub
+
+
 def test_deployment_shell_scripts_use_unix_line_endings_for_pi_scp():
     shell_scripts = sorted((ROOT / 'deploy').glob('*.sh'))
     attributes = (ROOT / '.gitattributes').read_text(encoding='utf-8')

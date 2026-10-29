@@ -17,6 +17,14 @@ different name.
 
 ## 2. Install and configure Caddy
 
+For a fresh Home Hub installation, Caddy can be installed as part of setup by
+passing `--install-caddy` to `deploy/install.sh` (or the release installer).
+This uses Caddy's official Debian-family package repository. The package
+starts and keeps its system service running. It does not add the Home Hub site
+to the Caddyfile or configure local DNS. A fresh package install may create its
+default Caddyfile; `enable_https.sh` asks before replacing it. Existing Caddy
+installations and `caddy.service` units are left untouched.
+
 Install the current stable Caddy package for Raspberry Pi OS using the
 [official Caddy installation instructions](https://caddyserver.com/docs/install).
 The official Debian-family package includes a systemd service. From the

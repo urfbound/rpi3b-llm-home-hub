@@ -83,7 +83,22 @@ the attributed word lists above. The exact SCOWL terms are also reproduced in
 The application can request forecast data from Open-Meteo. It displays
 provider attribution in the Weather interface; the service and its data are
 not bundled with the application. RSS content is fetched from feeds selected
-by household users and remains subject to each publisher's terms. Optional
-Ollama models, Caddy, and operating-system services are installed separately
-and are not bundled or relicensed by Home Hub. Consult their respective
-licenses and terms when installing or redistributing them.
+by household users and remains subject to each publisher's terms.
+
+On supported Linux systems, `deploy/install.sh --install-ollama` optionally
+downloads and runs Ollama's official installer for the separate Ollama runtime.
+Ollama's upstream repository is MIT-licensed; see
+<https://github.com/ollama/ollama/blob/main/LICENSE>. Home Hub does not
+bundle or redistribute Ollama, and this option downloads no model weights.
+Ollama remains a separately installed program with its own license notices.
+Model weights are separately licensed by their publishers; Home Hub does not
+select, recommend, supply, or download models. Caddy and operating-system
+services are also installed separately and are not bundled or relicensed by
+Home Hub. On supported Debian-family systems, the `--install-caddy` option in
+`deploy/install.sh` optionally configures Caddy's official package repository
+and installs its package. Caddy is licensed under Apache-2.0; its official
+packages include standard modules. See <https://github.com/caddyserver/caddy/blob/master/LICENSE>
+and <https://caddyserver.com/docs/install>. The package is a separately
+installed program and starts its own system service. Home Hub does not bundle
+or redistribute Caddy. Consult each service's license and terms when
+installing or redistributing it.

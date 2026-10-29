@@ -6,9 +6,10 @@ readonly RELEASE_API="https://api.github.com/repos/$REPOSITORY/releases/latest"
 
 mode=${1:-}
 if [[ $mode != install && $mode != upgrade ]]; then
-  printf 'Usage: release_bootstrap.sh install|upgrade\n' >&2
+  printf 'Usage: release_bootstrap.sh install|upgrade [installer options]\n' >&2
   exit 2
 fi
+shift
 if [[ $mode == upgrade && ! -d /opt/homehub ]]; then
   printf 'Home Hub is not installed at /opt/homehub; use the install command instead.\n' >&2
   exit 1
@@ -55,4 +56,4 @@ if [[ ! -f $temporary_directory/source/deploy/install.sh ]]; then
 fi
 
 printf 'Installing Home Hub release %s.\n' "$tag"
-bash "$temporary_directory/source/deploy/install.sh"
+bash "$temporary_directory/source/deploy/install.sh" "$@"

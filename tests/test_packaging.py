@@ -42,4 +42,8 @@ def test_distribution_includes_third_party_notices():
     assert 'SCOWL' in notice
     assert 'wordfreq' in notice
     assert 'CC BY-SA 4.0' in notice
+    assert 'Ollama runtime' in notice
+    assert 'select, recommend, supply, or download models' in notice
+    assert 'Caddy is licensed under Apache-2.0' in notice
+    assert 'Home Hub does not bundle' in notice
     assert any(dependency.startswith('click>=') for dependency in dependencies)

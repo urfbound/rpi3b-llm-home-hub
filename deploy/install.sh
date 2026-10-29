@@ -16,9 +16,21 @@ if [[ ${EUID:-$(id -u)} -eq 0 ]]; then
   printf 'Run this script as your regular Pi user; it will request sudo when needed.\n' >&2
   exit 1
 fi
+if (( HOMEHUB_INSTALL_OLLAMA )) \
+  && ! command -v ollama >/dev/null 2>&1 \
+  && ! homehub_ollama_platform_supported "$(uname -s)" "$(uname -m)"; then
+  printf 'The --install-ollama option supports Linux x86_64 and ARM64 only.\n' >&2
+  exit 1
+fi
 if ! command -v sudo >/dev/null 2>&1; then
   printf 'sudo is required for system installation steps.\n' >&2
   exit 1
+fi
+if (( ! HOMEHUB_NO_PROMPT )) && [[ -t 0 ]]; then
+  if ! homehub_prompt_install_choices; then
+    printf 'Installation cancelled.\n'
+    exit 0
+  fi
 fi
 
 readonly REPO_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd)"
@@ -61,6 +73,14 @@ printf 'Home Hub will install into %s and keep data in %s.\n' "$INSTALL_ROOT" "$
 printf 'sudo may prompt for your Pi password during system changes.\n'
 sudo -v
 
+if (( HOMEHUB_INSTALL_CADDY )); then
+  homehub_install_caddy_linux
+fi
+
+if (( HOMEHUB_INSTALL_OLLAMA )); then
+  homehub_install_ollama_linux
+fi
+
 if ! id -u "$SERVICE_USER" >/dev/null 2>&1; then
   sudo useradd --system --user-group --home-dir "$DATA_ROOT" \
     --no-create-home --shell /usr/sbin/nologin "$SERVICE_USER"
@@ -74,6 +94,9 @@ if sudo systemctl cat homehub-backup.timer >/dev/null 2>&1; then
 fi
 if sudo systemctl is-active --quiet homehub-backup.service; then
   sudo systemctl stop homehub-backup.service
+fi
+if sudo systemctl cat homehub-rss-refresh.timer >/dev/null 2>&1; then
+  sudo systemctl stop homehub-rss-refresh.timer
 fi
 
 if ! sudo test -f "$ENV_FILE"; then
@@ -183,7 +206,8 @@ done
 sudo rm -f -- /etc/cron.d/homehub-backup
 
 sudo systemctl daemon-reload
-sudo systemctl enable --now homehub.service homehub-backup.timer homehub-rss-refresh.timer
+sudo systemctl enable --now homehub.service homehub-backup.timer
+homehub_set_rss_refresh_timer "$HOMEHUB_NO_RSS"
 
 printf '\nHome Hub is installed. It listens on the Pi loopback interface only.\n'
 printf 'For setup, open an SSH tunnel from Windows: ssh -L 8080:127.0.0.1:8080 %s@hostname\n' "$USER"

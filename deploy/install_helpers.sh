@@ -5,6 +5,9 @@ homehub_parse_install_args() {
   HOMEHUB_SHOW_HELP=0
   HOMEHUB_ADMIN_USERNAME=''
   HOMEHUB_ADMIN_PASSWORD_STDIN=0
+  HOMEHUB_INSTALL_OLLAMA=0
+  HOMEHUB_INSTALL_CADDY=0
+  HOMEHUB_NO_RSS=0
   while (($#)); do
     case $1 in
       --no-prompt|-y|--yes) HOMEHUB_NO_PROMPT=1 ;;
@@ -14,8 +17,39 @@ homehub_parse_install_args() {
         shift
         ;;
       --admin-password-stdin) HOMEHUB_ADMIN_PASSWORD_STDIN=1 ;;
+      --install-ollama) HOMEHUB_INSTALL_OLLAMA=1 ;;
+      --install-caddy) HOMEHUB_INSTALL_CADDY=1 ;;
+      --no-rss) HOMEHUB_NO_RSS=1 ;;
       -h|--help)
-        printf 'Usage: install.sh [--no-prompt|--yes|-y] [--admin-username NAME] [--admin-password-stdin]\n'
+        cat <<'HELP'
+Usage: install.sh [OPTIONS]
+
+Install Home Hub on Raspberry Pi OS or another supported Linux system.
+
+Options:
+  --no-prompt, --yes, -y       Run without interactive prompts
+  --admin-username NAME        Set the first administrator username
+  --admin-password-stdin       Read the first administrator password from stdin
+  --install-ollama             Optionally install the Ollama runtime
+  --install-caddy              Optionally install Caddy from its official Debian repository
+  --no-rss                     Disable scheduled RSS feed refresh
+  -h, --help                   Show this help and exit
+
+Ollama is optional and installs only on Linux x86_64 or ARM64. If Ollama
+is already installed, its version and service state are left unchanged. No
+model is selected or downloaded. A newly installed Ollama service is stopped
+and disabled until you start it yourself.
+
+Caddy is optional. On Debian-family Linux systems with apt-get, this adds
+Caddy's official package repository and installs its package. The package
+starts a persistent system service. An existing Caddy installation or service
+is left unchanged. This does not configure Home Hub's Caddy site or local DNS; use
+deploy/enable_https.sh after setting up local DNS.
+
+During an interactive install, you can decline scheduled RSS refresh. The RSS
+feature remains available, including immediate refresh when a feed is added.
+Pass --no-rss to disable the scheduled systemd timer without a prompt.
+HELP
         HOMEHUB_SHOW_HELP=1
         return 0
         ;;
@@ -28,6 +62,138 @@ homehub_parse_install_args() {
     return 2
   fi
 }
+
+homehub_prompt_install_choices() {
+  if (( HOMEHUB_NO_PROMPT )); then return 0; fi
+  printf 'Optional packages are installed only with command-line options: pass --install-ollama and/or --install-caddy.\n'
+  local answer=''
+  printf 'Begin Home Hub installation? [Y/n] '
+  if ! read -r answer; then return 1; fi
+  if [[ $answer =~ ^[Nn]$ ]]; then return 1; fi
+  if (( ! HOMEHUB_NO_RSS )); then
+    printf 'Enable scheduled RSS feed refresh? [Y/n] '
+    if ! read -r answer; then return 1; fi
+    if [[ $answer =~ ^[Nn]$ ]]; then HOMEHUB_NO_RSS=1; fi
+  fi
+  return 0
+}
+
+homehub_set_rss_refresh_timer() {
+  local no_rss=${1:-0}
+  if (( no_rss )); then
+    sudo systemctl disable --now homehub-rss-refresh.timer
+  else
+    sudo systemctl enable --now homehub-rss-refresh.timer
+  fi
+}
+
+homehub_ollama_platform_supported() {
+  case "$1:$2" in
+    Linux:x86_64|Linux:aarch64|Linux:arm64) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+homehub_install_ollama_linux() (
+  set -eu
+  local os arch installer_script
+  if command -v ollama >/dev/null 2>&1; then
+    printf 'Ollama is already installed; leaving its version and service state unchanged.\n'
+    return 0
+  fi
+  os=$(uname -s)
+  arch=$(uname -m)
+  if ! homehub_ollama_platform_supported "$os" "$arch"; then
+    printf 'Ollama install is supported here only on Linux x86_64 or ARM64; found %s/%s.\n' "$os" "$arch" >&2
+    return 1
+  fi
+  if ! command -v curl >/dev/null 2>&1; then
+    printf 'Cannot install Ollama: curl is required to download the official installer. Install curl and retry.\n' >&2
+    return 1
+  fi
+
+  installer_script=$(mktemp)
+  trap 'rm -f -- "$installer_script"' EXIT
+  printf 'Downloading the official Ollama installer. This option installs the runtime only; it does not select or download a model.\n'
+  if ! curl -fsSL https://ollama.com/install.sh -o "$installer_script"; then
+    printf 'Could not download the official Ollama installer from https://ollama.com/install.sh. Check the network connection and retry.\n' >&2
+    return 1
+  fi
+  if ! sh "$installer_script"; then
+    printf 'The official Ollama installer failed. Review its output above, then retry or install Ollama manually.\n' >&2
+    return 1
+  fi
+
+  if command -v systemctl >/dev/null 2>&1 \
+    && sudo systemctl cat ollama.service >/dev/null 2>&1; then
+    sudo systemctl disable --now ollama.service
+    printf 'Ollama is installed and stopped. Start it when needed with: sudo systemctl start ollama\n'
+  fi
+)
+
+homehub_install_caddy_linux() (
+  set -eu
+  local os temporary_directory key_tmp keyring_tmp repo_tmp
+  if command -v caddy >/dev/null 2>&1; then
+    printf 'Caddy is already installed; leaving its version, service, and configuration unchanged.\n'
+    return 0
+  fi
+  if command -v systemctl >/dev/null 2>&1 \
+    && command -v sudo >/dev/null 2>&1 \
+    && sudo systemctl cat caddy.service >/dev/null 2>&1; then
+    printf 'A Caddy systemd service already exists; leaving its service and configuration unchanged.\n'
+    return 0
+  fi
+
+  os=$(uname -s)
+  if [[ $os != Linux ]] || ! command -v apt-get >/dev/null 2>&1; then
+    printf 'Caddy installation is supported here only on Linux systems with apt-get (Debian, Ubuntu, or Raspberry Pi OS).\n' >&2
+    return 1
+  fi
+  if ! command -v sudo >/dev/null 2>&1; then
+    printf 'Cannot install Caddy: sudo is required for package and system service setup.\n' >&2
+    return 1
+  fi
+  if ! command -v systemctl >/dev/null 2>&1; then
+    printf 'Cannot install Caddy as a persistent service: systemctl is not available.\n' >&2
+    return 1
+  fi
+  temporary_directory=$(mktemp -d)
+  key_tmp=$temporary_directory/caddy-signing-key.asc
+  keyring_tmp=$temporary_directory/caddy-signing-key.gpg
+  repo_tmp=$temporary_directory/caddy-stable.list
+  trap 'rm -rf -- "$temporary_directory"' EXIT
+
+  printf 'Installing Caddy from its official Debian-family package repository. The package starts a persistent system service.\n'
+  sudo apt-get update
+  sudo apt-get install --yes debian-keyring debian-archive-keyring apt-transport-https curl gnupg
+  if ! command -v curl >/dev/null 2>&1 || ! command -v gpg >/dev/null 2>&1; then
+    printf 'Could not install the curl and gpg prerequisites through apt-get. Install them, then retry.\n' >&2
+    return 1
+  fi
+
+  if ! curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/gpg.key -o "$key_tmp"; then
+    printf 'Could not download the official Caddy repository signing key. Check the network connection and retry.\n' >&2
+    return 1
+  fi
+  if ! gpg --dearmor --output "$keyring_tmp" "$key_tmp"; then
+    printf 'Could not prepare the official Caddy repository signing key.\n' >&2
+    return 1
+  fi
+  if ! curl -1sLf https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt -o "$repo_tmp"; then
+    printf 'Could not download the official Caddy package repository configuration. Check the network connection and retry.\n' >&2
+    return 1
+  fi
+
+  sudo install -D -o root -g root -m 0644 "$keyring_tmp" \
+    /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+  sudo install -D -o root -g root -m 0644 "$repo_tmp" \
+    /etc/apt/sources.list.d/caddy-stable.list
+  sudo apt-get update
+  sudo apt-get install --yes caddy
+  sudo systemctl enable --now caddy
+  printf 'Caddy is installed and its system service is enabled by the official package. Configure local DNS, then run deploy/enable_https.sh.\n'
+)
 
 homehub_ensure_environment_file() (
   local env_file=$1
