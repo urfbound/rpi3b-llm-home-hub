@@ -19,6 +19,19 @@ approves the completed change.
   [CHAT_PI_BENCHMARK.md](CHAT_PI_BENCHMARK.md). App and app-plus-model profiles
   are recorded. Remaining foundation work is target-Pi deployment and release
   verification; Chat remains hidden pending answer-quality review.
+- **Optional Ollama setup:** the Linux installer adds an explicit
+  `--install-ollama` option for x86_64 and ARM64. It installs only Ollama from
+  the official upstream installer, downloads no models, and leaves the
+  systemd service stopped and disabled. Verify the opt-in setup and loopback
+  access on target hardware. Windows currently uses Ollama's separate
+  upstream installer; a future cross-platform Home Hub installer should keep
+  platform-specific runtime installation separate and must not select or
+  supply model weights.
+- **Optional Caddy setup:** the installer accepts `--install-caddy` to add the
+  official Debian-family package repository and install Caddy. The package
+  keeps its system service running; existing Caddy binaries, services, and
+  configuration are left unchanged. Local DNS and LAN HTTPS configuration
+  remain explicit follow-up steps.
 - **Bug-fix review:** a focused fix branch now covers calendar re-archive UID
   collisions, account content transfer/deletion, calendar archive backup and
   restore, offline list clearing on logout, complete backup pruning, and

@@ -55,6 +55,22 @@ can use this bootstrap command as the regular Pi login:
 curl -fsSL https://raw.githubusercontent.com/urfbound/rpi3b-llm-home-hub/main/deploy/install-release.sh | sh
 ```
 
+To also install the optional Ollama runtime on Linux x86_64 or ARM64, pass
+the explicit installer option:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/urfbound/rpi3b-llm-home-hub/main/deploy/install-release.sh | sh -s -- --install-ollama
+```
+
+To also install Caddy from its official Debian-family package repository, pass
+`--install-caddy`. Its package starts a persistent system service. The option
+does not configure the Home Hub site or set up local DNS; follow
+[`TLS_DEPLOYMENT.md`](docs/TLS_DEPLOYMENT.md) to configure HTTPS afterward.
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/urfbound/rpi3b-llm-home-hub/main/deploy/install-release.sh | sh -s -- --install-caddy
+```
+
 It downloads the latest published release bundle and checks its SHA-256
 checksum before running the existing installer. To upgrade an existing
 installation to the latest release, run:
@@ -141,7 +157,24 @@ password input without putting the password in the command line:
 ```
 
 The password must be at least 12 characters. System authorization through
-`sudo` may still request your Pi password.
+`sudo` may still request your Pi password. On supported Linux x86_64 and
+ARM64 systems, add `--install-ollama` to install the Ollama runtime from its
+official installer. The Home Hub installer does not select, recommend, supply,
+or download models. To avoid an extra always-on service, it stops and disables
+the Ollama systemd service after installation; start it when needed with
+`sudo systemctl start ollama`. The option is not supported on 32-bit ARM
+systems. If Ollama is already installed, Home Hub leaves its version and
+service state unchanged. On Windows, install Ollama separately using its
+[official Windows download](https://ollama.com/download); Home Hub's Windows
+setup remains the documented Python setup above.
+
+The installer also accepts `--install-caddy` on Debian, Ubuntu, and Raspberry
+Pi OS. It uses the official Caddy package repository, which starts and keeps
+the `caddy` system service running. Existing Caddy binaries or systemd
+services are left unchanged, and the option does not replace an existing `/etc/caddy/Caddyfile`
+or configure local DNS. A fresh package install may create its default
+Caddyfile. Set up a local hostname first, then configure HTTPS as described in
+[`TLS_DEPLOYMENT.md`](docs/TLS_DEPLOYMENT.md).
 
 ## Uninstall from Raspberry Pi OS
 

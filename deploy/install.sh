@@ -16,6 +16,12 @@ if [[ ${EUID:-$(id -u)} -eq 0 ]]; then
   printf 'Run this script as your regular Pi user; it will request sudo when needed.\n' >&2
   exit 1
 fi
+if (( HOMEHUB_INSTALL_OLLAMA )) \
+  && ! command -v ollama >/dev/null 2>&1 \
+  && ! homehub_ollama_platform_supported "$(uname -s)" "$(uname -m)"; then
+  printf 'The --install-ollama option supports Linux x86_64 and ARM64 only.\n' >&2
+  exit 1
+fi
 if ! command -v sudo >/dev/null 2>&1; then
   printf 'sudo is required for system installation steps.\n' >&2
   exit 1
@@ -60,6 +66,14 @@ fi
 printf 'Home Hub will install into %s and keep data in %s.\n' "$INSTALL_ROOT" "$DATA_ROOT"
 printf 'sudo may prompt for your Pi password during system changes.\n'
 sudo -v
+
+if (( HOMEHUB_INSTALL_CADDY )); then
+  homehub_install_caddy_linux
+fi
+
+if (( HOMEHUB_INSTALL_OLLAMA )); then
+  homehub_install_ollama_linux
+fi
 
 if ! id -u "$SERVICE_USER" >/dev/null 2>&1; then
   sudo useradd --system --user-group --home-dir "$DATA_ROOT" \

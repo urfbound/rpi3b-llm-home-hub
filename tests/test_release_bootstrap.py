@@ -22,6 +22,16 @@ def test_install_and_upgrade_entrypoints_select_the_expected_mode():
     assert 'bash "$bootstrap" upgrade' in upgrade
 
 
+def test_release_install_and_upgrade_forward_optional_installer_arguments():
+    install_entry = (ROOT / 'deploy' / 'install-release.sh').read_text(encoding='utf-8')
+    upgrade_entry = (ROOT / 'deploy' / 'upgrade.sh').read_text(encoding='utf-8')
+    bootstrap = (ROOT / 'deploy' / 'release_bootstrap.sh').read_text(encoding='utf-8')
+
+    assert 'bash "$bootstrap" install "$@"' in install_entry
+    assert 'bash "$bootstrap" upgrade "$@"' in upgrade_entry
+    assert 'bash "$temporary_directory/source/deploy/install.sh" "$@"' in bootstrap
+
+
 def test_release_archive_workflow_publishes_a_checked_bundle():
     workflow = (ROOT / '.github' / 'workflows' / 'release.yml').read_text(encoding='utf-8')
 
