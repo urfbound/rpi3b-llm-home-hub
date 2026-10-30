@@ -122,7 +122,13 @@ def test_home_filters_apply_immediately_when_javascript_is_available(app):
 
 def test_home_page_contains_no_unicode_replacement_characters(app):
     client = sign_in(app, 'bob', 'bob weekend password')
-    assert b'\xef\xbf\xbd' not in client.get('/').data
+    page = client.get('/')
+    script = client.get('/static/app-shell.js')
+    assert b'<meta charset="utf-8">' in page.data
+    assert b'\xef\xbf\xbd' not in page.data
+    assert b'\xef\xbf\xbd' not in script.data
+    assert b'\\u2191' in script.data
+    assert b'\\u2193' in script.data
 
 
 def test_weekend_card_on_saturday_stops_at_sunday(app, monkeypatch):
