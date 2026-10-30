@@ -86,6 +86,14 @@ def test_shared_shell_marks_user_scope_for_card_layout(app):
     assert b'layout.__orders' in shell
 
 
+def test_calendar_tab_does_not_mark_home_active(app):
+    client = app.test_client()
+    sign_in(client)
+    page = client.get('/calendar').data
+    assert b'href="/" aria-current="page"' not in page
+    assert b'href="/calendar" aria-current="page"' in page
+
+
 def test_feature_tab_order_rejects_invalid_order_and_non_admins(app):
     admin = app.test_client()
     sign_in(admin)

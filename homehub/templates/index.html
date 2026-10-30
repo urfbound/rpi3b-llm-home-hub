@@ -190,7 +190,7 @@
         {% for week in calendar_weeks %}<tr>
           {% for day in week %}
           <td{% if day and day['is_today'] %} class="calendar-today-cell"{% endif %}>
-            {% if day %}<time datetime="{{ day['date'] }}">{{ day['day'] }}</time>
+            {% if day %}<a class="calendar-day{% if selected_date == day['date'] %} calendar-selected-day{% endif %}" href="{{ calendar_page_url }}?year={{ calendar_year }}&amp;month={{ calendar_month }}&amp;day={{ day['day'] }}" {% if selected_date == day['date'] %}aria-current="date"{% endif %}><time datetime="{{ day['date'] }}">{{ day['day'] }}</time></a>
               {% for event in day['events'] %}<a class="calendar-event" href="{{ url_for('event_detail', event_id=event['id']) }}">{{ event['title'] }}{% if not event['all_day'] and event['display_start_time'] %}<small>{{ event['display_start_time'] }}</small>{% endif %}</a>{% endfor %}
             {% endif %}
           </td>
@@ -198,7 +198,7 @@
         </tr>{% endfor %}
       </tbody>
     </table>
-    {% if current_user['account_kind'] != 'house' %}<p><a class="button primary" href="{{ url_for('new_event') }}">Add event</a></p>{% endif %}
+    {% if current_user['account_kind'] != 'house' %}<p><a class="button primary" href="{{ url_for('new_event', date=selected_date) if selected_date else url_for('new_event') }}">Add event{% if selected_date %} on {{ selected_date }}{% endif %}</a></p>{% endif %}
     <p><a href="{{ url_for('export_calendar') }}">Download calendar (.ics)</a></p>
     <p><a href="{{ url_for('export_calendar', only_required=1) }}">Download only events involving me (.ics)</a></p>
   </section>

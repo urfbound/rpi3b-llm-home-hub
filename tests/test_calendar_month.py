@@ -66,6 +66,27 @@ def test_calendar_controls_navigate_month_jump_year_and_return_to_today(client):
     ).data
 
 
+def test_calendar_day_selection_sets_event_date_and_keeps_month_heading(client):
+    home = client.get('/?month=10&year=2026').data
+    assert b'<h2>October 2026</h2>' in home
+    assert b'href="/calendar?year=2026&amp;month=10&amp;day=9"' in home
+
+    calendar = client.get('/calendar?year=2026&month=10&day=9').data
+    assert b'aria-current="date"' in calendar
+    assert b'/events/new?date=2026-10-09' in calendar
+    event = client.get('/events/new?date=2026-10-09').data
+    assert b'name="event_date" value="2026-10-09"' in event
+
+
+@pytest.mark.parametrize('day', ['0', '32', 'abc'])
+def test_calendar_rejects_invalid_selected_day(client, day):
+    assert client.get(f'/calendar?year=2026&month=10&day={day}').status_code == HTTPStatus.BAD_REQUEST
+
+
+def test_new_event_rejects_invalid_prefilled_date(client):
+    assert client.get('/events/new?date=2026-02-30').status_code == HTTPStatus.BAD_REQUEST
+
+
 def test_calendar_year_range_respects_retention_setting_and_disables_boundary_navigation(client):
     with sqlite3.connect(client.application.config['DATABASE']) as db:
         db.execute("INSERT INTO app_settings(key,value) VALUES('calendar_retention_years','0')")

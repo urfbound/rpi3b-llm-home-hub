@@ -1703,6 +1703,13 @@ def create_app(test_config=None):
         if (not 1 <= calendar_month <= 12
                 or not minimum_calendar_year <= calendar_year <= maximum_calendar_year):
             abort(HTTPStatus.BAD_REQUEST)
+        selected_day = request.args.get('day')
+        selected_date = None
+        if selected_day is not None:
+            try:
+                selected_date = date(calendar_year, calendar_month, int(selected_day))
+            except ValueError:
+                abort(HTTPStatus.BAD_REQUEST)
         expire_action = setting_text(db, 'calendar_expiry_action', 'archive')
         if expire_action not in ('archive', 'delete'):
             expire_action = 'archive'
@@ -1905,6 +1912,7 @@ def create_app(test_config=None):
         ).fetchall()
         return render_template('index.html', recipes=visible_recipes(db, g.user)[:6],
           events=month_events, calendar_weeks=calendar_weeks,
+          selected_date=selected_date.isoformat() if selected_date else None,
           calendar_month=calendar_month, calendar_year=calendar_year,
           calendar_month_name=pycalendar.month_name[calendar_month],
           months=pycalendar.month_name,
@@ -3863,6 +3871,14 @@ def create_app(test_config=None):
     def new_event():
         if g.user['account_kind'] == 'house':
             abort(HTTPStatus.FORBIDDEN)
+        event_date = household_today()
+        if 'date' in request.args:
+            try:
+                event_date = date.fromisoformat(request.args['date'])
+                if event_date.isoformat() != request.args['date']:
+                    raise ValueError
+            except ValueError:
+                abort(HTTPStatus.BAD_REQUEST)
         db = get_db()
         recipes = visible_recipes(db, g.user)
         recipe = None
@@ -3884,7 +3900,7 @@ def create_app(test_config=None):
             abort(HTTPStatus.BAD_REQUEST, description='Choose breakfast, lunch, or dinner.')
         default_title = ('Meal prep' if recipe and recipe['visibility'] == 'private'
                          else recipe['title'] if recipe else '')
-        event = {'title': '', 'event_date': household_today().isoformat(),
+        event = {'title': '', 'event_date': event_date.isoformat(),
                  'description': '', 'all_day': 1, 'start_time': '', 'end_time': '',
                  'visibility': 'shared', 'recurrence_frequency': '', 'recurrence_until': '',
                  'recipe_id': recipe['id'] if recipe else None,

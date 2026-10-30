@@ -22,8 +22,8 @@
     <a class="brand" href="{{ url_for('index') }}">⌂ Home Hub</a>
     {% if current_user %}
     <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="site-menu">Menu</button>
-    <nav class="site-nav" id="site-menu" aria-label="Main navigation" hidden>
-      <a href="{{ url_for('index') }}" {% if request.endpoint == 'index' %}aria-current="page"{% endif %}>Home</a>
+    <nav class="site-nav" id="site-menu" aria-label="Main navigation">
+      <a href="{{ url_for('index') }}" {% if request.path == '/' %}aria-current="page"{% endif %}>Home</a>
       <a href="/lists" {% if request.path.startswith('/lists') %}aria-current="page"{% endif %}>Lists</a>
       <a href="/recipes" {% if request.path.startswith('/recipes') %}aria-current="page"{% endif %}>Recipes</a>
       <a href="/calendar" {% if request.path.startswith('/calendar') or request.path.startswith('/events') %}aria-current="page"{% endif %}>Calendar</a>
