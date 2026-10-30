@@ -66,6 +66,12 @@ approves the completed change.
   the submitting section after a short form-post redirect. Card order and width
   preferences are scoped to the signed-in user, page, and card group. The full
   visual and keyboard review remains a release gate.
+- The bug-fix branch `bugfix/card-calendar-rss-ux` moves card layout controls
+  below each page, restores saved card positions and widths, and collapses the
+  top navigation when its tabs would overflow. Calendar dates select a day and
+  prefill a new event. Install now starts one RSS refresh immediately after
+  enabling the timer. Browser review and Pi RSS service/log verification remain
+  before this branch is ready to merge.
 
 ## Shared foundations and Admin
 
