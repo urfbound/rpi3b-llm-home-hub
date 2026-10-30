@@ -178,9 +178,16 @@ document.querySelector('[data-confirm-delete]').addEventListener('click', () => 
 });
 document.querySelectorAll('a[href*="/rss/articles/"][href$="/open"]').forEach(link => {
   link.addEventListener('click', event => {
-    const popup = window.open(link.href, '_blank');
+    const screen = window.screen;
+    const width = Math.min(screen.availWidth, Math.max(320, Math.floor(screen.availWidth * .94)));
+    const height = Math.min(screen.availHeight, Math.max(420, Math.floor(screen.availHeight * .92)));
+    const left = (screen.availLeft || 0) + Math.floor((screen.availWidth - width) / 2);
+    const top = (screen.availTop || 0) + Math.floor((screen.availHeight - height) / 2);
+    const popup = window.open(link.href, '_blank',
+      `popup=yes,width=${width},height=${height},left=${left},top=${top}`);
     if (!popup) return;
     event.preventDefault();
+    try { popup.opener = null; popup.blur(); } catch (_) { /* Browser-managed window. */ }
     window.focus();
     const timer = window.setInterval(() => {
       if (!popup.closed) return;
