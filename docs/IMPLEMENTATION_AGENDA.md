@@ -66,6 +66,15 @@ approves the completed change.
   the submitting section after a short form-post redirect. Card order and width
   preferences are scoped to the signed-in user, page, and card group. The full
   visual and keyboard review remains a release gate.
+- The bug-fix branch `bugfix/card-calendar-rss-ux` moves card layout controls
+  below each page, restores saved card positions and widths, and collapses the
+  top navigation when its tabs would overflow. Calendar dates select a day and
+  prefill a new event. Install now starts one RSS refresh immediately after
+  enabling the timer, and the timer checks again every ten minutes. The Pi's
+  pre-upgrade log showed the older scheduler's missing database path and an
+  elapsed timer with no next trigger. The scheduler path is already fixed in
+  source; verify the upgraded service and next timer trigger on the Pi. Browser
+  review and Pi RSS verification remain before this branch is ready to merge.
 
 ## Shared foundations and Admin
 

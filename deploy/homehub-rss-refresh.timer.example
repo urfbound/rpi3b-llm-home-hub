@@ -2,8 +2,7 @@
 Description=Check whether Home Hub RSS feeds need refreshing
 
 [Timer]
-OnBootSec=3min
-OnUnitActiveSec=10min
+OnCalendar=*-*-* *:00/10:00
 AccuracySec=1min
 Persistent=true
 Unit=homehub-rss-refresh.service
