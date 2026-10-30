@@ -19,9 +19,10 @@ def test_install_and_uninstall_manage_the_rss_timer_units():
     assert 'homehub-rss-refresh.service' in UNINSTALL
 
 
-def test_rss_timer_is_short_lived_and_uses_the_dedicated_service_account():
+def test_rss_timer_repeats_after_a_failed_run_and_uses_the_service_account():
     assert 'Type=oneshot' in SERVICE
     assert 'User=homehub' in SERVICE
     assert 'homehub-rss-refresh' in SERVICE
-    assert 'OnUnitActiveSec=10min' in TIMER
+    assert 'OnCalendar=*-*-* *:00/10:00' in TIMER
+    assert 'OnUnitActiveSec=' not in TIMER
     assert 'Persistent=true' in TIMER
