@@ -84,6 +84,7 @@ homehub_set_rss_refresh_timer() {
     sudo systemctl disable --now homehub-rss-refresh.timer
   else
     sudo systemctl enable --now homehub-rss-refresh.timer
+    sudo systemctl start homehub-rss-refresh.service
   fi
 }
 

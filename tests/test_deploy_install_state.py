@@ -147,6 +147,7 @@ homehub_set_rss_refresh_timer 1
     assert result.returncode == 0, result.stderr
     assert log.read_text().splitlines() == [
         'systemctl enable --now homehub-rss-refresh.timer',
+        'systemctl start homehub-rss-refresh.service',
         'systemctl disable --now homehub-rss-refresh.timer',
     ]
 
