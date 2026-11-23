@@ -26,7 +26,8 @@ from argon2 import PasswordHasher
 from argon2.exceptions import VerifyMismatchError, VerificationError
 from . import constants as limits
 from .chat import (ChatProviderError, ChatQueueFull, ChatRequestQueue,
-                   OllamaProvider, list_ollama_models)
+                   OllamaProvider, OpenAICompatibleProvider, list_ollama_models,
+                   list_openai_models, validate_chat_endpoint)
 from .chat_tools import ChatDataTools, ChatToolError
 from .backups import (BackupError, backup_filename, calendar_bundle_path, create_backup,
                       default_backup_directory, delete_backup, list_backups,
@@ -1252,6 +1253,7 @@ def create_app(test_config=None):
     if test_config:
         app.config.update(test_config)
     app.config.setdefault('OLLAMA_BASE_URL', 'http://127.0.0.1:11434')
+    app.config.setdefault('CHAT_API_KEY', os.environ.get('HOMEHUB_CHAT_API_KEY', ''))
     if not app.config['SECRET_KEY']:
         raise RuntimeError('Set HOMEHUB_SECRET_KEY to a long, random persistent secret')
     db_path = Path(app.config['DATABASE'])
@@ -1262,6 +1264,20 @@ def create_app(test_config=None):
     app.extensions['homehub_system_monitor'] = system_monitor
     maintenance = threading.Condition()
     request_state = {'active': 0, 'restoring': False}
+
+    def chat_provider(kind, endpoint):
+        if kind == 'remote_ollama':
+            return OllamaProvider(endpoint, allow_remote=True)
+        if kind == 'openai_compatible':
+            return OpenAICompatibleProvider(endpoint, api_key=app.config['CHAT_API_KEY'])
+        return OllamaProvider(app.config['OLLAMA_BASE_URL'])
+
+    def chat_models_for(kind, endpoint):
+        if kind == 'remote_ollama':
+            return list_ollama_models(endpoint, allow_remote=True)
+        if kind == 'openai_compatible':
+            return list_openai_models(endpoint, api_key=app.config['CHAT_API_KEY'])
+        return list_ollama_models(app.config['OLLAMA_BASE_URL'])
 
     def process_chat_job(job):
         with app.app_context():
@@ -1289,12 +1305,10 @@ def create_app(test_config=None):
                                  {'role': 'assistant', 'content': pair['response']}))
             messages.append({'role': 'user', 'content': job['prompt']})
             completion = app.config.get('CHAT_COMPLETION')
-            if completion is None:
-                completion = OllamaProvider(app.config['OLLAMA_BASE_URL']).complete
+            provider = chat_provider(job.get('provider', 'local_ollama'), job.get('endpoint', ''))
             if data_tools_enabled:
                 data_tools = ChatDataTools(db_path, job['owner_id'])
                 tool_completion = app.config.get('CHAT_COMPLETION_WITH_TOOLS')
-                provider = OllamaProvider(app.config['OLLAMA_BASE_URL'])
                 tool_definitions = data_tools.definitions()
                 tool_calls_used = 0
                 while True:
@@ -1315,13 +1329,13 @@ def create_app(test_config=None):
                     if (not isinstance(tool_response, dict)
                             or not isinstance(tool_response.get('content'), str)
                             or not isinstance(tool_response.get('tool_calls', []), list)):
-                        raise ChatProviderError('The local model returned an invalid tool response.')
+                        raise ChatProviderError('The model returned an invalid tool response.')
                     calls = tool_response.get('tool_calls', [])
                     if not calls:
                         response = tool_response['content']
                         break
                     if tool_calls_used >= limits.CHAT_TOOL_CALLS_PER_REQUEST_MAXIMUM:
-                        raise ChatProviderError('The local model exceeded the Chat tool-call limit.')
+                        raise ChatProviderError('The model exceeded the Chat tool-call limit.')
                     assistant_message = dict(tool_response)
                     assistant_message['role'] = 'assistant'
                     messages.append(assistant_message)
@@ -1329,6 +1343,11 @@ def create_app(test_config=None):
                         function = tool_call.get('function') if isinstance(tool_call, dict) else None
                         name = function.get('name') if isinstance(function, dict) else None
                         arguments = function.get('arguments', {}) if isinstance(function, dict) else {}
+                        if isinstance(arguments, str):
+                            try:
+                                arguments = json.loads(arguments)
+                            except ValueError:
+                                arguments = None
                         try:
                             if tool_calls_used >= limits.CHAT_TOOL_CALLS_PER_REQUEST_MAXIMUM:
                                 raise ChatToolError('Chat reached its tool-call limit.')
@@ -1336,14 +1355,26 @@ def create_app(test_config=None):
                         except ChatToolError as exc:
                             result = {'error': str(exc)}
                         tool_calls_used += 1
-                        messages.append({
-                            'role': 'tool', 'tool_name': str(name or '')[:80],
+                        tool_message = {
+                            'role': 'tool',
                             'content': json.dumps(result, ensure_ascii=False, separators=(',', ':')),
-                        })
+                        }
+                        if job.get('provider') == 'openai_compatible':
+                            tool_message['tool_call_id'] = str(tool_call.get('id', ''))[:128]
+                        else:
+                            tool_message['tool_name'] = str(name or '')[:80]
+                        messages.append(tool_message)
             else:
-                response = completion(job['model'], messages)
+                if completion is not None:
+                    response = completion(job['model'], messages)
+                else:
+                    response = provider.complete(
+                        job['model'], messages,
+                        on_chunk=lambda text: app.extensions['homehub_chat_queue'].update_partial(
+                            job['id'], text),
+                    )
             if not isinstance(response, str) or not response.strip():
-                raise ChatProviderError('The local model returned an empty response.')
+                raise ChatProviderError('The model returned an empty response.')
             response = response.strip()
             db = get_db()
             with db:
@@ -2330,8 +2361,10 @@ def create_app(test_config=None):
         weather_units = setting_text(db, 'weather_units', 'metric')
         if weather_units not in ('metric', 'imperial'):
             weather_units = 'metric'
+        chat_provider_kind = setting_text(db, 'chat_provider', 'local_ollama')
+        chat_endpoint = setting_text(db, 'chat_endpoint')
         try:
-            chat_models = list_ollama_models(app.config['OLLAMA_BASE_URL'])
+            chat_models = chat_models_for(chat_provider_kind, chat_endpoint)
             chat_models_error = ''
         except ChatProviderError as exc:
             chat_models = []
@@ -2349,7 +2382,7 @@ def create_app(test_config=None):
                                calendar_expiry_action=setting_text(
                                    db, 'calendar_expiry_action', 'archive'),
                                calendar_archive_folder=str(archive_folder),
-                               calendar_timezone=setting_text(db, 'weather_timezone', 'Pi local'),
+                               calendar_timezone=setting_text(db, 'weather_timezone', 'Server local'),
                                calendar_archives=calendar_archives,
                                calendar_archive_failures=calendar_archive_failures,
                                backup_folder=str(configured_folder),
@@ -2375,6 +2408,8 @@ def create_app(test_config=None):
                                chat_enabled=setting(
                                    db, 'chat_enabled', limits.CHAT_ENABLED_DEFAULT),
                                chat_model=chat_model,
+                               chat_provider=chat_provider_kind,
+                               chat_endpoint=chat_endpoint,
                                chat_models=chat_models,
                                chat_models_error=chat_models_error,
                                chat_max_queue_depth=setting(
@@ -2385,6 +2420,19 @@ def create_app(test_config=None):
                                    limits.CHAT_PAIRS_PER_CHAT_DEFAULT),
                                chat_data_tools_enabled=setting(
                                    db, 'chat_data_tools_enabled', limits.CHAT_DATA_TOOLS_DEFAULT))
+
+    @app.get('/admin/chat/models')
+    @admin_required
+    def discover_chat_models():
+        kind = request.args.get('provider', '')
+        endpoint = request.args.get('endpoint', '').strip()
+        if kind not in ('local_ollama', 'remote_ollama', 'openai_compatible'):
+            return jsonify(error='Choose a supported Chat API.'), HTTPStatus.BAD_REQUEST
+        try:
+            models = chat_models_for(kind, endpoint)
+        except ChatProviderError as exc:
+            return jsonify(error=str(exc)), HTTPStatus.BAD_REQUEST
+        return jsonify(models=models)
 
     @app.post('/admin/tab-order')
     @admin_required
@@ -2418,6 +2466,17 @@ def create_app(test_config=None):
         enabled = request.form.get('chat_enabled') == '1'
         data_tools_enabled = request.form.get('chat_data_tools_enabled') == '1'
         model = request.form.get('model', '').strip()
+        provider_kind = request.form.get('provider', 'local_ollama')
+        if provider_kind not in ('local_ollama', 'remote_ollama', 'openai_compatible'):
+            abort(HTTPStatus.BAD_REQUEST, description='Choose a supported Chat API.')
+        endpoint = request.form.get('endpoint', '').strip()
+        if provider_kind != 'local_ollama':
+            try:
+                endpoint = validate_chat_endpoint(endpoint)
+            except ChatProviderError as exc:
+                abort(HTTPStatus.BAD_REQUEST, description=str(exc))
+        else:
+            endpoint = ''
         try:
             max_queue_depth = int(request.form.get('max_queue_depth', ''))
             pairs_per_chat = int(request.form.get('pairs_per_chat', ''))
@@ -2434,22 +2493,26 @@ def create_app(test_config=None):
             abort(HTTPStatus.BAD_REQUEST, description='Choose a valid installed model.')
         if enabled:
             try:
-                installed_models = list_ollama_models(app.config['OLLAMA_BASE_URL'])
+                installed_models = chat_models_for(provider_kind, endpoint)
             except ChatProviderError as exc:
                 abort(HTTPStatus.BAD_REQUEST, description=str(exc))
             if not model or model not in installed_models:
                 abort(HTTPStatus.BAD_REQUEST,
-                      description='Choose a model installed in local Ollama.')
+                      description='Choose a model available on the selected Chat API.')
         db = get_db()
         with db:
+            settings = [('chat_enabled', '1' if enabled else '0'),
+                        ('chat_model', model),
+                        ('chat_max_queue_depth', str(max_queue_depth)),
+                        ('chat_pairs_per_chat', str(pairs_per_chat)),
+                        ('chat_data_tools_enabled', '1' if data_tools_enabled else '0')]
+            if 'provider' in request.form:
+                settings.extend((('chat_provider', provider_kind),
+                                 ('chat_endpoint', endpoint)))
             db.executemany(
                 'INSERT INTO app_settings(key,value) VALUES(?,?) '
                 'ON CONFLICT(key) DO UPDATE SET value=excluded.value',
-                (('chat_enabled', '1' if enabled else '0'),
-                 ('chat_model', model),
-                 ('chat_max_queue_depth', str(max_queue_depth)),
-                 ('chat_pairs_per_chat', str(pairs_per_chat)),
-                 ('chat_data_tools_enabled', '1' if data_tools_enabled else '0')),
+                settings,
             )
         return redirect(url_for('accounts') + '#chat-settings-section')
 
@@ -2499,6 +2562,8 @@ def create_app(test_config=None):
             prompt_maximum=limits.CHAT_PROMPT_MAXIMUM,
             chat_history_maximum=limits.CHAT_HISTORY_MAXIMUM,
             pinned_maximum=limits.CHAT_PINNED_MAXIMUM,
+            chat_model_location=('Local model' if setting_text(db, 'chat_provider', 'local_ollama')
+                                 == 'local_ollama' else 'Remote model'),
         )
 
     @app.get('/chat')
@@ -2570,13 +2635,15 @@ def create_app(test_config=None):
         model = setting_text(db, 'chat_model')
         if not model:
             abort(HTTPStatus.SERVICE_UNAVAILABLE,
-                  description='An administrator must select an installed local model first.')
+                  description='An administrator must select an available model first.')
         job_id = secrets.token_urlsafe(18)
         job = {
             'id': job_id,
             'owner_id': g.user['id'],
             'conversation_id': conversation_id,
             'model': model,
+            'provider': setting_text(db, 'chat_provider', 'local_ollama'),
+            'endpoint': setting_text(db, 'chat_endpoint'),
             'prompt': prompt,
             'pair_limit': pair_limit,
             'is_admin': g.user['role'] == 'admin',
@@ -2610,7 +2677,8 @@ def create_app(test_config=None):
                                and g.user['role'] != 'admin')):
             abort(HTTPStatus.NOT_FOUND)
         return jsonify(status=status['status'], queue_position=status['queue_position'],
-                       error=status['error'], conversation_id=status['conversation_id'])
+                       error=status['error'], conversation_id=status['conversation_id'],
+                       partial_text=status['partial_text'])
 
     @app.post('/chat/<int:conversation_id>/pin')
     @login_required
