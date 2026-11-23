@@ -11,13 +11,22 @@ approves the completed change.
 
 ## Current status
 
+- **Deployment pivot (2026-11-23):** The next target is a systemd-based Ubuntu
+  Proxmox LXC. Local inference is no longer planned for that deployment.
+  Remote Ollama and OpenAI-compatible agent API settings, model discovery,
+  streamed ordinary replies, and read-only tool calls are implemented on
+  `feature/ubuntu-lxc-remote-chat`. The original Pi benchmarks are historical
+  reference points. The next checkpoint is a clean LXC install, service and
+  HTTPS checks, and a live connection to the agent node; see
+  [UBUNTU_LXC_DEPLOYMENT.md](UBUNTU_LXC_DEPLOYMENT.md).
+
 - **Foundations:** account administration, roles and sessions,
   CSRF, login rate limiting, verified backup/restore, LAN HTTPS setup with
   loopback-only Waitress and Caddy, TLS deployment guidance,
   and schema versioning are implemented. Initial Ollama latency and memory
   measurements on the Raspberry Pi 3B are recorded in
   [CHAT_PI_BENCHMARK.md](CHAT_PI_BENCHMARK.md). App and app-plus-model profiles
-  are recorded. Remaining foundation work is target-Pi deployment and release
+  are recorded. Remaining foundation work is target-LXC deployment and release
   verification; Chat remains hidden pending answer-quality review.
 - **Optional Ollama setup:** the Linux installer adds an explicit
   `--install-ollama` option for x86_64 and ARM64. It installs only Ollama from
@@ -54,9 +63,9 @@ approves the completed change.
   associated Admin controls are on `main`. Remaining work is listed under
   each feature below: browser/device review, Pi profiling, and household
   playtesting where applicable.
-- **Next validation:** complete the target-Pi install, upgrade, and uninstall
-  checks, then continue phone/browser review of offline mode and responsive
-  feature pages.
+- **Next validation:** complete the target Ubuntu LXC install, upgrade, and
+  uninstall checks; connect the agent node and review Chat behavior together;
+  then continue phone/browser review of offline mode and responsive pages.
 - **Design reviews:** Account administration, Home, Lists, Recipes, Calendar,
   Weather, RSS, Games, and Chat are approved. App-only and app-plus-model Pi
   profiles are recorded. Chat answer-quality review and manual browser review
@@ -78,7 +87,7 @@ approves the completed change.
 
 ## Shared foundations and Admin
 
-- Finish Raspberry Pi install/uninstall hardening. Tests now cover venv
+- Finish Ubuntu LXC install/uninstall hardening. Tests now cover venv
   permissions, private environment-file mode and preservation, repeated runtime
   replacement without touching the checkout/database/backups, and uninstall's
   file-deletion boundary. The uninstaller now offers explicit data deletion;
@@ -88,12 +97,12 @@ approves the completed change.
   Tests also verify that a database backup precedes service activation and that
   repeated legacy-cron cleanup preserves unrelated jobs. Manually verify
   repeat install/uninstall, both preservation and deletion choices, the systemd
-  timers, and retained data/config ownership on a Pi using the regular-user/sudo
+  timers, and retained data/config ownership in the LXC using the regular-user/sudo
   flow on the target hostname.
 - Release installation path is prepared: tagged GitHub releases build a
   versioned source bundle with a SHA-256 manifest; install and upgrade
   bootstraps fetch the latest release and run the existing backup-preserving
-  installer. Before the first release, verify a clean Pi install, an upgrade
+  installer. Before the first release, verify a clean Ubuntu LXC install, an upgrade
   from the previous supported release, checksum failure handling, and the
   public `curl | sh` instructions. The repository must remain public for
   unauthenticated release downloads.
@@ -359,10 +368,14 @@ approves the completed change.
 - UX follow-up: each private chat entry now includes its own latest-prompt
   preview so people can recognize a conversation before opening it. Recent
   mobile readability review and persistent running-request navigation remain.
-- Add a provider interface for possible remote models, off by default. If
-  database tools are enabled, enforce the approved read-only per-user scope
-  and resource budget; require explicit confirmation and fresh authorization
-  for proposed writes. Never expose Ollama beyond loopback.
+- Remote Ollama and OpenAI-compatible Chat providers are implemented on
+  `feature/ubuntu-lxc-remote-chat`. Chat and read-only tools remain off by
+  default. Normal replies stream into the current view; tool calls use
+  complete messages and retain the approved read-only per-user scope and
+  resource budget. Require explicit confirmation and fresh authorization for
+  any future proposed writes. Validate endpoint reachability, model discovery,
+  answer quality, and tool compatibility against the real agent node before
+  household enablement.
 
 ## Deferred integrations
 

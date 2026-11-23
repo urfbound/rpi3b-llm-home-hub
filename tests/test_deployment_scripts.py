@@ -51,6 +51,14 @@ def test_installer_keeps_backup_schedule_in_one_systemd_timer():
     assert 'sudo systemctl enable --now homehub.service homehub-backup.timer' in INSTALL
 
 
+def test_ubuntu_lxc_install_checks_systemd_before_any_system_changes():
+    check = INSTALL.index('homehub_require_systemd')
+    first_system_change = INSTALL.index('sudo -v')
+    assert check < first_system_change
+    assert 'Ubuntu' in INSTALL
+    assert 'HOMEHUB_INSTALL_OLLAMA=0' in (ROOT / 'deploy' / 'install_helpers.sh').read_text()
+
+
 def test_ollama_install_is_explicit_and_precedes_home_hub_service_activation():
     install_ollama = INSTALL.index('homehub_install_ollama_linux')
     activate_homehub = INSTALL.index('sudo systemctl enable --now homehub.service')

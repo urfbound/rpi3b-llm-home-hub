@@ -1,10 +1,12 @@
 # Home Hub — Phase 1 starter
 
-A lightweight local-first family dashboard for Raspberry Pi 3B. Includes login, a household shopping list, recipes, local event creation, `.ics` calendar export and a switchable cozy light/dark theme. **This is a prototype, not a production-hardened household service.**
+A lightweight local-first family dashboard for an Ubuntu Proxmox LXC or Raspberry Pi OS. Includes login, household lists, recipes, calendar export, and a switchable light/dark theme. **Live deployment validation is still required before household use.**
 
 The [draft product plan](docs/PROJECT_PLAN.md) records the agreed direction
 for the full household app and decisions still to settle.
 See the [upgrade guide](docs/UPGRADES.md) before updating an existing install.
+For the current container target and remote-agent setup, see the
+[Ubuntu LXC deployment checkpoint](docs/UBUNTU_LXC_DEPLOYMENT.md).
 
 ## Run on Windows (PowerShell)
 
@@ -35,28 +37,30 @@ calendar archives together, then sign out all users. The default backup folder
 is `backups` beside the configured database; choose a protected folder with
 enough free space. Backups contain account hashes and private household data.
 
-## Install on Raspberry Pi OS
+## Install on Ubuntu LXC or Raspberry Pi OS
 
-The supported installer targets a Raspberry Pi running 64-bit Raspberry Pi
-OS with Python 3.11 or newer and `sudo` access. It installs the service under
+The supported installer targets a systemd-based Ubuntu LXC or a Raspberry Pi
+running 64-bit Raspberry Pi OS, with Python 3.11 or newer and `sudo` access.
+It installs the service under
 `/opt/homehub`, keeps the database and calendar archives under
 `/var/lib/homehub`, and creates a root-owned configuration file at
 `/etc/homehub/homehub.env`. It creates a dedicated `homehub` service account,
 installs the web service and systemd backup timer, and prompts to install
-`python3-venv` if needed. Run it as your normal Pi login; do not prefix it
+`python3-venv` if needed. Run it as a regular login with sudo; do not prefix it
 with `sudo`. The app listens on loopback only.
 
 ### Install from a published release
 
-After the first GitHub release is published, a fresh Raspberry Pi OS install
-can use this bootstrap command as the regular Pi login:
+After the first GitHub release is published, a fresh Ubuntu LXC or Raspberry Pi
+OS install can use this bootstrap command as a regular sudo-capable login:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/urfbound/rpi3b-llm-home-hub/main/deploy/install-release.sh | sh
 ```
 
-To also install the optional Ollama runtime on Linux x86_64 or ARM64, pass
-the explicit installer option:
+Local inference is not required when Chat uses an agent node. The older
+optional Ollama runtime installer remains available on Linux x86_64 or ARM64
+only when explicitly requested:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/urfbound/rpi3b-llm-home-hub/main/deploy/install-release.sh | sh -s -- --install-ollama
@@ -95,24 +99,24 @@ to create and verify a database backup before activating the updated service.
 ### Transfer files from Windows
 
 Open PowerShell in the project folder on Windows. Replace `username` and
-`hostname` in the commands with your Pi login and SSH host name or alias.
+`hostname` in the commands with your server login and SSH host name or alias.
 Windows OpenSSH's `ssh` and `scp` utilities are used.
 
 ```powershell
 tar.exe -czf "$env:TEMP\homehub-transfer.tar.gz" --exclude=__pycache__ --exclude="*.pyc" -C . homehub deploy scripts pyproject.toml README.md LICENSE
 if ($LASTEXITCODE -ne 0) { throw "Could not create the transfer archive." }
 ssh username@hostname "mkdir -p ~/homehub-release"
-if ($LASTEXITCODE -ne 0) { throw "Could not create the Pi staging directory." }
+if ($LASTEXITCODE -ne 0) { throw "Could not create the server staging directory." }
 scp "$env:TEMP\homehub-transfer.tar.gz" username@hostname:~/homehub-release/
 if ($LASTEXITCODE -ne 0) { throw "Transfer failed; do not run the installer." }
 $extract = 'cd ~/homehub-release && mkdir -p source && tar -tzf homehub-transfer.tar.gz | while IFS= read -r p; do case "$p" in */) mkdir -p "source/$p";; */*) mkdir -p "source/${p%/*}";; esac; done && find source -type d -exec chmod u+rwx {} + && tar --no-same-owner --no-same-permissions --no-overwrite-dir -xzf homehub-transfer.tar.gz -C source && rm homehub-transfer.tar.gz'
 ssh username@hostname $extract
-if ($LASTEXITCODE -ne 0) { throw "Could not unpack the transfer on the Pi." }
+if ($LASTEXITCODE -ne 0) { throw "Could not unpack the transfer on the server." }
 ssh -t username@hostname "cd ~/homehub-release/source && chmod +x deploy/install.sh deploy/uninstall.sh && ./deploy/install.sh"
 ```
 
 This transfers source and deployment files in an archive, excluding Python
-bytecode caches. Before extracting, the Pi creates the archive's directory
+bytecode caches. Before extracting, the server creates the archive's directory
 tree with your account's write permission, then tells GNU tar to preserve those
 permissions while extracting. This handles read-only permission bits that
 Windows may have stored in the archive and permits retrying after a partial
@@ -135,7 +139,7 @@ system changes.
 The transfer includes application code, scripts, and deployment examples, not
 your Windows `.git` directory, virtual environment, database, or backups. The
 installer copies the application into `/opt/homehub`; it leaves the staging
-directory in your Pi home directory. An existing database is backed up and
+directory in your server home directory. An existing database is backed up and
 verified before the new service starts.
 Keep `/etc/homehub/homehub.env` private and persistent; it contains the
 session-signing secret.
@@ -165,7 +169,7 @@ password input without putting the password in the command line:
 ```
 
 The password must be at least 12 characters. System authorization through
-`sudo` may still request your Pi password. On supported Linux x86_64 and
+`sudo` may still request your account password. On supported Linux x86_64 and
 ARM64 systems, add `--install-ollama` to install the Ollama runtime from its
 official installer. The Home Hub installer does not select, recommend, supply,
 or download models. To avoid an extra always-on service, it stops and disables
@@ -184,9 +188,9 @@ or configure local DNS. A fresh package install may create its default
 Caddyfile. Set up a local hostname first, then configure HTTPS as described in
 [`TLS_DEPLOYMENT.md`](docs/TLS_DEPLOYMENT.md).
 
-## Uninstall from Raspberry Pi OS
+## Uninstall from Ubuntu LXC or Raspberry Pi OS
 
-Run the uninstaller as your regular Pi login from the transferred repository:
+Run the uninstaller as your regular sudo-capable login from the transferred repository:
 
 ```powershell
 ssh -t username@hostname "cd ~/homehub-starter && ./deploy/uninstall.sh"
@@ -214,7 +218,7 @@ backup files while keeping the database. For example:
 `--keep-data` and `--keep-backups` can make preservation explicit. The
 uninstaller still creates and verifies a fresh backup before removal, then
 deletes that backup too when `--delete-data` or `--delete-backups` is selected.
-System authorization through `sudo` may still request your Pi password.
+System authorization through `sudo` may still request your account password.
 Preserved files under `/var/lib/homehub` become root-owned and are assigned
 back to the service account if you reinstall.
 ## Important limitations / follow-up work

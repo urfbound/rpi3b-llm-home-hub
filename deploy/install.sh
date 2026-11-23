@@ -13,7 +13,7 @@ if ! homehub_parse_install_args "$@"; then exit 2; fi
 if (( HOMEHUB_SHOW_HELP )); then exit 0; fi
 
 if [[ ${EUID:-$(id -u)} -eq 0 ]]; then
-  printf 'Run this script as your regular Pi user; it will request sudo when needed.\n' >&2
+  printf 'Run this script as a regular Ubuntu or Pi user with sudo access.\n' >&2
   exit 1
 fi
 if (( HOMEHUB_INSTALL_OLLAMA )) \
@@ -26,6 +26,7 @@ if ! command -v sudo >/dev/null 2>&1; then
   printf 'sudo is required for system installation steps.\n' >&2
   exit 1
 fi
+homehub_require_systemd
 if (( ! HOMEHUB_NO_PROMPT )) && [[ -t 0 ]]; then
   if ! homehub_prompt_install_choices; then
     printf 'Installation cancelled.\n'
@@ -55,7 +56,7 @@ if command -v python3 >/dev/null 2>&1 \
   python_ok=1
 fi
 if (( ! python_ok )); then
-  printf 'Home Hub requires Python 3.11 or newer. Install a supported Python on Raspberry Pi OS, then retry.\n' >&2
+  printf 'Home Hub requires Python 3.11 or newer. Install a supported Python on Ubuntu or Raspberry Pi OS, then retry.\n' >&2
   exit 1
 fi
 if ! python3 -c 'import venv' >/dev/null 2>&1; then
@@ -70,7 +71,7 @@ if ! python3 -c 'import venv' >/dev/null 2>&1; then
 fi
 
 printf 'Home Hub will install into %s and keep data in %s.\n' "$INSTALL_ROOT" "$DATA_ROOT"
-printf 'sudo may prompt for your Pi password during system changes.\n'
+printf 'sudo may prompt for your account password during system changes.\n'
 sudo -v
 
 if (( HOMEHUB_INSTALL_CADDY )); then
@@ -209,7 +210,7 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now homehub.service homehub-backup.timer
 homehub_set_rss_refresh_timer "$HOMEHUB_NO_RSS"
 
-printf '\nHome Hub is installed. It listens on the Pi loopback interface only.\n'
+printf '\nHome Hub is installed. It listens on the server loopback interface only.\n'
 printf 'For setup, open an SSH tunnel from Windows: ssh -L 8080:127.0.0.1:8080 %s@hostname\n' "$USER"
 printf 'Then browse to http://127.0.0.1:8080 on your Windows PC.\n'
 printf 'The source repository remains at %s; uninstall does not remove it.\n' "$REPO_ROOT"

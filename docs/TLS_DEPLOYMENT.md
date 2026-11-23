@@ -5,13 +5,13 @@ Caddy in front of Waitress, keeps the Python app on loopback, and uses Caddy's
 local certificate authority. It does not require a public domain or expose
 Home Hub to the Internet.
 
-## 1. Give the Pi a stable home-network name
+## 1. Give the Home Hub server a stable home-network name
 
-Reserve a stable address for the Pi in the router, then add a local DNS entry
+Reserve a stable address for the Ubuntu LXC or Pi in the router, then add a local DNS entry
 such as `homehub.home.arpa` pointing to that address. `home.arpa` is the
 special-use DNS domain reserved for residential home networks by
 [RFC 8375](https://www.rfc-editor.org/rfc/rfc8375.html). Configure household
-devices to use that local name. The name must resolve to the Pi on the LAN.
+devices to use that local name. The name must resolve to the Home Hub server on the LAN.
 Replace it in [Caddyfile.example](../deploy/Caddyfile.example) if you choose a
 different name.
 
@@ -25,10 +25,10 @@ to the Caddyfile or configure local DNS. A fresh package install may create its
 default Caddyfile; `enable_https.sh` asks before replacing it. Existing Caddy
 installations and `caddy.service` units are left untouched.
 
-Install the current stable Caddy package for Raspberry Pi OS using the
+Install the current stable Caddy package for Ubuntu or Raspberry Pi OS using the
 [official Caddy installation instructions](https://caddyserver.com/docs/install).
 The official Debian-family package includes a systemd service. From the
-transferred Home Hub repository on the Pi, check whether
+transferred Home Hub repository on the server, check whether
 `/etc/caddy/Caddyfile` already exists. The setup command refuses to replace
 any existing file by default. If it contains only the package's default site,
 or you have decided to replace the existing sites, run:
@@ -80,7 +80,7 @@ For the packaged Linux service, Caddy documents the root certificate at:
 ```
 
 Transfer **only** `root.crt` to household-managed devices over a trusted
-administrative path. Verify its SHA-256 fingerprint with the Pi administrator
+administrative path. Verify its SHA-256 fingerprint with the server administrator
 before installing it. Import it as a trusted root certificate in the device's
 operating-system or browser certificate store. Some browsers keep their own
 trust store, and mobile platforms may require an additional explicit
