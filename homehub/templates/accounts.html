@@ -115,22 +115,74 @@
     <button class="primary">Save RSS settings</button>
   </form>
 </section>
-<section class="panel" id="chat-settings-section"><p class="eyebrow">Optional local assistant</p><h2>Chat settings</h2>
+<section class="panel" id="chat-settings-section"><p class="eyebrow">Optional household assistant</p><h2>Chat settings</h2>
   <form method="post" action="{{ url_for('update_chat_settings') }}" class="chat-settings-form">
     <input type="hidden" name="_csrf" value="{{ csrf_token }}">
     <label class="system-status-check"><input type="checkbox" name="chat_enabled" value="1" {% if chat_enabled %}checked{% endif %}> Enable Chat</label>
     <label class="system-status-check"><input type="checkbox" name="chat_data_tools_enabled" value="1" {% if chat_data_tools_enabled %}checked{% endif %}> Allow read-only list and calendar context</label>
-    <label>Installed local model<select name="model" aria-label="Installed local model">
-      {% if not chat_models %}<option value="">No installed models found</option>{% endif %}
+    <label>Agent API<select name="provider" id="chat-provider">
+      <option value="local_ollama" {% if chat_provider == 'local_ollama' %}selected{% endif %}>Ollama on this server</option>
+      <option value="remote_ollama" {% if chat_provider == 'remote_ollama' %}selected{% endif %}>Ollama on another node</option>
+      <option value="openai_compatible" {% if chat_provider == 'openai_compatible' %}selected{% endif %}>OpenAI-compatible API on another node</option>
+    </select></label>
+    <label>Agent API address and port<input type="url" name="endpoint" id="chat-endpoint" value="{{ chat_endpoint }}" placeholder="http://192.168.1.50:11434" maxlength="255" autocomplete="off"></label>
+    <p class="muted">For a remote API, enter its origin, including http:// or https:// and the port. HTTP is accepted only for private LAN addresses; use HTTPS elsewhere. Leave the address empty for Ollama on this server. Set HOMEHUB_CHAT_API_KEY in the private service environment if the OpenAI-compatible API requires a bearer token.</p>
+    <label>Available model<select name="model" id="chat-model" aria-label="Available model">
+      {% if not chat_models %}<option value="">No models found</option>{% endif %}
       {% for model_name in chat_models %}<option value="{{ model_name }}" {% if model_name == chat_model or (not chat_model and loop.first) %}selected{% endif %}>{{ model_name }}</option>{% endfor %}
     </select></label>
-    {% if chat_models_error %}<p class="muted">{{ chat_models_error }} Ollama must be available on this device to enable Chat.</p>{% endif %}
+    <p id="chat-model-discovery-status" class="muted" role="status">{% if chat_models_error %}{{ chat_models_error }}{% endif %}</p>
     <label>Maximum waiting requests<input type="number" name="max_queue_depth" min="{{ limits.CHAT_MAX_QUEUE_DEPTH_MINIMUM }}" max="{{ limits.CHAT_MAX_QUEUE_DEPTH_MAXIMUM }}" value="{{ chat_max_queue_depth }}" required></label>
     <label>Prompt-and-response pairs per chat<input type="number" name="pairs_per_chat" min="{{ limits.CHAT_PAIRS_PER_CHAT_MINIMUM }}" max="{{ limits.CHAT_PAIRS_PER_CHAT_MAXIMUM }}" value="{{ chat_pairs_per_chat }}" required></label>
-    <p class="muted">Chat stays hidden until enabled. Read-only data access is off by default; when enabled, Chat can read only lists and events visible to the requesting user. Each request is limited to 3 tool calls, 100 rows and 16 KiB per result. Keep this off until its resource budget is verified on a Raspberry Pi. No data can be changed through Chat. Only local Ollama models are selectable; the model service remains on loopback. Remote providers are not enabled.</p>
+    <p class="muted">Chat stays hidden until enabled. Read-only data access is off by default; when enabled, Chat can read only lists and events visible to the requesting user. Each request is limited to 3 tool calls, 100 rows and 16 KiB per result. No data can be changed through Chat. Prompts and any enabled household context are sent to the selected agent node.</p>
     <p><a href="{{ url_for('admin_chat_history') }}">View and manage all chat histories</a></p>
     <button class="primary">Save Chat settings</button>
   </form>
+  <script>
+  (() => {
+    const provider = document.getElementById('chat-provider');
+    const endpoint = document.getElementById('chat-endpoint');
+    const model = document.getElementById('chat-model');
+    const status = document.getElementById('chat-model-discovery-status');
+    let pending;
+    const discover = () => {
+      const remote = provider.value !== 'local_ollama';
+      endpoint.disabled = !remote;
+      endpoint.required = remote;
+      if (remote && !endpoint.value.trim()) {
+        model.replaceChildren(new Option('Enter an API address first', ''));
+        status.textContent = '';
+        return;
+      }
+      if (pending) pending.abort();
+      pending = new AbortController();
+      status.textContent = 'Checking available models…';
+      const query = new URLSearchParams({provider: provider.value, endpoint: endpoint.value.trim()});
+      fetch(`{{ url_for('discover_chat_models') }}?${query}`, {signal: pending.signal})
+        .then(async response => {
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error || 'Model discovery failed.');
+          return data.models;
+        }).then(models => {
+          const selected = model.value;
+          model.replaceChildren(...models.map(name => new Option(name, name)));
+          if (models.includes(selected)) model.value = selected;
+          if (!models.length) model.replaceChildren(new Option('No models found', ''));
+          status.textContent = models.length ? `${models.length} model(s) available.` : 'No models available.';
+        }).catch(error => {
+          if (error.name !== 'AbortError') status.textContent = error.message;
+        });
+    };
+    provider.addEventListener('change', discover);
+    endpoint.addEventListener('input', () => {
+      if (pending) pending.abort();
+      clearTimeout(endpoint.discoveryTimer);
+      endpoint.discoveryTimer = setTimeout(discover, 450);
+    });
+    endpoint.disabled = provider.value === 'local_ollama';
+    endpoint.required = !endpoint.disabled;
+  })();
+  </script>
 </section>
 <section class="panel" id="system-status-settings-section"><p class="eyebrow">Dashboard visibility</p><h2>System status</h2>
   <form method="post" action="{{ url_for('update_system_status_settings') }}" class="system-status-settings">

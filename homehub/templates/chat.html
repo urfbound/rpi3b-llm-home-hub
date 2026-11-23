@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% block content %}
 <div class="crumb">Home / <strong>Chat</strong></div>
-<div class="page-heading"><div><p class="eyebrow">Private local assistant</p><h1>Chat</h1><p class="muted">Responses may take a few minutes. Your prompts stay on the home network.</p></div><span class="chip">Local model enabled</span></div>
+<div class="page-heading"><div><p class="eyebrow">Private household assistant</p><h1>Chat</h1><p class="muted">Responses may take a few minutes. Prompts are sent to the configured agent node.</p></div><span class="chip">{{ chat_model_location }} enabled</span></div>
 <div class="chat-layout">
   <aside class="panel chat-history-panel">
     <div class="chat-history-head"><div><h2>Your chats</h2><p class="muted">{{ conversations|length }} / {{ chat_history_maximum }} · {{ conversations|selectattr('is_pinned')|list|length }} / {{ pinned_maximum }} pinned</p></div>
@@ -23,8 +23,8 @@
       {% if conversation.owner_user_id == current_user['id'] and chat_enabled %}<div class="chat-header-actions"><form method="post" action="{{ url_for('toggle_chat_pin', conversation_id=conversation.id) }}"><input type="hidden" name="_csrf" value="{{ csrf_token }}"><button class="quiet">{{ 'Unpin chat' if conversation.is_pinned else 'Pin chat' }}</button></form></div>{% endif %}
     </header>
     <div class="chat-messages" aria-live="polite">
-      {% if pairs %}{% for pair in pairs %}<article class="chat-pair"><div class="chat-message user-message"><p class="chat-prompt preserve">{{ pair.prompt }}</p><small>You · {{ pair.created_at }}</small></div><div class="chat-message assistant-message"><p class="chat-assistant-label">Home Hub assistant</p><p class="preserve">{{ pair.response }}</p><small>Local model · {{ pair.model }} · {{ pair.created_at }}</small></div></article>{% endfor %}
-      {% else %}<p class="empty-state">Ask a short question to begin. Local model answers may take a few minutes.</p>{% endif %}
+      {% if pairs %}{% for pair in pairs %}<article class="chat-pair"><div class="chat-message user-message"><p class="chat-prompt preserve">{{ pair.prompt }}</p><small>You · {{ pair.created_at }}</small></div><div class="chat-message assistant-message"><p class="chat-assistant-label">Home Hub assistant</p><p class="preserve">{{ pair.response }}</p><small>Model · {{ pair.model }} · {{ pair.created_at }}</small></div></article>{% endfor %}
+      {% else %}<p class="empty-state">Ask a short question to begin. Model answers may take a few minutes.</p>{% endif %}
     </div>
     {% if conversation.owner_user_id == current_user['id'] and chat_enabled %}
     <form id="chat-prompt-form" method="post" action="{{ url_for('send_chat_prompt', conversation_id=conversation.id) }}" class="chat-prompt-form">
@@ -33,6 +33,7 @@
       <label for="chat-prompt">Your prompt<textarea id="chat-prompt" name="prompt" rows="3" maxlength="{{ prompt_maximum }}" placeholder="Ask a short question…" required></textarea></label>
       <div class="chat-submit-row"><small id="chat-prompt-count">0 / {{ prompt_maximum }} characters</small><div><small>Responses may take a few minutes.</small> <button id="chat-send-button" class="primary">Send</button></div></div>
       <p id="chat-request-status" class="muted" role="status" aria-live="polite"><span id="chat-request-status-text"></span><span id="chat-request-ellipsis" class="chat-working-ellipsis" aria-hidden="true" hidden>...</span></p>
+      <p id="chat-stream-preview" class="preserve" aria-live="polite" hidden></p>
     </form>
     {% elif conversation.owner_user_id == current_user['id'] %}<p class="chat-readonly-note">Chat is currently disabled by an administrator.</p>
     {% else %}<p class="chat-readonly-note">This is a read-only admin view. Only {{ conversation.display_name }} can send prompts.</p>{% endif %}
@@ -47,6 +48,7 @@
   const count = document.getElementById('chat-prompt-count');
   const statusText = document.getElementById('chat-request-status-text');
   const ellipsis = document.getElementById('chat-request-ellipsis');
+  const preview = document.getElementById('chat-stream-preview');
   const max = {{ prompt_maximum }};
   let requestId = {{ request.args.get('request_id', '')|tojson }};
   const setStatus = (message, working = false) =>
@@ -58,10 +60,22 @@
     fetch(`/chat/requests/${encodeURIComponent(requestId)}`, {headers: {'Accept': 'application/json'}})
       .then(response => response.ok ? response.json() : Promise.reject())
       .then(data => {
-        if (data.status === 'queued') setStatus(`Waiting in queue · position ${data.queue_position}`);
-        else if (data.status === 'running') setStatus('Your local model is working', true);
+        if (data.status === 'queued') {
+          preview.hidden = true;
+          preview.textContent = '';
+          setStatus(`Waiting in queue · position ${data.queue_position}`);
+        }
+        else if (data.status === 'running') {
+          setStatus('Your model is working', true);
+          preview.textContent = data.partial_text || '';
+          preview.hidden = !data.partial_text;
+        }
         else if (data.status === 'complete') { setStatus('Response ready.'); setBusy(false); location.reload(); return; }
-        else if (data.status === 'failed') { setStatus(data.error || 'The model request failed.'); requestId = ''; setBusy(false); return; }
+        else if (data.status === 'failed') {
+          preview.hidden = true;
+          preview.textContent = '';
+          setStatus(data.error || 'The model request failed.'); requestId = ''; setBusy(false); return;
+        }
         window.setTimeout(poll, 1200);
       }).catch(() => {
         setStatus('Chat request status is temporarily unavailable.');
@@ -72,6 +86,8 @@
     event.preventDefault();
     if (sendButton.disabled) return;
     const formData = window.HomeHubChatUI.beginSubmission(form, prompt, sendButton);
+    preview.hidden = true;
+    preview.textContent = '';
     setStatus('Adding your request to the queue');
     fetch(form.action, {method: 'POST', body: formData, headers: {'X-Requested-With': 'XMLHttpRequest'}})
       .then(async response => {

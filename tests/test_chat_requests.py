@@ -5,6 +5,7 @@ from threading import Event
 
 import pytest
 
+import homehub.app as app_module
 from homehub.app import PH, create_app
 from homehub.constants import (
     CHAT_PAIRS_PER_CHAT_DEFAULT,
@@ -87,7 +88,7 @@ def test_chat_request_saves_prompt_answer_model_and_updates_title(app):
     page = alice.get('/chat/1')
     assert b'How is dinner going?' in page.data
     assert b'Local answer' in page.data
-    assert b'Local model' in page.data
+    assert b'Model \xc2\xb7' in page.data
     assert b'gemma3:270m' in page.data
     with sqlite3.connect(app.config['DATABASE']) as db:
         assert db.execute('SELECT title FROM chat_conversations WHERE id=1').fetchone() == (
@@ -261,13 +262,56 @@ def test_chat_rejects_requests_when_waiting_queue_is_full(app):
     assert admin_request.status_code == HTTPStatus.ACCEPTED
     assert waiting_status == {
         'status': 'queued', 'queue_position': 2, 'error': '', 'conversation_id': 2,
+        'partial_text': '',
     }
     assert admin_status == {
         'status': 'queued', 'queue_position': 1, 'error': '', 'conversation_id': 3,
+        'partial_text': '',
     }
     assert full.status_code == HTTPStatus.TOO_MANY_REQUESTS
     assert full.get_json()['error'] == 'The Chat waiting queue is full. Try again shortly.'
     assert app.extensions['homehub_chat_queue'].wait_idle(2)
+
+
+def test_remote_chat_stream_is_private_and_saves_final_answer(app, monkeypatch):
+    first_chunk = Event()
+    finish = Event()
+    calls = []
+
+    class FakeRemoteProvider:
+        def __init__(self, endpoint, *, api_key=''):
+            calls.append((endpoint, api_key))
+
+        def complete(self, model, messages, *, on_chunk):
+            calls.append((model, messages))
+            on_chunk('First words')
+            first_chunk.set()
+            assert finish.wait(2)
+            on_chunk('First words and more')
+            return 'First words and more'
+
+    monkeypatch.setattr(app_module, 'OpenAICompatibleProvider', FakeRemoteProvider)
+    app.config['CHAT_API_KEY'] = 'private-test-key'
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        db.executemany('INSERT INTO app_settings(key,value) VALUES(?,?)', [
+            ('chat_provider', 'openai_compatible'),
+            ('chat_endpoint', 'https://agent.example.com:8443'),
+        ])
+    alice = sign_in(app, 'alice', 'alice chat password')
+    bob = sign_in(app, 'bob', 'bob chat password')
+    app.config.pop('CHAT_COMPLETION')
+    queued = submit(alice, 'Hello agent')
+    assert queued.status_code == HTTPStatus.ACCEPTED
+    request_id = queued.get_json()['request_id']
+    assert first_chunk.wait(2)
+    assert alice.get(f'/chat/requests/{request_id}').get_json()['partial_text'] == 'First words'
+    assert bob.get(f'/chat/requests/{request_id}').status_code == HTTPStatus.NOT_FOUND
+    finish.set()
+    assert wait_for_request(alice, request_id)['status'] == 'complete'
+    assert b'First words and more' in alice.get('/chat/1').data
+    assert b'Model \xc2\xb7' in alice.get('/chat/1').data
+    assert calls[0] == ('https://agent.example.com:8443', 'private-test-key')
+    assert calls[1][0] == 'gemma3:270m'
 
 
 def test_chat_requires_enabled_feature_and_a_selected_model(app):
@@ -323,6 +367,34 @@ def test_enabled_chat_data_tools_are_scoped_and_model_receives_bounded_result(ap
     assert 'Groceries' in serialized_tool_result and 'Bread' in serialized_tool_result
     assert 'Bob private' not in serialized_tool_result and 'Secret' not in serialized_tool_result
     assert len(serialized_tool_result.encode()) <= CHAT_TOOL_RESULT_BYTES_MAXIMUM
+
+
+def test_openai_compatible_tool_calls_round_trip_with_call_ids(app):
+    calls = []
+
+    def completion_with_tools(_model, messages, tools):
+        calls.append((messages, tools))
+        if len(calls) == 1:
+            return {'content': '', 'tool_calls': [{
+                'id': 'call-1', 'type': 'function',
+                'function': {'name': 'get_household_lists', 'arguments': '{}'},
+            }]}
+        return {'content': 'Done', 'tool_calls': []}
+
+    app.config['CHAT_COMPLETION_WITH_TOOLS'] = completion_with_tools
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        db.executemany('INSERT INTO app_settings(key,value) VALUES(?,?)', [
+            ('chat_provider', 'openai_compatible'),
+            ('chat_endpoint', 'https://agent.example.com:8443'),
+            ('chat_data_tools_enabled', '1'),
+        ])
+    alice = sign_in(app, 'alice', 'alice chat password')
+    queued = submit(alice, 'Use my list')
+    assert queued.status_code == HTTPStatus.ACCEPTED
+    wait_for_request(alice, queued.get_json()['request_id'])
+    assert calls[1][0][-1]['role'] == 'tool'
+    assert calls[1][0][-1]['tool_call_id'] == 'call-1'
+    assert 'lists' in calls[1][0][-1]['content']
 
 
 def test_chat_data_tools_are_omitted_when_admin_setting_is_off(app):

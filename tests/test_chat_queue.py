@@ -77,3 +77,21 @@ def test_failed_chat_request_is_reported_without_killing_queue_worker():
     assert started == ['bad', 'good']
     assert queue.status('bad')['status'] == 'failed'
     assert queue.status('good')['status'] == 'complete'
+
+
+def test_chat_queue_exposes_only_bounded_partial_text_for_running_request():
+    started = Event()
+    release = Event()
+
+    def process(job):
+        queue.update_partial(job['id'], 'First words')
+        started.set()
+        assert release.wait(2)
+
+    queue = ChatRequestQueue(process)
+    queue.enqueue({'id': 'streamed', 'is_admin': False}, max_waiting=1)
+    assert started.wait(2)
+    assert queue.status('streamed')['partial_text'] == 'First words'
+    release.set()
+    assert queue.wait_idle(2)
+    assert queue.status('streamed')['partial_text'] == ''

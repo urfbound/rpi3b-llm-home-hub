@@ -78,7 +78,7 @@ def test_chat_is_hidden_by_default_and_admin_can_configure_installed_model(app):
     assert f'value="{CHAT_PAIRS_PER_CHAT_DEFAULT}"'.encode() in page.data
     assert b'name="chat_data_tools_enabled" value="1"' in page.data
     assert b'name="chat_data_tools_enabled" value="1" checked' not in page.data
-    assert b'Keep this off until its resource budget is verified on a Raspberry Pi.' in page.data
+    assert b'Prompts and any enabled household context are sent to the selected agent node.' in page.data
     response = post(admin, chat_enabled='1', model='qwen2.5:0.5b',
                     max_queue_depth='12', pairs_per_chat='24',
                     chat_data_tools_enabled='1')
@@ -161,3 +161,40 @@ def test_chat_data_tools_setting_is_admin_controlled_and_defaults_off(app):
 
     assert response.status_code == HTTPStatus.FOUND
     assert setting_values(app)['chat_data_tools_enabled'] == '1'
+
+
+def test_admin_can_select_remote_openai_endpoint_and_discovered_model(app, monkeypatch):
+    calls = []
+    monkeypatch.setattr(app_module, 'list_openai_models',
+                        lambda endpoint, api_key='': calls.append((endpoint, api_key)) or ['agent-model'])
+    admin = sign_in(app, 'admin', 'admin chat password')
+    response = post(admin, chat_enabled='1', provider='openai_compatible',
+                    endpoint='https://agent.example.com:8443', model='agent-model',
+                    max_queue_depth='8', pairs_per_chat='16')
+    assert response.status_code == HTTPStatus.FOUND
+    assert calls == [('https://agent.example.com:8443', '')]
+    assert setting_values(app)['chat_provider'] == 'openai_compatible'
+    assert setting_values(app)['chat_endpoint'] == 'https://agent.example.com:8443'
+    page = admin.get('/admin/accounts')
+    assert b'https://agent.example.com:8443' in page.data
+    assert b'agent-model' in page.data
+
+
+def test_remote_chat_setting_rejects_invalid_endpoint_without_saving(app):
+    admin = sign_in(app, 'admin', 'admin chat password')
+    response = post(admin, chat_enabled='1', provider='openai_compatible',
+                    endpoint='http://example.com:8000', model='agent-model',
+                    max_queue_depth='8', pairs_per_chat='16')
+    assert response.status_code == HTTPStatus.BAD_REQUEST
+    assert setting_values(app) == {}
+
+
+def test_model_discovery_is_admin_only_and_uses_requested_endpoint(app, monkeypatch):
+    monkeypatch.setattr(app_module, 'list_openai_models',
+                        lambda endpoint, api_key='': [endpoint.rsplit(':', 1)[-1]])
+    admin = sign_in(app, 'admin', 'admin chat password')
+    reader = sign_in(app, 'reader', 'reader chat password')
+    path = ('/admin/chat/models?provider=openai_compatible&'
+            'endpoint=https%3A%2F%2Fagent.example.com%3A8443')
+    assert reader.get(path).status_code == HTTPStatus.FORBIDDEN
+    assert admin.get(path).get_json() == {'models': ['8443']}

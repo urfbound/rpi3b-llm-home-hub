@@ -24,7 +24,7 @@ homehub_parse_install_args() {
         cat <<'HELP'
 Usage: install.sh [OPTIONS]
 
-Install Home Hub on Raspberry Pi OS or another supported Linux system.
+Install Home Hub on Ubuntu (including a Proxmox LXC) or Raspberry Pi OS.
 
 Options:
   --no-prompt, --yes, -y       Run without interactive prompts
@@ -76,6 +76,13 @@ homehub_prompt_install_choices() {
     if [[ $answer =~ ^[Nn]$ ]]; then HOMEHUB_NO_RSS=1; fi
   fi
   return 0
+}
+
+homehub_require_systemd() {
+  if ! command -v systemctl >/dev/null 2>&1 || [[ ! -d /run/systemd/system ]]; then
+    printf 'Home Hub requires a running systemd instance. Start an Ubuntu system container with systemd enabled, then retry.\n' >&2
+    return 1
+  fi
 }
 
 homehub_set_rss_refresh_timer() {
