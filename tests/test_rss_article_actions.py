@@ -81,8 +81,17 @@ def test_rss_links_open_popunder_and_submit_done_reading_when_closed(app):
     client = signed_in(app)
     page = client.get('/rss')
     assert b'window.open(link.href' in page.data
+    assert b'popup=yes' in page.data
+    assert b'screen.availWidth' in page.data
     assert b'window.setInterval' in page.data
     assert b'doneForm.requestSubmit()' in page.data
+
+
+def test_done_reading_dialog_has_an_opaque_theme_surface():
+    from pathlib import Path
+    css = (Path(__file__).parents[1] / 'homehub' / 'static' / 'style.css').read_text()
+    assert '.rss-dialog{' in css
+    assert 'background:var(--panel)' in css.split('.rss-dialog{')[-1].split('}')[0]
 
 
 def test_deleting_a_favourite_requires_confirmation(app):

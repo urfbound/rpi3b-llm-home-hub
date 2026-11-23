@@ -23,7 +23,22 @@ function cardLabel(id, heading) {
   return id === 'calendar' ? 'Calendar' : heading;
 }
 
-if (typeof module !== 'undefined') module.exports = {restoreCardOrder, moveCard, shouldCollapseNav, navContentWidth, cardLabel};
+function previewColumns(display, gridTemplateColumns) {
+  if (display !== 'grid' || !gridTemplateColumns || gridTemplateColumns === 'none') return 1;
+  return Math.max(1, gridTemplateColumns.trim().split(/\s+/)
+    .filter(track => parseFloat(track) !== 0).length);
+}
+
+function previewAbove(viewportHeight, triggerTop, triggerBottom, panelHeight) {
+  const below = viewportHeight - triggerBottom;
+  return below < panelHeight && triggerTop > below;
+}
+
+function cardArrow(step) {
+  return step < 0 ? '\u2191' : '\u2193';
+}
+
+if (typeof module !== 'undefined') module.exports = {restoreCardOrder, moveCard, shouldCollapseNav, navContentWidth, cardLabel, previewColumns, previewAbove, cardArrow};
 
 if (typeof document !== 'undefined') (() => {
   const menu = document.querySelector('#site-menu');
@@ -102,11 +117,46 @@ if (typeof document !== 'undefined') (() => {
   );
 
   if (cards.length) {
-    const controls = document.createElement('details');
+    const controls = document.createElement('div');
     controls.className = 'card-layout-controls';
-    controls.innerHTML = '<summary>Arrange cards</summary><div class="card-layout-rows"></div>';
-    const rows = controls.querySelector('.card-layout-rows');
+    const trigger = document.createElement('button');
+    trigger.type = 'button';
+    trigger.className = 'card-layout-trigger';
+    trigger.textContent = 'Arrange cards';
+    trigger.setAttribute('aria-expanded', 'false');
+    trigger.setAttribute('aria-controls', 'card-layout-popunder');
+    const popunder = document.createElement('section');
+    popunder.className = 'card-layout-popunder';
+    popunder.id = 'card-layout-popunder';
+    popunder.setAttribute('aria-label', 'Arrange cards');
+    popunder.hidden = true;
+    const positionPreview = () => {
+      if (popunder.hidden) return;
+      const rect = trigger.getBoundingClientRect();
+      const above = previewAbove(window.innerHeight, rect.top, rect.bottom, popunder.scrollHeight);
+      popunder.classList.toggle('above', above);
+      const space = above ? rect.top : window.innerHeight - rect.bottom;
+      popunder.style.maxHeight = `${Math.max(80, Math.min(680, space - 12))}px`;
+    };
+    const heading = document.createElement('div');
+    heading.className = 'card-layout-popunder-heading';
+    heading.innerHTML = '<strong>Page layout</strong><span>Tap a card to change its width. Use the arrows to move it.</span>';
+    const close = document.createElement('button');
+    close.type = 'button';
+    close.className = 'card-layout-close';
+    close.textContent = 'Close';
+    heading.append(close);
+    popunder.append(heading);
+    controls.append(trigger, popunder);
     const rowByCard = new Map();
+    const gridByParent = new Map();
+    const updatePreview = () => {
+      parents.forEach(parent => {
+        const style = getComputedStyle(parent);
+        const columns = previewColumns(style.display, style.gridTemplateColumns);
+        gridByParent.get(parent).style.gridTemplateColumns = `repeat(${columns}, minmax(0, 1fr))`;
+      });
+    };
     const updateArrows = () => {
       cards.forEach(card => {
         const siblings = [...card.parentElement.children].filter(item => cards.includes(item));
@@ -115,11 +165,18 @@ if (typeof document !== 'undefined') (() => {
         row.children[2].disabled = siblings.at(-1) === card;
       });
     };
+    parents.forEach(parent => {
+      const preview = document.createElement('div');
+      preview.className = 'card-layout-preview-grid';
+      if (getComputedStyle(parent).display !== 'grid') preview.classList.add('card-layout-preview-stack');
+      gridByParent.set(parent, preview);
+      popunder.append(preview);
+    });
     cards.forEach(card => {
       const label = cardLabel(card.id,
         card.querySelector('h2, h1')?.textContent.trim() || `Card ${card.dataset.cardKey}`);
       const row = document.createElement('div');
-      row.className = 'card-width-control';
+      row.className = 'card-layout-preview-card';
       row.dataset.cardKey = cardId(card);
       rowByCard.set(card, row);
       const width = document.createElement('button');
@@ -128,6 +185,7 @@ if (typeof document !== 'undefined') (() => {
         const wide = card.classList.contains('card-wide');
         width.textContent = `${label}: ${wide ? 'Full width' : 'Standard width'}`;
         width.setAttribute('aria-pressed', String(wide));
+        row.classList.toggle('card-wide', wide);
       };
       updateWidth();
       width.addEventListener('click', () => {
@@ -135,31 +193,54 @@ if (typeof document !== 'undefined') (() => {
         layout[cardId(card)] = wide ? 'wide' : 'standard';
         localStorage.setItem(key, JSON.stringify(layout));
         updateWidth();
+        updatePreview();
+        positionPreview();
       });
       row.append(width);
-      for (const [arrow, step, direction] of [['↑', -1, 'up'], ['↓', 1, 'down']]) {
+      for (const [step, direction] of [[-1, 'up'], [1, 'down']]) {
         const move = document.createElement('button');
         move.type = 'button';
         move.className = 'card-order-arrow';
-        move.textContent = arrow;
+        move.textContent = cardArrow(step);
         move.setAttribute('aria-label', `Move ${label} ${direction}`);
         move.addEventListener('click', () => {
           const parent = card.parentElement;
           const siblings = [...parent.children].filter(item => cards.includes(item));
           const next = moveCard(siblings.map(cardId), cardId(card), step);
           placeCards(parent, siblings, next);
-          placeCards(rows, siblings.map(item => rowByCard.get(item)), next);
+          placeCards(gridByParent.get(parent), siblings.map(item => rowByCard.get(item)), next);
           layout.__orders ||= {};
           layout.__orders[groupId(parent)] = next;
           localStorage.setItem(key, JSON.stringify(layout));
           updateArrows();
+          updatePreview();
+          positionPreview();
           move.focus();
         });
         row.append(move);
       }
-      rows.append(row);
+      gridByParent.get(card.parentElement).append(row);
     });
     updateArrows();
+    updatePreview();
+    const hidePreview = () => {
+      popunder.hidden = true;
+      trigger.setAttribute('aria-expanded', 'false');
+    };
+    trigger.addEventListener('click', () => {
+      popunder.hidden = !popunder.hidden;
+      trigger.setAttribute('aria-expanded', String(!popunder.hidden));
+      if (!popunder.hidden) { updatePreview(); positionPreview(); }
+    });
+    close.addEventListener('click', () => { hidePreview(); trigger.focus(); });
+    document.addEventListener('click', event => {
+      if (!controls.contains(event.target)) hidePreview();
+    });
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape' && !popunder.hidden) { hidePreview(); trigger.focus(); }
+    });
+    window.addEventListener('resize', () => { updatePreview(); positionPreview(); });
+    window.addEventListener('scroll', positionPreview, {passive: true});
     main.append(controls);
   }
 
