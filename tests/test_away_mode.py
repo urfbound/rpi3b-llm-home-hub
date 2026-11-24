@@ -61,7 +61,7 @@ def test_away_mode_snapshot_contains_only_items_visible_to_user(client):
 
 def test_shopping_page_exposes_away_mode_state_for_cached_items(client):
     login(client)
-    response = client.get('/')
+    response = client.get('/lists')
 
     assert response.status_code == HTTPStatus.OK
     assert b'data-away-list-id="1"' in response.data
@@ -156,7 +156,7 @@ def test_away_mode_offline_shell_and_service_worker_are_available(client):
     assert worker.status_code == HTTPStatus.OK
     assert worker.headers['Service-Worker-Allowed'] == '/'
     assert b'offline.html' in worker.data
-    assert b"homehub-away-v3" in worker.data
+    assert b"homehub-away-v4" in worker.data
 
 
 def test_logout_offers_to_clear_saved_offline_data_and_warns_about_pending_changes(client):

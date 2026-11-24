@@ -72,7 +72,7 @@ def test_weekend_card_covers_friday_through_sunday_with_event_context(app):
     bob = sign_in(app, 'bob', 'bob weekend password')
 
     page = bob.get('/')
-    card = re.search(r'<section class="panel home-weekend".*?(?=<section class="panel" id="calendar")',
+    card = re.search(r'<section class="panel home-weekend".*?(?=<section class="panel calendar-panel" id="calendar")',
                      page.data.decode(), re.S).group()
 
     assert 'This weekend' in card
@@ -98,9 +98,9 @@ def test_weekend_card_hides_private_details_and_just_my_events_filters(app):
 
     all_events = bob.get('/')
     just_mine = bob.get('/?just_my_events=1')
-    all_card = re.search(r'<section class="panel home-weekend".*?(?=<section class="panel" id="calendar")',
+    all_card = re.search(r'<section class="panel home-weekend".*?(?=<section class="panel calendar-panel" id="calendar")',
                          all_events.data.decode(), re.S).group()
-    mine_card = re.search(r'<section class="panel home-weekend".*?(?=<section class="panel" id="calendar")',
+    mine_card = re.search(r'<section class="panel home-weekend".*?(?=<section class="panel calendar-panel" id="calendar")',
                           just_mine.data.decode(), re.S).group()
 
     assert 'Bob party' in all_card
@@ -140,7 +140,7 @@ def test_weekend_card_on_saturday_stops_at_sunday(app, monkeypatch):
     bob = sign_in(app, 'bob', 'bob weekend password')
 
     page = bob.get('/')
-    card = re.search(r'<section class="panel home-weekend".*?(?=<section class="panel" id="calendar")',
+    card = re.search(r'<section class="panel home-weekend".*?(?=<section class="panel calendar-panel" id="calendar")',
                      page.data.decode(), re.S).group()
 
     assert 'Friday already passed' not in card

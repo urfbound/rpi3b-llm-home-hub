@@ -58,6 +58,8 @@ def test_games_landing_puts_daily_play_before_yesterdays_solutions(game_app):
     alex = sign_in(game_app, 'alex')
     page = alex.get('/games').data
     assert page.index(b'id="word-title"') < page.index(b"Yesterday's solutions")
+    assert page.index(b'Household scoreboard') < page.index(b'aria-label="Games"')
+    assert b'0 of 6 daily puzzles finished' in page
 
 
 def test_games_hub_is_reachable_from_main_navigation_and_stays_active_on_game_pages(game_app):

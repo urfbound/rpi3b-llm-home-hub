@@ -137,6 +137,7 @@ def test_creator_can_edit_event_but_other_user_cannot_and_admin_can_delete(app):
     assert edited.status_code == HTTPStatus.FOUND
     deleted = admin.post('/events/1/delete', data={'_csrf': csrf(admin)})
     assert deleted.status_code == HTTPStatus.FOUND
+    assert deleted.headers['Location'] == '/calendar#calendar'
     with sqlite3.connect(app.config['DATABASE']) as db:
         assert db.execute('SELECT COUNT(*) FROM events').fetchone()[0] == 0
 

@@ -38,7 +38,14 @@ function cardArrow(step) {
   return step < 0 ? '\u2191' : '\u2193';
 }
 
-if (typeof module !== 'undefined') module.exports = {restoreCardOrder, moveCard, shouldCollapseNav, navContentWidth, cardLabel, previewColumns, previewAbove, cardArrow};
+function recipeMatches(title, visibility, ownerId, viewerId, query, filter) {
+  const nameMatches = title.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase());
+  return nameMatches && (filter === 'all' ||
+    filter === 'shared' && visibility === 'shared' ||
+    filter === 'mine' && Number(ownerId) === Number(viewerId));
+}
+
+if (typeof module !== 'undefined') module.exports = {restoreCardOrder, moveCard, shouldCollapseNav, navContentWidth, cardLabel, previewColumns, previewAbove, cardArrow, recipeMatches};
 
 if (typeof document !== 'undefined') (() => {
   const menu = document.querySelector('#site-menu');
@@ -48,6 +55,24 @@ if (typeof document !== 'undefined') (() => {
   const crumbPage = document.querySelector('#breadcrumb-page');
   const main = document.querySelector('main[data-user-id]');
   if (!main || !main.dataset.userId) return;
+
+  const recipeSearch = main.querySelector('#recipe-search');
+  const recipeFilter = main.querySelector('#recipe-filter');
+  if (recipeSearch && recipeFilter) {
+    const cards = [...main.querySelectorAll('.recipe-cards li[data-owner-id]')];
+    const empty = main.querySelector('#recipe-search-empty');
+    const updateRecipes = () => {
+      let count = 0;
+      cards.forEach(card => {
+        card.hidden = !recipeMatches(card.textContent, card.dataset.visibility,
+          card.dataset.ownerId, main.dataset.userId, recipeSearch.value, recipeFilter.value);
+        if (!card.hidden) count += 1;
+      });
+      if (empty) empty.hidden = count !== 0;
+    };
+    recipeSearch.addEventListener('input', updateRecipes);
+    recipeFilter.addEventListener('change', updateRecipes);
+  }
 
   const returnKey = `homehub-return-section:${main.dataset.userId}`;
   try {
@@ -74,8 +99,7 @@ if (typeof document !== 'undefined') (() => {
     crumbTab.textContent = activeTab.textContent.trim();
     crumbTab.href = activeTab.href;
   }
-  if (title && crumbPage && activeTab?.getAttribute('href') !== '/' &&
-      title.textContent.trim() !== crumbTab?.textContent.trim()) {
+  if (title && crumbPage && title.textContent.trim() !== crumbTab?.textContent.trim()) {
     crumbPage.textContent = ` › ${title.textContent.trim()}`;
   }
 

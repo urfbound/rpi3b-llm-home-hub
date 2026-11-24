@@ -144,7 +144,7 @@ def test_recipe_detail_and_library_show_owner_controls(users):
 
     detail = bob.get(f'/recipes/{recipe_id}')
     edit_page = bob.get(f'/recipes/{recipe_id}/edit')
-    library = bob.get('/')
+    library = bob.get('/recipes')
 
     assert b'Edit recipe' in detail.data
     assert b'Delete recipe' in detail.data

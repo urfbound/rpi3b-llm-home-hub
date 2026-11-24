@@ -71,11 +71,12 @@ def test_todo_creation_saves_optional_due_date_and_assignee(client):
     assert row == ('2026-10-25', bob_id)
 
 
-def test_list_picker_opens_selection_immediately(client):
+def test_list_rail_opens_selection_immediately(client):
     sign_in(client)
     _, _, list_id, _ = setup_todo(client)
     page = client.get(f'/lists?kind=todo&list_id={list_id}').data
-    assert b'<select id="list-picker" name="list_id" onchange="this.form.requestSubmit()">' in page
+    assert f'href="/lists?kind=todo&amp;list_id={list_id}" aria-current="page"'.encode() in page
+    assert b'id="list-picker"' not in page
 
 
 @pytest.mark.parametrize('fields', [
@@ -164,7 +165,7 @@ def test_todo_list_shows_assignment_due_date_and_edit_control(client):
                    (bob_id, item_id))
         db.commit()
 
-    page = client.get(f'/?kind=todo&list_id={list_id}')
+    page = client.get(f'/lists?kind=todo&list_id={list_id}')
 
     assert b'Assigned to Bob' in page.data
     assert b'2026-10-25' in page.data
@@ -183,7 +184,7 @@ def test_private_todo_assignment_is_limited_to_list_members(client):
     bob = client.application.test_client()
     sign_in(bob, 'bob', 'bob test password')
 
-    page = bob.get(f'/?kind=todo&list_id={list_id}')
+    page = bob.get(f'/lists?kind=todo&list_id={list_id}')
     assignment_options = page.data.split(b'<select name="assignee_id">', 1)[1].split(b'</select>', 1)[0]
     assert b'Carol' not in assignment_options
     response = bob.post('/todo', data={
