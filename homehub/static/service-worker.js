@@ -1,4 +1,4 @@
-const CACHE_NAME = 'homehub-away-v4';
+const CACHE_NAME = 'homehub-away-v5';
 const SHELL_FILES = [
   '/offline.html',
   '/static/style.css',

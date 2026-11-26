@@ -2,7 +2,7 @@
 {% block content %}
 <section class="panel recipe-detail">
   <div class="recipe-detail-actions">
-    <a href="{{ url_for('index') }}#recipes">← Recipes</a>
+    <a href="{{ url_for('index') }}#recipes"><span class="icon-arrow icon-arrow-left" aria-hidden="true"></span> Recipes</a>
     {% if can_edit %}<a class="button" href="{{ url_for('edit_recipe', recipe_id=recipe['id']) }}">Edit recipe</a>{% endif %}
     {% if can_delete %}<button type="button" class="danger" onclick="document.getElementById('delete-recipe-dialog').showModal()">Delete recipe</button>{% endif %}
   </div>

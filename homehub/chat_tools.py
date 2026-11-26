@@ -39,24 +39,9 @@ _TOOL_DEFINITIONS = [
     {
         'type': 'function',
         'function': {
-            'name': 'get_saved_articles',
-            'description': 'Read saved household articles and this signed-in user’s personal-feed articles.',
-            'parameters': {'type': 'object', 'properties': {}, 'additionalProperties': False},
-        },
-    },
-    {
-        'type': 'function',
-        'function': {
-            'name': 'get_system_status',
-            'description': 'Read the latest system performance sample if household visibility allows it.',
-            'parameters': {'type': 'object', 'properties': {}, 'additionalProperties': False},
-        },
-    },
-    {
-        'type': 'function',
-        'function': {
-            'name': 'get_admin_overview',
-            'description': 'For admins only: read a small overview of household configuration, without secrets.',
+            'name': 'get_home_hub_datetime',
+            'description': ('Read the current date and local time from the Home Hub host. '
+                            'Use this instead of guessing for current date/time questions.'),
             'parameters': {'type': 'object', 'properties': {}, 'additionalProperties': False},
         },
     },
@@ -74,6 +59,14 @@ _TOOL_DEFINITIONS = [
                 'required': ['start_date', 'end_date'],
                 'additionalProperties': False,
             },
+        },
+    },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'get_my_chat_history',
+            'description': 'Read bounded history from only this signed-in user’s saved chats, including for admins.',
+            'parameters': {'type': 'object', 'properties': {}, 'additionalProperties': False},
         },
     },
 ]
@@ -96,8 +89,7 @@ class ChatDataTools:
     def call(self, name, arguments):
         if not isinstance(name, str) or name not in {
                 'get_household_lists', 'get_calendar_events', 'get_household_recipes',
-                'get_weather_forecast', 'get_saved_articles', 'get_system_status',
-                'get_admin_overview'}:
+                'get_weather_forecast', 'get_my_chat_history', 'get_home_hub_datetime'}:
             raise ChatToolError('That read-only tool is not available.')
         if not isinstance(arguments, dict):
             raise ChatToolError('Tool arguments must be an object.')
@@ -111,8 +103,6 @@ class ChatDataTools:
             ).fetchone()
             if requester is None or requester['account_kind'] == 'house':
                 raise ChatToolError('This account cannot use Chat data tools.')
-            if name == 'get_admin_overview' and requester['role'] != 'admin':
-                raise ChatToolError('This read-only overview is available to administrators only.')
             if name != 'get_calendar_events' and arguments:
                 raise ChatToolError('This tool does not accept arguments.')
             if name == 'get_household_lists':
@@ -123,11 +113,15 @@ class ChatDataTools:
                 return self._recipes(db, requester)
             if name == 'get_weather_forecast':
                 return self._weather(db)
-            if name == 'get_saved_articles':
-                return self._articles(db, requester)
-            if name == 'get_system_status':
-                return self._system_status(db, requester)
-            return self._admin_overview(db)
+            if name == 'get_my_chat_history':
+                return self._chat_history(db, requester)
+            if name == 'get_home_hub_datetime':
+                local_now = datetime.now().astimezone()
+                return {
+                    'local_datetime': local_now.isoformat(),
+                    'timezone': local_now.tzname() or 'local',
+                }
+            raise ChatToolError('That read-only tool is not available.')
 
     def _lists(self, db, requester):
         if requester['role'] == 'admin':
@@ -376,76 +370,67 @@ class ChatDataTools:
                 break
         return result
 
-    def _articles(self, db, requester):
-        articles = db.execute(
-            'SELECT a.title,a.url,a.summary,a.published,f.title AS feed_title,'
-            'COALESCE(s.is_read,0) AS is_read,COALESCE(s.is_favorite,0) AS is_favorite '
-            'FROM rss_articles a JOIN rss_feeds f ON f.id=a.feed_id '
-            'LEFT JOIN rss_article_states s ON s.article_id=a.id AND s.user_id=? '
-            'WHERE s.deleted_at IS NULL AND (f.scope=? OR (f.scope=? AND f.owner_user_id=?)) '
-            'ORDER BY f.sort_order,f.id,a.first_seen_at DESC,a.id DESC LIMIT ?',
-            (requester['id'], 'household', 'personal', requester['id'],
-             limits.CHAT_TOOL_RESULT_ROWS_MAXIMUM + 1),
+    def _chat_history(self, db, requester):
+        conversations = db.execute(
+            'SELECT id,title,updated_at FROM chat_conversations WHERE owner_user_id=? '
+            'ORDER BY updated_at DESC,id DESC LIMIT ?',
+            (requester['id'], limits.CHAT_HISTORY_MAXIMUM + 1),
         ).fetchall()
-        result = {'articles': [], 'row_count': 0, 'truncated': False}
-        if len(articles) > limits.CHAT_TOOL_RESULT_ROWS_MAXIMUM:
-            result['truncated'] = True
-            articles = articles[:limits.CHAT_TOOL_RESULT_ROWS_MAXIMUM]
-        for article in articles:
-            result['articles'].append({
-                'feed': article['feed_title'][:limits.RSS_FEED_TITLE_MAXIMUM],
-                'title': article['title'][:limits.RSS_ARTICLE_TITLE_MAXIMUM],
-                'url': (article['url'] or '')[:limits.RSS_ARTICLE_URL_MAXIMUM],
-                'summary': article['summary'][:limits.RSS_ARTICLE_BODY_MAXIMUM],
-                'published': article['published'][:limits.RSS_ARTICLE_DATE_MAXIMUM],
-                'read': bool(article['is_read']), 'favorite': bool(article['is_favorite']),
-            })
+        result = {
+            'conversations': [], 'row_count': 0,
+            'truncated': len(conversations) > limits.CHAT_HISTORY_MAXIMUM,
+        }
+        for conversation in conversations[:limits.CHAT_HISTORY_MAXIMUM]:
+            if result['row_count'] >= limits.CHAT_TOOL_RESULT_ROWS_MAXIMUM:
+                result['truncated'] = True
+                break
+            record = {
+                'title': conversation['title'][:limits.LIST_TITLE_MAXIMUM],
+                'updated_at': conversation['updated_at'], 'pairs': [],
+            }
+            result['conversations'].append(record)
             result['row_count'] += 1
             if _serialized_size(result) > limits.CHAT_TOOL_RESULT_BYTES_MAXIMUM:
-                result['articles'].pop()
+                result['conversations'].pop()
                 result['row_count'] -= 1
                 result['truncated'] = True
                 break
-        return result
 
-    def _system_status(self, db, requester):
-        visible = db.execute(
-            "SELECT value FROM app_settings WHERE key='system_metrics_visible_to_all'"
-        ).fetchone()
-        if requester['role'] != 'admin' and visible and visible['value'] == '0':
-            raise ChatToolError('System status is not available to this account.')
-        row = db.execute(
-            'SELECT sampled_at,cpu_percent,ram_percent,temperature_c,disk_used_bytes,'
-            'disk_total_bytes,app_rss_bytes FROM system_metrics ORDER BY sampled_at DESC LIMIT 1'
-        ).fetchone()
-        if row is None:
-            return {'available': False, 'row_count': 0, 'truncated': False}
-        result = {'available': True, **dict(row), 'row_count': 1, 'truncated': False}
-        if _serialized_size(result) > limits.CHAT_TOOL_RESULT_BYTES_MAXIMUM:
-            raise ChatToolError('The system status result exceeds the size limit.')
-        return result
-
-    def _admin_overview(self, db):
-        accounts = db.execute(
-            'SELECT COUNT(*) AS total,COALESCE(SUM(active=1),0) AS active,'
-            "COALESCE(SUM(role='admin' AND active=1),0) AS admins FROM users"
-        ).fetchone()
-        allowed_settings = (
-            'chat_enabled', 'chat_model', 'weather_outbound_enabled',
-            'backup_interval_days', 'calendar_timezone',
-        )
-        settings = {}
-        for key in allowed_settings:
-            row = db.execute('SELECT value FROM app_settings WHERE key=?', (key,)).fetchone()
-            if row:
-                settings[key] = row['value'][:128]
-        result = {
-            'accounts': {'total': accounts['total'], 'active': accounts['active'],
-                         'active_admins': accounts['admins']},
-            'settings': settings, 'row_count': 1, 'truncated': False,
-        }
-        if _serialized_size(result) > limits.CHAT_TOOL_RESULT_BYTES_MAXIMUM:
-            raise ChatToolError('The admin overview exceeds the size limit.')
+            remaining = limits.CHAT_TOOL_RESULT_ROWS_MAXIMUM - result['row_count']
+            pairs = db.execute(
+                'SELECT substr(prompt,1,?) AS prompt,'
+                'substr(response,1,?) AS response,created_at '
+                'FROM chat_pairs WHERE conversation_id=? '
+                'ORDER BY position DESC,id DESC LIMIT ?',
+                (limits.CHAT_HISTORY_TEXT_MAXIMUM + 1,
+                 limits.CHAT_HISTORY_TEXT_MAXIMUM + 1,
+                 conversation['id'], remaining + 1),
+            ).fetchall()
+            if len(pairs) > remaining:
+                result['truncated'] = True
+                pairs = pairs[:remaining]
+            stop = False
+            for pair in pairs:
+                prompt = pair['prompt'][:limits.CHAT_HISTORY_TEXT_MAXIMUM]
+                response = pair['response'][:limits.CHAT_HISTORY_TEXT_MAXIMUM]
+                record['pairs'].append({
+                    'prompt': prompt,
+                    'response': response,
+                    'created_at': pair['created_at'],
+                })
+                result['row_count'] += 1
+                if (len(pair['prompt']) > limits.CHAT_HISTORY_TEXT_MAXIMUM
+                        or len(pair['response']) > limits.CHAT_HISTORY_TEXT_MAXIMUM):
+                    result['truncated'] = True
+                if _serialized_size(result) > limits.CHAT_TOOL_RESULT_BYTES_MAXIMUM:
+                    record['pairs'].pop()
+                    result['row_count'] -= 1
+                    result['truncated'] = True
+                    stop = True
+                    break
+            record['pairs'].reverse()
+            if stop:
+                break
         return result
 
     def _calendar(self, db, requester, arguments):

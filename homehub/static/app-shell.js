@@ -35,7 +35,7 @@ function previewAbove(viewportHeight, triggerTop, triggerBottom, panelHeight) {
 }
 
 function cardArrow(step) {
-  return step < 0 ? '\u2191' : '\u2193';
+  return step < 0 ? 'up' : 'down';
 }
 
 function recipeMatches(title, visibility, ownerId, viewerId, query, filter) {
@@ -100,7 +100,7 @@ if (typeof document !== 'undefined') (() => {
     crumbTab.href = activeTab.href;
   }
   if (title && crumbPage && title.textContent.trim() !== crumbTab?.textContent.trim()) {
-    crumbPage.textContent = ` › ${title.textContent.trim()}`;
+    crumbPage.textContent = ` > ${title.textContent.trim()}`;
   }
 
   const key = `homehub-card-layout:${main.dataset.userId}:${location.pathname}`;
@@ -225,7 +225,10 @@ if (typeof document !== 'undefined') (() => {
         const move = document.createElement('button');
         move.type = 'button';
         move.className = 'card-order-arrow';
-        move.textContent = cardArrow(step);
+        const arrow = document.createElement('span');
+        arrow.className = `icon-arrow icon-arrow-${cardArrow(step)}`;
+        arrow.setAttribute('aria-hidden', 'true');
+        move.append(arrow);
         move.setAttribute('aria-label', `Move ${label} ${direction}`);
         move.addEventListener('click', () => {
           const parent = card.parentElement;

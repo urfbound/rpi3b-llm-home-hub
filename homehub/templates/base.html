@@ -4,9 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Home Hub</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v=4) }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v=5) }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='contacts-sticky.css') }}">
-  <script src="{{ url_for('static', filename='app-shell.js', v=4) }}" defer></script>
+  <script src="{{ url_for('static', filename='app-shell.js', v=5) }}" defer></script>
   <script>
     document.documentElement.dataset.theme=localStorage.getItem('theme')||'light';
     function toggleTheme(){const t=document.documentElement.dataset.theme==='light'?'dark':'light';document.documentElement.dataset.theme=t;localStorage.setItem('theme',t)}
@@ -41,7 +41,7 @@
     {% elif request.path.startswith('/games/') %}{% set parent.label = 'Games' %}{% set parent.href = '/games' %}
     {% elif request.path.startswith('/admin/') %}{% set parent.label = 'Admin' %}{% set parent.href = url_for('accounts') %}
     {% endif %}
-    <nav class="breadcrumb-nav" aria-label="Breadcrumb"><a href="{{ url_for('index') }}">Home Hub</a><span aria-hidden="true">›</span><a id="breadcrumb-tab" href="{{ parent.href }}">{{ parent.label }}</a><span id="breadcrumb-page"></span></nav>
+    <nav class="breadcrumb-nav" aria-label="Breadcrumb"><a href="{{ url_for('index') }}">Home Hub</a><span aria-hidden="true">&gt;</span><a id="breadcrumb-tab" href="{{ parent.href }}">{{ parent.label }}</a><span id="breadcrumb-page"></span></nav>
     {% endif %}
     {% endif %}
     <div class="toolbar">

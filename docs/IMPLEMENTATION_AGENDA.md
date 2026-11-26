@@ -77,6 +77,13 @@ approves the completed change.
   Static assets refresh online and fall back to cache offline. Local browser
   and automated verification are complete; review these changes on the LXC
   after deployment, especially with household data and a phone browser.
+- **Pre-release bug-fix slice (unmerged):** Chat exposes the Home Hub host's
+  local date and time; invalid Word Ladder guesses stay in the game with
+  feedback; Word Garden and Wumpus preserve board anchors, and the Wumpus map
+  centers the occupied room. Navigation and game arrows use CSS-drawn icons,
+  and Admin panels have consistent separation. The full Python and Node suites
+  pass; Admin spacing and rendered arrows were checked at desktop and mobile
+  widths.
 - **Design reviews:** Account administration, Home, Lists, Recipes, Calendar,
   Weather, RSS, Games, and Chat are approved. App-only and app-plus-model Pi
   profiles are recorded. Chat answer-quality review and manual browser review
@@ -164,8 +171,9 @@ approves the completed change.
 5. Phone away-mode caching and checkmark-only sync by stable item ID are
    implemented and merged: pending changes persist across reconnects, while
    sync rechecks login and list permissions and reports concurrent edits and
-   deleted items for review. Browser QA remains for the service-worker/offline
-   flow on an HTTPS phone browser.
+   deleted items for review. The offline shell now initializes its saved-list
+   state and refreshes its cached copy after deployment. Browser QA remains for
+   the service-worker/offline flow on an HTTPS phone browser.
 
 ### Recipes
 
@@ -367,10 +375,12 @@ approves the completed change.
   one lazy in-process worker, prioritizes admins among waiting requests, shows
   queue positions, and records successful answers with the model name. Ollama
   requests use a 2048-token context and unload the model after each response.
-  Read-only list and calendar tools are implemented behind an admin toggle
-  that defaults off. They enforce requester visibility, a 31-day calendar
-  window, three tool calls per request, and 100-row/16-KiB result caps. The
-  Combined Pi profiling is recorded in
+  Current work narrows the opt-in tool catalog to lists, recipes, calendar
+  events, cached weather, and the Home Hub host's local date and time. Data
+  tools enforce requester permissions, a 31-day calendar window, three tool
+  calls per request, and 100-row/16-KiB result caps. The history tool returns
+  bounded recent chats owned only by the requester, including when that
+  requester is an admin. Combined Pi profiling is recorded in
   [CHAT_PI_BENCHMARK.md](CHAT_PI_BENCHMARK.md). Qwen2.5 0.5b retained 244 MiB
   available with the app running and is the current Pi 3B choice for tools;
   Qwen3 0.6b dropped to 32 MiB and is not recommended on 1 GB hardware.

@@ -13,6 +13,7 @@ from . import game_ladder, game_grids, game_wumpus
 
 games = Blueprint('games', __name__)
 INVALID_WORD_NOTICE = 'Enter a valid five-letter word from the offline word list.'
+INVALID_LADDER_MOVE_NOTICE = 'Choose a listed four-letter word that changes one letter.'
 
 WORD_BANK = (
     'APPLE', 'BLOOM', 'CLOUD', 'DREAM', 'EMBER', 'FLAME', 'GRAPE', 'HEART',
@@ -274,7 +275,7 @@ def daily_guess():
     guess = request.form.get('guess', '').strip().upper()
     if not re.fullmatch(r'[A-Z]{5}', guess) or guess not in VALID_WORDS:
         flash(INVALID_WORD_NOTICE)
-        return redirect(url_for('games.page'))
+        return redirect(url_for('games.page', _anchor='word-garden-board'))
     attempt = _attempt(db, g.user['id'], today)
     if attempt is None:
         db.execute("INSERT INTO game_attempts(user_id,game,mode,puzzle_date,answer) VALUES(?,'word','daily',?,?)",
@@ -282,7 +283,7 @@ def daily_guess():
         db.commit()
         attempt = _attempt(db, g.user['id'], today)
     _submit_guess(db, attempt, guess)
-    return redirect(url_for('games.page'))
+    return redirect(url_for('games.page', _anchor='word-garden-board'))
 
 
 @games.post('/games/word/practice')
@@ -323,7 +324,8 @@ def practice_guess(attempt_id):
         return unauthorized
     db, _ = _context()
     _submit_guess(db, _private_practice(db, attempt_id), request.form.get('guess', ''))
-    return redirect(url_for('games.practice_page', attempt_id=attempt_id))
+    return redirect(url_for('games.practice_page', attempt_id=attempt_id,
+                            _anchor='word-garden-board'))
 
 
 def _ladder_attempt(db, day):
@@ -398,6 +400,12 @@ def _ladder_move(db, attempt, word):
     db.commit()
 
 
+def _is_ladder_move(word, previous):
+    return (re.fullmatch(r'[A-Z]{4}', word) is not None
+            and word in game_ladder.WORDS
+            and game_ladder.one_letter_apart(previous, word))
+
+
 @games.post('/games/ladder/move')
 def ladder_move():
     unauthorized = _require_user()
@@ -410,8 +418,9 @@ def ladder_move():
     if attempt is not None and attempt['status'] != 'playing':
         abort(HTTPStatus.CONFLICT)
     start = json.loads(attempt['state'])['path'][-1] if attempt else game_ladder.daily_puzzle(today)[0]
-    if word not in game_ladder.WORDS or not game_ladder.one_letter_apart(start, word):
-        abort(HTTPStatus.BAD_REQUEST)
+    if not _is_ladder_move(word, start):
+        flash(INVALID_LADDER_MOVE_NOTICE)
+        return redirect(url_for('games.ladder_page'))
     if attempt is None:
         attempt = _create_ladder(db, today, 'daily')
     _ladder_move(db, attempt, word)
@@ -466,7 +475,13 @@ def ladder_practice_move(attempt_id):
     if unauthorized:
         return unauthorized
     db, _ = _context()
-    _ladder_move(db, _ladder_practice(db, attempt_id), request.form.get('word', ''))
+    attempt = _ladder_practice(db, attempt_id)
+    word = request.form.get('word', '').strip().upper()
+    path = json.loads(attempt['state'])['path']
+    if not _is_ladder_move(word, path[-1]):
+        flash(INVALID_LADDER_MOVE_NOTICE)
+        return redirect(url_for('games.ladder_practice_page', attempt_id=attempt_id))
+    _ladder_move(db, attempt, word)
     return redirect(url_for('games.ladder_practice_page', attempt_id=attempt_id))
 
 
@@ -730,7 +745,7 @@ def _wumpus_render(db, today, attempt=None, practice=False):
         if state['room'] == game['placements'][1]:
             death = ('🍽️', 'The Wumpus ate you.')
         elif state['room'] in game['placements'][2:4]:
-            death = ('⬇️', 'You fell into a pit.')
+            death = ('P', 'You fell into a pit.')
     map_rooms = []
     for room, (x, y, z) in points.items():
         clues = (['Bats carried you away.'] if room in bat_rooms and room != state['room']
@@ -844,7 +859,7 @@ def wumpus_action():
     if attempt is None:
         attempt = _create_wumpus(db, today, 'daily', game)
     _wumpus_action(db, attempt, action, rooms)
-    return redirect(url_for('games.wumpus_page'))
+    return redirect(url_for('games.wumpus_page', _anchor='wumpus-game-board'))
 
 
 @games.post('/games/wumpus/practice')
@@ -883,7 +898,8 @@ def wumpus_practice_action(attempt_id):
         abort(HTTPStatus.CONFLICT)
     action, rooms = _wumpus_request(json.loads(attempt['state'])['room'])
     _wumpus_action(db, attempt, action, rooms)
-    return redirect(url_for('games.wumpus_practice_page', attempt_id=attempt_id))
+    return redirect(url_for('games.wumpus_practice_page', attempt_id=attempt_id,
+                            _anchor='wumpus-game-board'))
 
 
 @games.get('/games/<game>/archive/<day_text>')
@@ -907,7 +923,7 @@ def archive(game, day_text):
         solution = daily_answer(day)
     elif game == 'ladder':
         start, target = game_ladder.daily_puzzle(day)
-        solution = ' → '.join(game_ladder.shortest_path(start, target))
+        solution = ' -> '.join(game_ladder.shortest_path(start, target))
     elif game == 'wumpus':
         solution = f"The Wumpus was in room {game_wumpus.daily_map(day)['placements'][1]}."
     else:

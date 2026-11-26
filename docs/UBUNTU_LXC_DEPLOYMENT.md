@@ -46,7 +46,11 @@ when a bearer token crosses the network.
 
 Chat remains disabled by default. Its optional data tools remain off by
 default and enforce the signed-in user's read permissions and result limits.
-Enabling them sends the permitted result to the selected agent node. The
+They cover lists, recipes, calendar events, and cached weather; a separate
+clock tool returns the Home Hub host's local date and time. The chat-history
+tool can read only the requesting user's own chats, including when the
+requester is an admin.
+Enabling the tools sends permitted results to the selected agent node. The
 remote node must support OpenAI-style function calls or Ollama tools to use
 that feature. No Chat tool can modify household data.
 

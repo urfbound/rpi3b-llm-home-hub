@@ -119,7 +119,7 @@
   <form method="post" action="{{ url_for('update_chat_settings') }}" class="chat-settings-form">
     <input type="hidden" name="_csrf" value="{{ csrf_token }}">
     <label class="system-status-check"><input type="checkbox" name="chat_enabled" value="1" {% if chat_enabled %}checked{% endif %}> Enable Chat</label>
-    <label class="system-status-check"><input type="checkbox" name="chat_data_tools_enabled" value="1" {% if chat_data_tools_enabled %}checked{% endif %}> Allow read-only list and calendar context</label>
+    <label class="system-status-check"><input type="checkbox" name="chat_data_tools_enabled" value="1" {% if chat_data_tools_enabled %}checked{% endif %}> Allow read-only Chat data tools</label>
     <label>Agent API<select name="provider" id="chat-provider">
       <option value="local_ollama" {% if chat_provider == 'local_ollama' %}selected{% endif %}>Ollama on this server</option>
       <option value="remote_ollama" {% if chat_provider == 'remote_ollama' %}selected{% endif %}>Ollama on another node</option>
@@ -134,7 +134,7 @@
     <p id="chat-model-discovery-status" class="muted" role="status">{% if chat_models_error %}{{ chat_models_error }}{% endif %}</p>
     <label>Maximum waiting requests<input type="number" name="max_queue_depth" min="{{ limits.CHAT_MAX_QUEUE_DEPTH_MINIMUM }}" max="{{ limits.CHAT_MAX_QUEUE_DEPTH_MAXIMUM }}" value="{{ chat_max_queue_depth }}" required></label>
     <label>Prompt-and-response pairs per chat<input type="number" name="pairs_per_chat" min="{{ limits.CHAT_PAIRS_PER_CHAT_MINIMUM }}" max="{{ limits.CHAT_PAIRS_PER_CHAT_MAXIMUM }}" value="{{ chat_pairs_per_chat }}" required></label>
-    <p class="muted">Chat stays hidden until enabled. Read-only data access is off by default; when enabled, Chat can read only lists and events visible to the requesting user. Each request is limited to 3 tool calls, 100 rows and 16 KiB per result. No data can be changed through Chat. Prompts and any enabled household context are sent to the selected agent node.</p>
+    <p class="muted">Chat stays hidden until enabled. Read-only data tools are off by default. When enabled, Chat can read lists, recipes, calendar events, and cached weather within the requesting user's permissions. It can also read the Home Hub host's local date and time. Chat history access is limited to chats owned by the requesting user, even for admins. Each request is limited to 3 tool calls, 100 rows and 16 KiB per result. No data can be changed through Chat. Prompts and any enabled household context are sent to the selected agent node.</p>
     <p><a href="{{ url_for('admin_chat_history') }}">View and manage all chat histories</a></p>
     <button class="primary">Save Chat settings</button>
   </form>

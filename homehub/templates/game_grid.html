@@ -7,7 +7,7 @@
 .puzzle-clues{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1rem}.puzzle-form-actions{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
 @media(max-width:550px){.puzzle-grid{grid-template-columns:repeat({{ puzzle['size'] }},minmax(0,1fr));width:100%}.puzzle-cell{width:100%;min-width:0;height:2.1rem;font-size:.85rem}.puzzle-clues{grid-template-columns:1fr}}
 </style>
-<p><a href="{{ url_for('games.page') }}">← All games</a></p>
+<p><a href="{{ url_for('games.page') }}"><span class="icon-arrow icon-arrow-left" aria-hidden="true"></span> All games</a></p>
 <p class="eyebrow">{{ 'Practice' if practice else 'Daily challenge' }}</p><h1>{{ puzzle['title'] }}</h1>
 <p>{{ day.isoformat() }} · {{ streak }}-day streak{% if game == 'crossword' %} · Edited by {{ puzzle['editor'] }}{% endif %}{% if puzzle['difficulty'] %} · {{ puzzle['difficulty'] }}{% if game == 'sudoku' %} estimate{% endif %}{% endif %}</p>
 {% if game == 'crossword' %}<p>Fill each open square from the across and down clues.</p>{% elif game == 'nonogram' %}<p>Mark every square filled or empty using the row and column clues.</p>{% else %}<p>Fill each row, column, and 3×3 box with the digits 1 through 9.</p>{% endif %}
