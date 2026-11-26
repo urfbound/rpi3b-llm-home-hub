@@ -42,3 +42,11 @@ test('both card movement controls render as single arrow characters', () => {
   assert.equal([...shell.cardArrow(-1)].length, 1);
   assert.equal([...shell.cardArrow(1)].length, 1);
 });
+
+test('recipe search and filters keep only matching visible cards', () => {
+  assert.equal(shell.recipeMatches('Lemon pasta', 'shared', 2, 1, 'LEMON', 'all'), true);
+  assert.equal(shell.recipeMatches('Lemon pasta', 'shared', 2, 1, 'soup', 'all'), false);
+  assert.equal(shell.recipeMatches('Lemon pasta', 'private', 2, 1, '', 'shared'), false);
+  assert.equal(shell.recipeMatches('Lemon pasta', 'private', 2, 2, '', 'mine'), true);
+  assert.equal(shell.recipeMatches('Lemon pasta', 'private', 2, 1, '', 'mine'), false);
+});

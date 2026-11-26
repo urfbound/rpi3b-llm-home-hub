@@ -1,8 +1,13 @@
 {% extends 'base.html' %}
 {% block content %}
-<section class="intro">
-  <h1>{% if page_mode == 'lists' %}Lists{% elif page_mode == 'recipes' %}Recipes{% elif page_mode == 'calendar' %}Calendar{% else %}A little home for everything.{% endif %}</h1>
-  {% if page_mode == 'home' %}<p>Your family's recipes, plans, and shopping lists, all in one place.</p>{% endif %}
+<section class="intro page-intro">
+  <p class="eyebrow">{% if page_mode == 'home' %}Your household{% elif page_mode == 'lists' %}Around the house{% elif page_mode == 'recipes' %}The kitchen{% else %}Plans together{% endif %}</p>
+  <h1>{% if page_mode == 'lists' %}Lists{% elif page_mode == 'recipes' %}Recipes{% elif page_mode == 'calendar' %}Calendar{% else %}Today at home{% endif %}</h1>
+  <p>{% if page_mode == 'home' %}A quick look at what matters around the house.{% elif page_mode == 'lists' %}Everything to pick up and everything to get done, in one place.{% elif page_mode == 'recipes' %}Browse household favorites and add something new.{% else %}See what's coming up for everyone.{% endif %}</p>
+  {% if page_mode == 'calendar' %}<div class="intro-actions">
+    {% if current_user['account_kind'] != 'house' %}<a class="button primary" href="{{ url_for('new_event') }}">New event</a>{% endif %}
+    <a class="button" href="{{ url_for('export_calendar') }}">Download calendar (.ics)</a>
+  </div>{% endif %}
 </section>
 <div class="grid">
   {% if page_mode == 'home' %}
@@ -117,6 +122,7 @@
       {% set own_contact_count = contacts|selectattr('owner_user_id', 'equalto', current_user['id'])|list|length %}
       <span class="muted">{{ own_contact_count }} / {{ contact_limit }}</span>
     </div>
+    {% if current_user['account_kind'] != 'house' %}<details class="contact-create"><summary class="button">New contact</summary>
     <form method="post" action="{{ url_for('create_contact') }}" class="contact-form" id="contact-form">
       <input type="hidden" name="_csrf" value="{{ csrf_token }}">
       <div class="contact-fields">
@@ -130,7 +136,7 @@
         <button type="button" id="phone-contact-import" hidden>Choose from phone</button>
         <button class="primary" {% if own_contact_count >= contact_limit %}disabled{% endif %}>Add contact</button>
       </div>
-    </form>
+    </form></details>{% endif %}
     <label class="contacts-search-label">Search contacts <input id="contacts-search" type="search" autocomplete="off"></label>
     <ul class="contact-list">
       {% for contact in contacts %}
@@ -161,7 +167,7 @@
   {% endif %}
 
   {% if page_mode in ('home', 'calendar') %}
-  <section class="panel" id="calendar">
+  <section class="panel calendar-panel" id="calendar">
     <div class="calendar-heading"><h2>{{ calendar_month_name }} {{ calendar_year }}</h2></div>
     <nav class="calendar-controls" aria-label="Calendar month navigation">
       <div class="calendar-month-controls">
@@ -184,7 +190,7 @@
       </form>
       <a class="calendar-today" href="{{ calendar_today_url }}">Today</a>
     </nav>
-    <table class="calendar-month-grid">
+    <div class="calendar-month-container"><table class="calendar-month-grid">
       <thead><tr>{% for day_name in calendar_days %}<th scope="col"><span class="weekday-full">{{ day_name }}</span><span class="weekday-short">{{ day_name[:3] }}</span><span class="weekday-narrow">{{ 'R' if day_name == 'Thursday' else day_name[0] }}</span></th>{% endfor %}</tr></thead>
       <tbody>
         {% for week in calendar_weeks %}<tr>
@@ -197,40 +203,32 @@
           {% endfor %}
         </tr>{% endfor %}
       </tbody>
-    </table>
+    </table></div>
     {% if current_user['account_kind'] != 'house' %}<p><a class="button primary" href="{{ url_for('new_event', date=selected_date) if selected_date else url_for('new_event') }}">Add event{% if selected_date %} on {{ selected_date }}{% endif %}</a></p>{% endif %}
     <p><a href="{{ url_for('export_calendar') }}">Download calendar (.ics)</a></p>
     <p><a href="{{ url_for('export_calendar', only_required=1) }}">Download only events involving me (.ics)</a></p>
   </section>
   {% endif %}
 
-  {% if page_mode in ('home', 'lists') %}
+  {% if page_mode == 'lists' %}
   <section class="panel" id="shopping" {% if list_kind == 'shopping' and selected_list %}data-away-list-id="{{ selected_list['id'] }}" data-away-list-title="{{ selected_list['title'] }}"{% endif %}>
-    <h2>Lists</h2>
+    <h2>{{ 'Shopping lists' if list_kind == 'shopping' else 'To-do lists' if list_kind == 'todo' else 'Weekly chores' }}</h2>
     <nav aria-label="List categories" class="list-tabs">
       <a href="{{ list_page_url }}?kind=shopping" {% if list_kind == 'shopping' %}aria-current="page"{% endif %}>Shopping</a>
       <a href="{{ list_page_url }}?kind=todo" {% if list_kind == 'todo' %}aria-current="page"{% endif %}>To-do</a>
       <a href="{{ list_page_url }}?kind=chores" {% if list_kind == 'chores' %}aria-current="page"{% endif %}>Chores</a>
     </nav>
 
-    {% if lists %}
-    <form method="get" action="{{ list_page_url }}" class="inline list-picker-form">
-      <input type="hidden" name="kind" value="{{ list_kind }}">
-      <label for="list-picker">Choose a list</label>
-      <select id="list-picker" name="list_id" onchange="this.form.requestSubmit()">
-        {% if list_kind == 'shopping' %}
-          {% for category in shopping_categories %}{% set category_lists = lists|selectattr('category', 'equalto', category)|list %}{% if category_lists %}<optgroup label="{{ category }}">{% for list in category_lists %}<option value="{{ list['id'] }}" {% if selected_list and selected_list['id'] == list['id'] %}selected{% endif %}>{{ list['title'] }}{% if list['visibility'] == 'private' %} · Private{% endif %}</option>{% endfor %}</optgroup>{% endif %}{% endfor %}
-        {% else %}
-          {% for list in lists %}<option value="{{ list['id'] }}" {% if selected_list and selected_list['id'] == list['id'] %}selected{% endif %}>{{ list['title'] }}{% if list['visibility'] == 'private' %} · Private{% endif %}</option>{% endfor %}
-        {% endif %}
-      </select>
-      <button>Open</button>
-    </form>
+    <div class="lists-workspace{{ ' lists-chores-workspace' if list_kind == 'chores' else '' }}">
+    {% if list_kind != 'chores' %}
+    <nav class="list-rail" aria-label="Your lists">
+      {% for list in lists %}<a href="{{ list_page_url }}?kind={{ list_kind }}&amp;list_id={{ list['id'] }}" {% if selected_list and selected_list['id'] == list['id'] %}aria-current="page"{% endif %}><strong>{{ list['title'] }}</strong><small>{% if list_kind == 'shopping' %}{{ list['category'] }} · {% endif %}{{ 'Private' if list['visibility'] == 'private' else 'Shared' }}</small></a>{% else %}<p class="muted">No lists yet.</p>{% endfor %}
+    </nav>
     {% endif %}
-
+    <div class="lists-detail">
     {% if current_user['account_kind'] != 'house' %}
     <details>
-      <summary>Create a list</summary>
+      <summary class="button primary">New {{ 'shopping list' if list_kind == 'shopping' else 'checklist' }}</summary>
       <form method="post" action="{{ url_for('create_list') }}">
         <input type="hidden" name="_csrf" value="{{ csrf_token }}">
         <input type="hidden" name="kind" value="{{ list_kind }}">
@@ -402,11 +400,21 @@
     {% elif list_kind == 'todo' %}
       <p>Create a To-do list to get started.</p>
     {% endif %}
+    </div></div>
   </section>
 
   {% endif %}
-  {% if page_mode in ('home', 'recipes') %}<section class="panel" id="recipes">
-    <h2>Recipe book</h2>
+  {% if page_mode == 'recipes' %}<section class="panel" id="recipes">
+    <div class="recipe-library" aria-label="Recipe library">
+      <h2>Recipe book</h2>
+      <div class="recipe-library-tools">
+        <input id="recipe-search" type="search" placeholder="Search recipes" aria-label="Search recipes" autocomplete="off">
+        <select id="recipe-filter" aria-label="Filter recipes"><option value="all">All recipes</option><option value="shared">Shared with household</option>{% if current_user['account_kind'] != 'house' %}<option value="mine">My recipes</option>{% endif %}</select>
+      </div>
+      <ul class="recipe-cards">{% for r in recipes %}<li data-visibility="{{ r['visibility'] }}" data-owner-id="{{ r['created_by'] }}"><a href="{{ url_for('recipe_detail', recipe_id=r['id']) }}">{{ r['title'] }}</a></li>{% else %}<li>Your recipe book is waiting.</li>{% endfor %}</ul>
+      <p id="recipe-search-empty" class="muted" hidden>No recipes match that search.</p>
+    </div>
+    {% if current_user['account_kind'] != 'house' %}<details class="recipe-create-disclosure"><summary class="button primary">New recipe</summary>
     <form method="post" action="{{ url_for('add_recipe') }}" class="recipe-create">
       <input type="hidden" name="_csrf" value="{{ csrf_token }}">
       <label>Name<input name="title" placeholder="Favourite dinner" maxlength="{{ limits.RECIPE_TITLE_MAXIMUM }}" required></label>
@@ -429,13 +437,7 @@
       <button type="button" id="add-recipe-step">Add step</button>
       <button class="primary">Save recipe</button>
     </form>
-    <ul>{% for r in recipes %}<li><a href="{{ url_for('recipe_detail', recipe_id=r['id']) }}">{{ r['title'] }}</a></li>{% else %}<li>Your recipe book is waiting.</li>{% endfor %}</ul>
-  </section>{% endif %}
-
-  {% if page_mode == 'home' %}<section class="panel">
-    <h2>Coming next</h2>
-    <p>Weather, RSS headlines, games, and local LLM chat will plug into this lightweight foundation.</p>
-    <p class="muted">This starter intentionally doesn't include external network requests or a running model yet.</p>
+    </details>{% endif %}
   </section>{% endif %}
 </div>
 <script>

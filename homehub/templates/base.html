@@ -4,9 +4,9 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>Home Hub</title>
-  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v=4) }}">
   <link rel="stylesheet" href="{{ url_for('static', filename='contacts-sticky.css') }}">
-  <script src="{{ url_for('static', filename='app-shell.js') }}" defer></script>
+  <script src="{{ url_for('static', filename='app-shell.js', v=4) }}" defer></script>
   <script>
     document.documentElement.dataset.theme=localStorage.getItem('theme')||'light';
     function toggleTheme(){const t=document.documentElement.dataset.theme==='light'?'dark':'light';document.documentElement.dataset.theme=t;localStorage.setItem('theme',t)}
@@ -32,22 +32,37 @@
       {% endfor %}
       {% if current_user['role'] == 'admin' %}<a href="{{ url_for('accounts') }}" {% if request.endpoint == 'accounts' %}aria-current="page"{% endif %}>Admin</a>{% endif %}
     </nav>
-    <nav class="breadcrumb-nav" aria-label="Breadcrumb"><a href="{{ url_for('index') }}">Home</a><span aria-hidden="true">›</span><a id="breadcrumb-tab" href="{{ url_for('index') }}">{{ 'Admin' if request.endpoint == 'accounts' else 'Home' }}</a><span id="breadcrumb-page"></span></nav>
+    {% set top_level = request.path in ('/', '/lists', '/recipes', '/calendar', '/weather', '/rss', '/games', '/chat', '/sticky-notes', '/admin/accounts') %}
+    {% if not top_level %}
+    {% set parent = namespace(label='Home', href=url_for('index')) %}
+    {% if request.path.startswith('/recipes/') %}{% set parent.label = 'Recipes' %}{% set parent.href = '/recipes' %}
+    {% elif request.path.startswith('/events/') %}{% set parent.label = 'Calendar' %}{% set parent.href = '/calendar' %}
+    {% elif request.path.startswith('/lists/') %}{% set parent.label = 'Lists' %}{% set parent.href = '/lists' %}
+    {% elif request.path.startswith('/games/') %}{% set parent.label = 'Games' %}{% set parent.href = '/games' %}
+    {% elif request.path.startswith('/admin/') %}{% set parent.label = 'Admin' %}{% set parent.href = url_for('accounts') %}
+    {% endif %}
+    <nav class="breadcrumb-nav" aria-label="Breadcrumb"><a href="{{ url_for('index') }}">Home Hub</a><span aria-hidden="true">›</span><a id="breadcrumb-tab" href="{{ parent.href }}">{{ parent.label }}</a><span id="breadcrumb-page"></span></nav>
+    {% endif %}
     {% endif %}
     <div class="toolbar">
       <button type="button" onclick="toggleTheme()" aria-label="Toggle light and dark theme">◐ Theme</button>
       {% if current_user %}
-      <a href="{{ url_for('change_password') }}">{{ current_user['display_name'] }}</a>
-      <form method="post" action="{{ url_for('logout') }}" data-away-logout
-            data-away-user-id="{{ current_user['id'] }}">
-        <input type="hidden" name="_csrf" value="{{ csrf_token }}">
-        <label class="logout-offline-clear">
-          <input type="checkbox" data-away-clear-user-data>
-          Clear saved offline list
-        </label>
-        <small>Also discards pending offline changes on this device.</small>
-        <button>Log out</button>
-      </form>
+      <details class="account-menu">
+        <summary aria-label="Account menu for {{ current_user['display_name'] }}">{{ current_user['display_name'] }}</summary>
+        <div class="account-menu-content">
+          <a href="{{ url_for('change_password') }}">Change password</a>
+          <form method="post" action="{{ url_for('logout') }}" data-away-logout
+                data-away-user-id="{{ current_user['id'] }}">
+            <input type="hidden" name="_csrf" value="{{ csrf_token }}">
+            <label class="logout-offline-clear">
+              <input type="checkbox" data-away-clear-user-data>
+              Clear saved offline list
+            </label>
+            <small>Also discards pending offline changes on this device.</small>
+            <button>Log out</button>
+          </form>
+        </div>
+      </details>
       {% endif %}
     </div>
   </header>

@@ -17,7 +17,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from fractions import Fraction
 from functools import wraps
 from pathlib import Path
-from urllib.parse import urlsplit
+from urllib.parse import urlencode, urlsplit
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from flask import (Flask, Response, abort, flash, g, has_app_context, jsonify, make_response, redirect,
                    render_template, request, send_file, send_from_directory, session, url_for)
@@ -1236,6 +1236,10 @@ def save_recipe_content(db, recipe_id, values):
         [(recipe_id, position, step) for position, step in enumerate(steps)]
     )
 
+def lists_page_location(**query):
+    return '/lists' + ('?' + urlencode(query) if query else '')
+
+
 def create_app(test_config=None):
     app = Flask(__name__)
     # The supported deployment places exactly one Caddy proxy in front of
@@ -1941,7 +1945,8 @@ def create_app(test_config=None):
             "WHERE contacts.owner_user_id=? OR contacts.visibility='shared' "
             'ORDER BY contacts.name COLLATE NOCASE,contacts.id', (g.user['id'],)
         ).fetchall()
-        return render_template('index.html', recipes=visible_recipes(db, g.user)[:6],
+        return render_template('index.html',
+          recipes=visible_recipes(db, g.user) if page_mode == 'recipes' else [],
           events=month_events, calendar_weeks=calendar_weeks,
           selected_date=selected_date.isoformat() if selected_date else None,
           calendar_month=calendar_month, calendar_year=calendar_year,
@@ -3209,7 +3214,7 @@ def create_app(test_config=None):
             if visibility == 'private' and allowed_ids:
                 db.executemany('INSERT INTO list_access(list_id,user_id) VALUES(?,?)',
                                ((list_id, user_id) for user_id in allowed_ids))
-        return redirect(url_for('index', kind=kind, list_id=list_id))
+        return redirect(lists_page_location(kind=kind, list_id=list_id))
 
     @app.post('/chores')
     @login_required
@@ -3242,7 +3247,7 @@ def create_app(test_config=None):
                 'VALUES(?,?,?,?,?)',
                 (weekday, text, g.user['id'], assignee_id, int(assigned_everyone))
             )
-        return redirect(url_for('index', kind='chores', weekday=weekday))
+        return redirect(lists_page_location(kind='chores', weekday=weekday))
 
     @app.post('/chores/<int:chore_id>/toggle')
     @login_required
@@ -3271,7 +3276,7 @@ def create_app(test_config=None):
                 )
         if request.args.get('return_to') == 'home':
             return redirect(url_for('index'))
-        return redirect(url_for('index', kind='chores', weekday=chore['weekday']))
+        return redirect(lists_page_location(kind='chores', weekday=chore['weekday']))
 
     @app.post('/chores/<int:chore_id>/delete')
     @login_required
@@ -3284,7 +3289,7 @@ def create_app(test_config=None):
             abort(HTTPStatus.FORBIDDEN)
         with db:
             db.execute('DELETE FROM chores WHERE id=?', (chore_id,))
-        return redirect(url_for('index', kind='chores', weekday=chore['weekday']))
+        return redirect(lists_page_location(kind='chores', weekday=chore['weekday']))
 
     def add_list_item(expected_kind):
         text = request.form.get('text','').strip()
@@ -3336,8 +3341,7 @@ def create_app(test_config=None):
             db.execute('INSERT INTO shopping_items(text,created_by,list_id,due_date,assignee_id,updated_at) '
                        'VALUES(?,?,?,?,?,CURRENT_TIMESTAMP)',
                        (text, g.user['id'], target['id'], due_date, assignee_id))
-        return redirect(url_for('index', kind=expected_kind, list_id=target['id']) +
-                        ('#shopping' if expected_kind == 'shopping' else '#todo'))
+        return redirect(lists_page_location(kind=expected_kind, list_id=target['id']) + '#shopping')
 
     @app.post('/shopping')
     @login_required
@@ -3392,7 +3396,7 @@ def create_app(test_config=None):
         with db:
             db.execute('UPDATE shopping_items SET text=?,due_date=?,assignee_id=?,updated_at=CURRENT_TIMESTAMP '
                        'WHERE id=?', (text, due_date, assignee_id, item_id))
-        return redirect(url_for('index', kind='todo', list_id=target['id']) + '#todo')
+        return redirect(lists_page_location(kind='todo', list_id=target['id']) + '#shopping')
 
     @app.post('/shopping/<int:item_id>/toggle')
     @login_required
@@ -3408,8 +3412,7 @@ def create_app(test_config=None):
             db.execute("UPDATE shopping_items SET done=1-done,updated_at="
                        "strftime('%Y-%m-%d %H:%M:%f','now') "
                        'WHERE id=?', (item_id,))
-        return redirect(url_for('index', kind=target['kind'], list_id=target['id']) +
-                        ('#shopping' if target['kind'] == 'shopping' else '#todo'))
+        return redirect(lists_page_location(kind=target['kind'], list_id=target['id']) + '#shopping')
 
     @app.post('/shopping/<int:item_id>/delete')
     @login_required
@@ -3423,8 +3426,7 @@ def create_app(test_config=None):
             abort(HTTPStatus.FORBIDDEN)
         with db:
             db.execute('DELETE FROM shopping_items WHERE id=?', (item_id,))
-        return redirect(url_for('index', kind=target['kind'], list_id=target['id']) +
-                        ('#shopping' if target['kind'] == 'shopping' else '#todo'))
+        return redirect(lists_page_location(kind=target['kind'], list_id=target['id']) + '#shopping')
 
     @app.post('/lists/<int:list_id>/delete')
     @login_required
@@ -3436,7 +3438,7 @@ def create_app(test_config=None):
         kind = target['kind']
         with db:
             db.execute('DELETE FROM household_lists WHERE id=?', (list_id,))
-        return redirect(url_for('index', kind=kind))
+        return redirect(lists_page_location(kind=kind))
 
     @app.get('/shopping.txt')
     @login_required
@@ -3634,8 +3636,7 @@ def create_app(test_config=None):
             signature = paste_review_signature(list_id, g.user['id'], raw_text, rows)
             return render_paste_review(target, raw_text, preview, issues,
                                        signature, stale=True, status=409)
-        return redirect(url_for('index', kind=target['kind'], list_id=target['id']) +
-                        ('#shopping' if target['kind'] == 'shopping' else '#todo'))
+        return redirect(lists_page_location(kind=target['kind'], list_id=target['id']) + '#shopping')
 
     @app.get('/shopping/sync')
     @login_required
@@ -4170,7 +4171,7 @@ def create_app(test_config=None):
                 db.execute('DELETE FROM events WHERE series_id=?', (event['series_id'],))
             else:
                 db.execute('DELETE FROM events WHERE id=?', (event_id,))
-        return redirect(url_for('index') + '#calendar')
+        return redirect('/calendar#calendar')
 
     @app.get('/calendar.ics')
     @login_required

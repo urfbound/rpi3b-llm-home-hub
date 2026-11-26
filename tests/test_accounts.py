@@ -68,11 +68,14 @@ def test_admin_can_reorder_feature_tabs_without_moving_home_or_admin(app):
 def test_shared_shell_has_collapsible_navigation_and_breadcrumb(app):
     client = app.test_client()
     sign_in(client)
-    page = client.get('/').data
+    page = client.get('/recipes').data
     assert b'aria-controls="site-menu"' in page
-    assert b'aria-label="Breadcrumb"' in page
-    assert b'id="breadcrumb-page"' in page
-    assert b'id="breadcrumb-tab" href="/"' in page
+    assert b'aria-label="Breadcrumb"' not in page
+    assert b'aria-current="page">Recipes</a>' in page
+    nested = client.get('/events/new').data
+    assert b'aria-label="Breadcrumb"' in nested
+    assert b'>Home Hub</a>' in nested
+    assert b'>Calendar</a>' in nested
     assert b'app-shell.js' in page
 
 

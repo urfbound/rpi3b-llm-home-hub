@@ -66,12 +66,23 @@ approves the completed change.
 - **Next validation:** complete the target Ubuntu LXC install, upgrade, and
   uninstall checks; connect the agent node and review Chat behavior together;
   then continue phone/browser review of offline mode and responsive pages.
+- **Live design follow-up (2026-11-23):** `feature/live-design-polish` fixes the
+  narrow calendar weekday labels, collapses the account/logout controls,
+  restores a dashboard-focused Home page, and corrects primary button contrast
+  in both themes. Lists now uses a list rail and returns there after writes;
+  Recipes opens on a searchable, filterable library without the old six-item
+  cap; Games leads with progress and the scoreboard; and Calendar exposes its
+  main actions in the heading. Top-level pages rely on the selected tab;
+  nested pages show a Home Hub breadcrumb with the parent tab and page heading.
+  Static assets refresh online and fall back to cache offline. Local browser
+  and automated verification are complete; review these changes on the LXC
+  after deployment, especially with household data and a phone browser.
 - **Design reviews:** Account administration, Home, Lists, Recipes, Calendar,
   Weather, RSS, Games, and Chat are approved. App-only and app-plus-model Pi
   profiles are recorded. Chat answer-quality review and manual browser review
   remain before household rollout.
 - UX follow-up: the shared shell now keeps parent tabs active on nested list,
-  recipe, and event pages, links the tab level in the breadcrumb, and restores
+  recipe, and event pages, shows breadcrumbs only on nested pages, and restores
   the submitting section after a short form-post redirect. Card order and width
   preferences are scoped to the signed-in user, page, and card group. The full
   visual and keyboard review remains a release gate.

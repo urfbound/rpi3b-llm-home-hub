@@ -57,7 +57,7 @@ def create_chore(client, *, text='Put clothes away', weekday=0, assignee='everyo
 
 def test_chores_tab_shows_seven_days_and_everyone_controls(household):
     _, client = household
-    page = client.get('/?kind=chores')
+    page = client.get('/lists?kind=chores')
     assert page.status_code == HTTPStatus.OK
     for day in ('Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'):
         assert day.encode() in page.data
@@ -88,7 +88,7 @@ def test_everyone_chore_is_grouped_per_person_and_excludes_house_account(househo
     app, client = household
     response = create_chore(client)
     assert response.status_code == HTTPStatus.FOUND
-    page = client.get('/?kind=chores&weekday=0')
+    page = client.get('/lists?kind=chores&weekday=0')
     assert b'Alice' in page.data
     assert b'Bob' in page.data
     assert b'House' not in page.data
@@ -108,11 +108,11 @@ def test_person_assignment_and_filter_show_only_that_users_chore(household):
     assert create_chore(client, text='Feed dog', assignee=str(bob_id)).status_code == HTTPStatus.FOUND
     with sqlite3.connect(app.config['DATABASE']) as db:
         chore_id = db.execute("SELECT id FROM chores WHERE text='Feed dog'").fetchone()[0]
-    assert b'Feed dog</span>' in client.get('/?kind=chores&weekday=0').data
+    assert b'Feed dog</span>' in client.get('/lists?kind=chores&weekday=0').data
     assert b'Feed dog</span>' not in client.get(
-        f'/?kind=chores&weekday=0&assignee_id={alice_id}').data
+        f'/lists?kind=chores&weekday=0&assignee_id={alice_id}').data
     assert b'Feed dog</span>' in client.get(
-        f'/?kind=chores&weekday=0&assignee_id={bob_id}').data
+        f'/lists?kind=chores&weekday=0&assignee_id={bob_id}').data
     assert client.post(f'/chores/{chore_id}/toggle',
                        data={'_csrf': csrf_token(client)}).status_code == HTTPStatus.FORBIDDEN
 
@@ -140,7 +140,7 @@ def test_chore_completion_is_independent_for_each_assigned_user(household):
 
     bob = app.test_client()
     sign_in(bob, 'bob', 'bob test password')
-    bob_page = bob.get('/?kind=chores&weekday=0&assignee_id=' + str(bob_id))
+    bob_page = bob.get('/lists?kind=chores&weekday=0&assignee_id=' + str(bob_id))
     assert b'class="done"' not in bob_page.data
     assert bob.post(f'/chores/{chore_id}/toggle',
                     data={'_csrf': csrf_token(bob)}).status_code == HTTPStatus.FOUND
@@ -157,7 +157,7 @@ def test_house_account_can_view_but_cannot_change_chores(household):
         chore_id = db.execute('SELECT id FROM chores').fetchone()[0]
     house = app.test_client()
     sign_in(house, 'house', 'house test password')
-    page = house.get('/?kind=chores&weekday=0')
+    page = house.get('/lists?kind=chores&weekday=0')
     assert b'Put clothes away' in page.data
     assert b'/chores/' not in page.data
     assert house.post(f'/chores/{chore_id}/toggle',
@@ -171,13 +171,13 @@ def test_chore_completion_resets_at_next_sunday_without_deleting_chore(household
         chore_id = db.execute('SELECT id FROM chores').fetchone()[0]
     monkeypatch.setattr(app_module, 'household_today', lambda: date(2026, 10, 25))
     client.post(f'/chores/{chore_id}/toggle', data={'_csrf': csrf_token(client)})
-    assert b'class="done"' in client.get('/?kind=chores&weekday=0').data
+    assert b'class="done"' in client.get('/lists?kind=chores&weekday=0').data
 
     monkeypatch.setattr(app_module, 'household_today', lambda: date(2026, 10, 31))
-    assert b'class="done"' in client.get('/?kind=chores&weekday=0').data
+    assert b'class="done"' in client.get('/lists?kind=chores&weekday=0').data
 
     monkeypatch.setattr(app_module, 'household_today', lambda: date(2026, 11, 1))
-    page = client.get('/?kind=chores&weekday=0')
+    page = client.get('/lists?kind=chores&weekday=0')
     assert b'class="done"' not in page.data
     with sqlite3.connect(app.config['DATABASE']) as db:
         assert db.execute('SELECT COUNT(*) FROM chores WHERE id=?',

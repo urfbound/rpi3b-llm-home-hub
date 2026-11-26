@@ -1,4 +1,4 @@
-const CACHE_NAME = 'homehub-away-v3';
+const CACHE_NAME = 'homehub-away-v4';
 const SHELL_FILES = [
   '/offline.html',
   '/static/style.css',
@@ -31,11 +31,15 @@ self.addEventListener('fetch', event => {
 
   if (request.method === 'GET' && url.pathname.startsWith('/static/')) {
     event.respondWith((async () => {
-      const cached = await caches.match(request);
-      if (cached) return cached;
-      const response = await fetch(request);
-      if (response.ok) (await caches.open(CACHE_NAME)).put(request, response.clone());
-      return response;
+      try {
+        const response = await fetch(request);
+        if (response.ok) await (await caches.open(CACHE_NAME)).put(request, response.clone());
+        return response;
+      } catch (error) {
+        const cached = await caches.match(request);
+        if (cached) return cached;
+        throw error;
+      }
     })());
   }
 });

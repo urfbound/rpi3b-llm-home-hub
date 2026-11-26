@@ -40,13 +40,74 @@ def test_requires_login(client):
 
 def test_login_and_ics(client):
     sign_in(client)
-    assert b'A little home for everything' in client.get('/').data
+    assert b'Today at home' in client.get('/').data
     with client.session_transaction() as sess: token=sess['csrf_token']
     client.post('/events',data={'title':'Pasta night','event_date':'2026-10-21','_csrf':token})
     calendar=client.get('/calendar.ics')
     assert calendar.status_code==HTTPStatus.OK
     assert b'SUMMARY:Pasta night' in calendar.data
     assert b'DTSTART;VALUE=DATE:20261021' in calendar.data
+
+
+def test_home_is_a_dashboard_and_feature_pages_lead_with_content(client):
+    sign_in(client)
+    home = client.get('/').data
+    assert b'Today at home' in home
+    assert b'Coming next' not in home
+    assert b'id="home-chores"' in home
+    assert b'id="this-weekend"' in home
+    assert b'id="recipes"' not in home
+    assert b'id="shopping"' not in home
+
+    lists = client.get('/lists').data
+    assert b'aria-label="Your lists"' in lists
+    assert b'New shopping list' in lists
+
+    recipes = client.get('/recipes').data
+    assert recipes.index(b'aria-label="Recipe library"') < recipes.index(b'class="recipe-create"')
+    assert b'New recipe' in recipes
+    assert b'aria-label="Search recipes"' in recipes
+    assert b'aria-label="Filter recipes"' in recipes
+
+
+def test_list_writes_return_to_the_selected_lists_page(client):
+    sign_in(client)
+    token = csrf_token(client)
+    created = client.post('/lists', data={
+        'kind': 'shopping', 'title': 'Market', 'category': 'Groceries',
+        'visibility': 'shared', '_csrf': token,
+    })
+    assert created.headers['Location'].startswith('/lists?kind=shopping&list_id=')
+    list_id = created.headers['Location'].split('list_id=')[1]
+    added = client.post('/shopping', data={
+        'text': 'Apples', 'list_id': list_id, '_csrf': token,
+    })
+    assert added.headers['Location'] == f'/lists?kind=shopping&list_id={list_id}#shopping'
+    chore = client.post('/chores', data={
+        'text': 'Sweep', 'weekday': '0', 'assignee': 'everyone', '_csrf': token,
+    })
+    assert chore.headers['Location'] == '/lists?kind=chores&weekday=0'
+
+
+def test_account_actions_are_collapsed_but_logout_controls_remain(client):
+    sign_in(client)
+    page = client.get('/').data
+    assert b'<details class="account-menu">' in page
+    assert b'data-away-clear-user-data' in page
+    assert b'action="/logout"' in page
+    assert b'aria-label="Breadcrumb"' not in page
+
+
+def test_recipe_library_shows_all_accessible_recipes(client):
+    sign_in(client)
+    with sqlite3.connect(client.application.config['DATABASE']) as db:
+        db.executemany(
+            'INSERT INTO recipes(title,created_by) VALUES(?,1)',
+            [(f'Recipe {number}',) for number in range(7)],
+        )
+    page = client.get('/recipes').data
+    for number in range(7):
+        assert f'Recipe {number}'.encode() in page
 
 def test_csrf_required(client):
     sign_in(client)
@@ -143,7 +204,7 @@ def test_paste_list_rechecks_private_list_access(client):
 
 def test_list_page_offers_copy_and_paste_controls(client):
     sign_in(client)
-    page = client.get('/')
+    page = client.get('/lists')
     assert b'Copy list' in page.data
     assert b'Paste list' in page.data
     assert b'Clipboard access unavailable' in page.data
@@ -162,16 +223,26 @@ def test_calendar_download_links_render_on_separate_lines(client):
 
     assert b'</a></p>\n    <p><a href="/calendar.ics?only_required=1">' in response.data
 
+
+def test_calendar_page_has_primary_action_in_heading(client):
+    sign_in(client)
+    page = client.get('/calendar').data
+    intro = page.split(b'</section>', 1)[0]
+    assert b'href="/events/new"' in intro
+    assert b'href="/calendar.ics"' in intro
+
 def test_theme_switch_uses_approved_theme_label(client):
     sign_in(client)
 
     assert '◐ Theme'.encode() in client.get('/').data
 
-def test_list_picker_groups_shopping_lists_by_category(client):
+def test_shopping_list_rail_shows_category(client):
     sign_in(client)
-    response = client.get('/')
+    response = client.get('/lists')
 
-    assert b'<optgroup label="Groceries">' in response.data
+    assert b'aria-label="Your lists"' in response.data
+    assert b'Groceries' in response.data
+    assert b'id="list-picker"' not in response.data
 
 def test_calendar_weekdays_include_responsive_abbreviations(client):
     sign_in(client)
@@ -183,11 +254,10 @@ def test_calendar_weekdays_include_responsive_abbreviations(client):
 
 def test_list_and_recipe_remove_controls_have_inline_layout_hooks(client):
     sign_in(client)
-    response = client.get('/')
-
-    assert b'class="checks list-items"' in response.data
-    assert b'class="recipe-ingredient-row"' in response.data
-    assert b'class="recipe-step-row"' in response.data
+    assert b'class="checks list-items"' in client.get('/lists').data
+    recipes = client.get('/recipes').data
+    assert b'class="recipe-ingredient-row"' in recipes
+    assert b'class="recipe-step-row"' in recipes
 def test_top_navigation_links_to_dedicated_lists_and_calendar_pages(client):
     sign_in(client)
     page = client.get('/')
@@ -199,7 +269,7 @@ def test_homepage_cards_link_to_dedicated_pages(client):
     sign_in(client)
     page = client.get('/')
 
-    assert b'href="/lists?kind=chores"' in page.data
+    assert b'href="/lists?kind=chores&weekday=' in page.data
     assert b'href="/calendar"' in page.data
 
 def test_lists_and_calendar_routes_show_their_own_sections(client):
@@ -222,7 +292,8 @@ def test_lists_opens_selected_list_on_lists_tab_and_hides_placeholder(client):
     assert b'Coming next' not in page.data
     assert b'id="recipes"' not in page.data
     assert b'href="/recipes"' in page.data
-    assert b'action="/lists" class="inline list-picker-form"' in page.data
+    assert b'aria-label="Your lists"' in page.data
+    assert b'id="list-picker"' not in page.data
 
 def test_recipes_have_a_dedicated_navigation_page(client):
     sign_in(client)
@@ -368,7 +439,7 @@ def test_private_list_creation_selection_and_allowlist_access(client):
         'text': 'Wrapping paper', 'list_id': str(list_id), '_csrf': token,
     })
     assert added.status_code == HTTPStatus.FOUND
-    assert b'Holiday gifts' in client.get(f'/?list_id={list_id}').data
+    assert b'Holiday gifts' in client.get(f'/lists?list_id={list_id}').data
     with sqlite3.connect(db_path) as db:
         assert db.execute('SELECT text FROM shopping_items WHERE list_id=?',
                           (list_id,)).fetchone() == ('Wrapping paper',)
@@ -379,12 +450,12 @@ def test_private_list_creation_selection_and_allowlist_access(client):
 
     bob = client.application.test_client()
     sign_in_as(bob, 'bob', 'bob test password')
-    assert bob.get(f'/?list_id={list_id}').status_code == HTTPStatus.OK
+    assert bob.get(f'/lists?list_id={list_id}').status_code == HTTPStatus.OK
     assert b'Wrapping paper' in bob.get(f'/shopping.txt?list_id={list_id}').data
 
     carol = client.application.test_client()
     sign_in_as(carol, 'carol', 'carol test password')
-    denied = carol.get(f'/?list_id={list_id}')
+    denied = carol.get(f'/lists?list_id={list_id}')
     assert denied.status_code == HTTPStatus.NOT_FOUND
     assert b'Wrapping paper' not in denied.data
     assert carol.get(f'/shopping.txt?list_id={list_id}').status_code == HTTPStatus.NOT_FOUND
@@ -426,7 +497,7 @@ def test_shared_todo_list_accepts_tasks_and_is_visible_to_household(client):
 
     bob = client.application.test_client()
     sign_in_as(bob, 'bob', 'bob test password')
-    page = bob.get(f'/?kind=todo&list_id={list_id}')
+    page = bob.get(f'/lists?kind=todo&list_id={list_id}')
     assert page.status_code == HTTPStatus.OK
     assert b'Water the plants' in page.data
 

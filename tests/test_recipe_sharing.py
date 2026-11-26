@@ -81,10 +81,10 @@ def test_private_recipe_is_visible_only_to_owner_allowlist_and_admin(app):
     admin = sign_in(app, 'alex')
 
     assert bob.get(f'/recipes/{recipe_id}').status_code == HTTPStatus.OK
-    assert b'House soup' in bob.get('/').data
+    assert b'House soup' in bob.get('/recipes').data
     assert carol.get(f'/recipes/{recipe_id}').status_code == HTTPStatus.NOT_FOUND
     assert carol.get(f'/recipes/{recipe_id}?servings=8').status_code == HTTPStatus.NOT_FOUND
-    assert b'House soup' not in carol.get('/').data
+    assert b'House soup' not in carol.get('/recipes').data
     assert carol.post(f'/recipes/{recipe_id}/notes', data={
         'text': 'Should not persist', '_csrf': csrf(carol),
     }).status_code == HTTPStatus.NOT_FOUND
