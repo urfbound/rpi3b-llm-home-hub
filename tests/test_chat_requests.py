@@ -360,13 +360,57 @@ def test_enabled_chat_data_tools_are_scoped_and_model_receives_bounded_result(ap
 
     assert {tool['function']['name'] for tool in calls[0][1]} == {
         'get_household_lists', 'get_calendar_events', 'get_household_recipes',
-        'get_weather_forecast', 'get_saved_articles', 'get_system_status',
-        'get_admin_overview',
+        'get_weather_forecast', 'get_my_chat_history', 'get_home_hub_datetime',
     }
     serialized_tool_result = calls[1][0][-1]['content']
     assert 'Groceries' in serialized_tool_result and 'Bread' in serialized_tool_result
     assert 'Bob private' not in serialized_tool_result and 'Secret' not in serialized_tool_result
     assert len(serialized_tool_result.encode()) <= CHAT_TOOL_RESULT_BYTES_MAXIMUM
+
+
+def test_chat_agent_can_read_only_the_requesters_chat_history(app):
+    calls = []
+
+    def completion_with_tools(_model, messages, tools):
+        calls.append((messages, tools))
+        if len(calls) == 1:
+            return {'content': '', 'tool_calls': [{
+                'function': {'name': 'get_my_chat_history', 'arguments': {}},
+            }]}
+        return {'content': 'I found your earlier question.', 'tool_calls': []}
+
+    app.config['CHAT_COMPLETION_WITH_TOOLS'] = completion_with_tools
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        db.execute(
+            "INSERT INTO app_settings(key,value) VALUES('chat_data_tools_enabled','1')"
+        )
+        db.execute(
+            'INSERT INTO chat_pairs(conversation_id,position,prompt,response,model,created_at) '
+            "VALUES(1,0,'Alice previous question','Alice previous answer','test-model',"
+            "'2026-10-24T10:00:00+00:00')"
+        )
+        bob_chat = db.execute(
+            "INSERT INTO chat_conversations(owner_user_id,title,created_at,updated_at) "
+            "VALUES(3,'Bob private','2026-10-24T10:00:00+00:00','2026-10-24T10:00:00+00:00')"
+        ).lastrowid
+        db.execute(
+            'INSERT INTO chat_pairs(conversation_id,position,prompt,response,model,created_at) '
+            "VALUES(?,0,'Bob secret question','Bob secret answer','test-model',"
+            "'2026-10-24T10:00:00+00:00')",
+            (bob_chat,),
+        )
+    alice = sign_in(app, 'alice', 'alice chat password')
+
+    queued = submit(alice, 'What did I ask earlier?')
+
+    assert queued.status_code == HTTPStatus.ACCEPTED
+    wait_for_request(alice, queued.get_json()['request_id'])
+    assert any(tool['function']['name'] == 'get_my_chat_history'
+               for tool in calls[0][1])
+    tool_result = calls[1][0][-1]['content']
+    assert 'Alice previous question' in tool_result
+    assert 'Alice previous answer' in tool_result
+    assert 'Bob secret' not in tool_result
 
 
 def test_openai_compatible_tool_calls_round_trip_with_call_ids(app):

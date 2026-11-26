@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 {% block content %}
 <article class="panel event-detail">
-  <div class="event-detail-actions"><a href="{{ url_for('index') }}#calendar">← Calendar</a>
+  <div class="event-detail-actions"><a href="{{ url_for('index') }}#calendar"><span class="icon-arrow icon-arrow-left" aria-hidden="true"></span> Calendar</a>
     {% if can_edit %}<div class="actions"><a class="button" href="{{ url_for('edit_event', event_id=event['id']) }}">Edit event</a><button type="button" class="danger" onclick="document.getElementById('delete-event-dialog').showModal()">Delete event</button></div>{% endif %}
   </div>
   <p class="eyebrow">{{ 'All day' if event['all_day'] else 'Timed event' }}</p>

@@ -171,7 +171,7 @@
     <div class="calendar-heading"><h2>{{ calendar_month_name }} {{ calendar_year }}</h2></div>
     <nav class="calendar-controls" aria-label="Calendar month navigation">
       <div class="calendar-month-controls">
-        {% if calendar_has_previous %}<a class="calendar-nav-button" aria-label="Previous month" href="{{ calendar_previous_url }}">←</a>{% else %}<span class="calendar-nav-button is-disabled" aria-label="No earlier retained month">←</span>{% endif %}
+        {% if calendar_has_previous %}<a class="calendar-nav-button" aria-label="Previous month" href="{{ calendar_previous_url }}"><span class="icon-arrow icon-arrow-left" aria-hidden="true"></span></a>{% else %}<span class="calendar-nav-button is-disabled" aria-label="No earlier retained month"><span class="icon-arrow icon-arrow-left" aria-hidden="true"></span></span>{% endif %}
         <form method="get" action="{{ calendar_page_url if page_mode == 'calendar' else url_for('index') }}">
           <label class="visually-hidden" for="calendar-month">Choose month</label>
           <select id="calendar-month" name="month" onchange="this.form.submit()">
@@ -179,7 +179,7 @@
           </select>
           <input type="hidden" name="year" value="{{ calendar_year }}">
         </form>
-        {% if calendar_has_next %}<a class="calendar-nav-button" aria-label="Next month" href="{{ calendar_next_url }}">→</a>{% else %}<span class="calendar-nav-button is-disabled" aria-label="No later month">→</span>{% endif %}
+        {% if calendar_has_next %}<a class="calendar-nav-button" aria-label="Next month" href="{{ calendar_next_url }}"><span class="icon-arrow icon-arrow-right" aria-hidden="true"></span></a>{% else %}<span class="calendar-nav-button is-disabled" aria-label="No later month"><span class="icon-arrow icon-arrow-right" aria-hidden="true"></span></span>{% endif %}
       </div>
       <form method="get" action="{{ calendar_page_url if page_mode == 'calendar' else url_for('index') }}" class="calendar-year-control">
         <label class="visually-hidden" for="calendar-year">Choose year</label>

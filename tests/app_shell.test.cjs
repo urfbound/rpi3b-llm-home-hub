@@ -1,5 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
 const shell = require('../homehub/static/app-shell.js');
 
 test('saved card positions restore in each group and keep new cards', () => {
@@ -36,11 +38,20 @@ test('card preview opens above the trigger when space below is short', () => {
   assert.equal(shell.previewAbove(900, 180, 225, 220), false);
 });
 
-test('both card movement controls render as single arrow characters', () => {
-  assert.equal(shell.cardArrow(-1), '\u2191');
-  assert.equal(shell.cardArrow(1), '\u2193');
-  assert.equal([...shell.cardArrow(-1)].length, 1);
-  assert.equal([...shell.cardArrow(1)].length, 1);
+test('card movement controls identify direction without a font-dependent glyph', () => {
+  assert.equal(shell.cardArrow(-1), 'up');
+  assert.equal(shell.cardArrow(1), 'down');
+});
+
+test('app navigation arrows use drawn icons instead of Unicode arrow glyphs', () => {
+  const templates = path.join(__dirname, '../homehub/templates');
+  const files = fs.readdirSync(templates).filter(file => file.endsWith('.html'));
+  const sources = [...files.map(file => fs.readFileSync(path.join(templates, file), 'utf8')),
+    fs.readFileSync(path.join(__dirname, '../homehub/games.py'), 'utf8'),
+    fs.readFileSync(path.join(__dirname, '../homehub/static/app-shell.js'), 'utf8')];
+  const arrowGlyph = /[\u2190-\u21FF\u2B05-\u2B07\u27A1\u203A]/u;
+
+  for (const source of sources) assert.doesNotMatch(source, arrowGlyph);
 });
 
 test('recipe search and filters keep only matching visible cards', () => {

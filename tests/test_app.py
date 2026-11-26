@@ -310,7 +310,7 @@ def test_home_uses_valid_utf8_symbols_for_dashboard_labels(client):
     assert b'Chores \xc2\xb7' in page.data
     assert b'\xc3\x82' not in page.data
     assert b'Next month' in page.data
-    assert b'\xe2\x86\x92' in page.data
+    assert b'class="icon-arrow icon-arrow-right" aria-hidden="true"' in page.data
 
 def test_list_text_exports_the_selected_todo_list(client):
     sign_in(client)

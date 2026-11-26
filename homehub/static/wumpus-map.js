@@ -31,9 +31,17 @@
       const y = room.y * Math.cos(pitch) - z * Math.sin(pitch);
       const depth = room.y * Math.sin(pitch) + z * Math.cos(pitch);
       const scale = 185 * (1 + depth * .16);
-      const point = {x: 270 + x * scale, y: 270 - y * scale, depth};
+      const point = {x: x * scale, y: -y * scale, depth};
       positions.set(room.number, point);
-      room.element.setAttribute('transform', `translate(${point.x} ${point.y}) scale(${1 + depth * .12})`);
+    }
+    const currentRoom = rooms.find(room => room.element.classList.contains('current'));
+    const focus = positions.get(currentRoom.number);
+    for (const room of rooms) {
+      const point = positions.get(room.number);
+      point.x += 270 - focus.x;
+      point.y += 270 - focus.y;
+      room.element.setAttribute(
+        'transform', `translate(${point.x} ${point.y}) scale(${1 + point.depth * .12})`);
     }
     for (const line of corridors) {
       const a = positions.get(Number(line.dataset.a));

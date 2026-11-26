@@ -92,10 +92,14 @@ def test_daily_attempt_is_private_resumable_and_scored_once(game_app):
     invalid = alex.post('/games/word/guess', data={'_csrf': token_for(alex),
                                                    'guess': '1bad!'})
     assert invalid.status_code == 302
+    assert invalid.headers['Location'] == '/games#word-garden-board'
     assert b'Enter a valid five-letter word from the offline word list' in alex.get('/games').data
-    assert alex.post('/games/word/guess', data={'_csrf': token_for(alex),
-                                                'guess': answer}).status_code == 302
+    accepted = alex.post('/games/word/guess', data={'_csrf': token_for(alex),
+                                                    'guess': answer})
+    assert accepted.status_code == 302
+    assert accepted.headers['Location'] == '/games#word-garden-board'
     resumed = alex.get('/games').data
+    assert b'id="word-garden-board"' in resumed
     assert b'100 points' in resumed
     assert answer.encode() in resumed
     assert answer.encode() not in sam.get('/games').data
@@ -169,9 +173,11 @@ def test_practice_never_changes_daily_score(game_app):
     practice_url = response.headers['Location']
     assert practice_url.startswith('/games/word/practice/')
     assert alex.get(practice_url).status_code == 200
-    assert alex.post(practice_url + '/guess', data={
+    response = alex.post(practice_url + '/guess', data={
         '_csrf': token_for(alex), 'guess': daily_answer(date(2026, 10, 24))
-    }).status_code == 302
+    })
+    assert response.status_code == 302
+    assert response.headers['Location'] == practice_url + '#word-garden-board'
     with sqlite3.connect(game_app.config['DATABASE']) as db:
         assert db.execute("SELECT COUNT(*) FROM game_attempts WHERE mode='daily'").fetchone()[0] == 0
     assert b'No scored wins yet' in alex.get('/games').data
@@ -245,8 +251,12 @@ def test_ladder_validates_steps_and_scores_shortest_win(game_app):
     start, target = daily_puzzle(date(2026, 10, 24))
     assert start.encode() in alex.get('/games/ladder').data
     assert target.encode() in alex.get('/games/ladder').data
-    bad = alex.post('/games/ladder/move', data={'_csrf': token_for(alex), 'word': 'XXXXX'})
-    assert bad.status_code == 400
+    from homehub.game_ladder import WORDS
+    assert 'ZZZZ' not in WORDS
+    bad = alex.post('/games/ladder/move', data={'_csrf': token_for(alex), 'word': 'ZZZZ'})
+    assert bad.status_code == 302
+    assert b'Choose a listed four-letter word that changes one letter.' in alex.get(
+        '/games/ladder').data
     with sqlite3.connect(game_app.config['DATABASE']) as db:
         assert db.execute("SELECT COUNT(*) FROM game_attempts WHERE game='ladder'").fetchone()[0] == 0
     for word in shortest_path(start, target)[1:]:
@@ -271,6 +281,10 @@ def test_ladder_hints_reduce_score_and_practice_is_private(game_app):
     url = practice.headers['Location']
     assert sign_in(game_app, 'sam').get(url).status_code == 404
     assert b'Practice' in alex.get(url).data
+    invalid = alex.post(url + '/move', data={'_csrf': token_for(alex), 'word': 'ZZZZ'})
+    assert invalid.status_code == 302
+    assert invalid.headers['Location'] == url
+    assert b'Choose a listed four-letter word that changes one letter.' in alex.get(url).data
 
 
 @pytest.mark.parametrize('game', ['crossword', 'nonogram', 'sudoku'])
@@ -375,10 +389,11 @@ def test_wumpus_map_shows_topology_and_only_visited_clues(game_app):
     game = daily_map(date(2026, 10, 24))
     start = game['placements'][0]
     page = alex.get('/games/wumpus').data.decode()
+    assert 'id="wumpus-game-board"' in page
     assert 'id="hide-wumpus-map"' in page
     assert 'wumpus-map.js' in page
     assert 'id="arrow-path" name="rooms" required placeholder="2, 3" autocomplete="off"' in page
-    assert page.index('<section class="panel"><div class="wumpus-map-wrap">') < page.index('<h2>Room ')
+    assert page.index('<section class="panel" id="wumpus-game-board"><div class="wumpus-map-wrap">') < page.index('<h2>Room ')
     assert (page.index('Drag to rotate the cave.') < page.index('id="hide-wumpus-map"')
             < page.index('<svg id="wumpus-map"'))
     corridors = [(classes, int(a), int(b)) for classes, a, b in
@@ -407,8 +422,9 @@ def test_wumpus_map_shows_topology_and_only_visited_clues(game_app):
         assert db.execute("SELECT COUNT(*) FROM game_attempts WHERE game='wumpus'").fetchone()[0] == 0
 
     safe = next(room for room in ROOMS[start] if room not in game['placements'][1:])
-    alex.post('/games/wumpus/action', data={'_csrf': token_for(alex),
-                                            'action': 'move', 'rooms': str(safe)})
+    moved = alex.post('/games/wumpus/action', data={'_csrf': token_for(alex),
+                                                    'action': 'move', 'rooms': str(safe)})
+    assert moved.headers['Location'] == '/games/wumpus#wumpus-game-board'
     page = alex.get('/games/wumpus').data.decode()
     rooms = dict((int(room), clues) for room, clues in
                  re.findall(r'data-room="(\d+)" data-clues="([^"]*)"', page))
@@ -458,8 +474,9 @@ def test_wumpus_map_records_bat_encounter_without_unseen_warnings(game_app):
     alex = sign_in(game_app, 'alex')
     url = alex.post('/games/wumpus/practice', data={
         '_csrf': token_for(alex), 'seed': str(seed)}).headers['Location']
-    alex.post(f'{url}/action', data={'_csrf': token_for(alex),
-                                     'action': 'move', 'rooms': str(bat)})
+    moved = alex.post(f'{url}/action', data={'_csrf': token_for(alex),
+                                             'action': 'move', 'rooms': str(bat)})
+    assert moved.headers['Location'] == url + '#wumpus-game-board'
     page = alex.get(url).data.decode()
     rooms = dict((int(room), clues) for room, clues in
                  re.findall(r'data-room="(\d+)" data-clues="([^"]*)"', page))
@@ -471,8 +488,8 @@ def test_wumpus_map_records_bat_encounter_without_unseen_warnings(game_app):
     assert '🍃' not in bat_markup and '🐲' not in bat_markup
 
 
-@pytest.mark.parametrize(('hazard_index', 'emoji'), [(1, '🍽️'), (2, '⬇️')])
-def test_wumpus_map_shows_only_cause_of_death(game_app, hazard_index, emoji):
+@pytest.mark.parametrize(('hazard_index', 'marker'), [(1, '🍽️'), (2, 'P')])
+def test_wumpus_map_shows_only_cause_of_death(game_app, hazard_index, marker):
     from homehub.game_wumpus import ROOMS, map_for_seed
 
     seed, hazard = next((seed, game['placements'][hazard_index])
@@ -486,7 +503,7 @@ def test_wumpus_map_shows_only_cause_of_death(game_app, hazard_index, emoji):
                                      'action': 'move', 'rooms': str(hazard)})
     page = alex.get(url).data.decode()
     room_markup = re.search(rf'id="wumpus-room-{hazard}".*?</g>', page).group()
-    assert emoji in room_markup
+    assert marker in room_markup
     assert not any(marker in room_markup for marker in ('🦇', '🍃', '🐲'))
 
 

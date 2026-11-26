@@ -23,7 +23,7 @@
 <section class="games-grid" aria-label="Games">
 {% for id, name, status in games %}<article class="games-card"><h2>{{ name }}</h2><p>{{ status }} · {{ statuses.get(id, 'not started') }}</p><p>{{ name }} streak: {{ streaks[id] }} day{{ '' if streaks[id] == 1 else 's' }}</p>{% if id == 'ladder' %}<a href="{{ url_for('games.ladder_page') }}">Play {{ name }}</a>{% elif id == 'wumpus' %}<a href="{{ url_for('games.wumpus_page') }}">Play {{ name }}</a>{% elif id == 'word' %}<a href="#word-title">Play {{ name }}</a>{% else %}<a href="{{ url_for('games.grid_page', game=id) }}">Play {{ name }}</a>{% endif %}</article>{% endfor %}
 </section>
-<div class="games-layout"><section class="panel" aria-labelledby="word-title">
+<div class="games-layout"><section class="panel" id="word-garden-board" aria-labelledby="word-title">
 <p class="eyebrow">Daily challenge</p><h2 id="word-title">Word Garden</h2>
 <p>Find the five-letter word in six guesses. Each letter is marked correct, present elsewhere, or absent.</p>
 <p>Your current Word Garden streak: {{ streak }}-day streak.</p>

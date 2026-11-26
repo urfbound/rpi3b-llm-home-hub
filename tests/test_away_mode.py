@@ -153,10 +153,11 @@ def test_away_mode_offline_shell_and_service_worker_are_available(client):
 
     assert offline.status_code == HTTPStatus.OK
     assert b'away-mode.js' in offline.data
+    assert b'data-away-offline' in offline.data
     assert worker.status_code == HTTPStatus.OK
     assert worker.headers['Service-Worker-Allowed'] == '/'
     assert b'offline.html' in worker.data
-    assert b"homehub-away-v4" in worker.data
+    assert b"homehub-away-v5" in worker.data
 
 
 def test_logout_offers_to_clear_saved_offline_data_and_warns_about_pending_changes(client):

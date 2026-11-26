@@ -78,6 +78,10 @@ def test_chat_is_hidden_by_default_and_admin_can_configure_installed_model(app):
     assert f'value="{CHAT_PAIRS_PER_CHAT_DEFAULT}"'.encode() in page.data
     assert b'name="chat_data_tools_enabled" value="1"' in page.data
     assert b'name="chat_data_tools_enabled" value="1" checked' not in page.data
+    assert b'Allow read-only Chat data tools' in page.data
+    assert b'lists, recipes, calendar events, and cached weather' in page.data
+    assert b"Home Hub host's local date and time" in page.data
+    assert b'Chat history access is limited to chats owned by the requesting user, even for admins.' in page.data
     assert b'Prompts and any enabled household context are sent to the selected agent node.' in page.data
     response = post(admin, chat_enabled='1', model='qwen2.5:0.5b',
                     max_queue_depth='12', pairs_per_chat='24',
