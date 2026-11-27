@@ -36,10 +36,12 @@
     }
     const currentRoom = rooms.find(room => room.element.classList.contains('current'));
     const focus = positions.get(currentRoom.number);
+    const offsetX = 270 - focus.x;
+    const offsetY = 270 - focus.y;
     for (const room of rooms) {
       const point = positions.get(room.number);
-      point.x += 270 - focus.x;
-      point.y += 270 - focus.y;
+      point.x += offsetX;
+      point.y += offsetY;
       room.element.setAttribute(
         'transform', `translate(${point.x} ${point.y}) scale(${1 + point.depth * .12})`);
     }

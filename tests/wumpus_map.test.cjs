@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-test('the occupied room stays centered and highlighted on initial render and rotation', () => {
+test('the occupied room and its neighbors stay together on initial render and rotation', () => {
   const source = fs.readFileSync(
     path.join(__dirname, '../homehub/static/wumpus-map.js'), 'utf8');
   const listeners = {};
@@ -19,15 +19,14 @@ test('the occupied room stays centered and highlighted on initial render and rot
     };
   };
   const rooms = [
-    makeRoom(4, [0.2, -0.5, 0.3]),
-    makeRoom(9, [-0.6, 0.1, -0.8], true),
-    makeRoom(12, [0.4, 0.8, -0.2]),
+    makeRoom(18, [-0.382, 1, 0]),
+    makeRoom(19, [0.382, 1, 0], true),
+    makeRoom(20, [0.618, 0.618, 0.618]),
   ];
-  const corridors = [{
-    dataset: {a: '4', b: '9'},
-    style: {},
-    setAttribute() {},
-  }];
+  const corridors = [
+    {dataset: {a: '18', b: '19'}, style: {}, setAttribute() {}},
+    {dataset: {a: '19', b: '20'}, style: {}, setAttribute() {}},
+  ];
   const svg = {
     querySelectorAll: selector => selector === '.wumpus-room' ? rooms : corridors,
     addEventListener: (name, listener) => { listeners[name] = listener; },
@@ -44,6 +43,12 @@ test('the occupied room stays centered and highlighted on initial render and rot
     assert.ok(match);
     assert.equal(Number(match[1]), 270);
     assert.equal(Number(match[2]), 270);
+    for (const neighbor of [rooms[0], rooms[2]]) {
+      const position = neighbor.getAttribute('transform').match(/^translate\(([-\d.]+) ([-\d.]+)\)/);
+      assert.ok(position);
+      assert.ok(Math.hypot(Number(position[1]) - 270, Number(position[2]) - 270) < 180,
+        `room ${neighbor.dataset.room} should stay near the occupied room`);
+    }
   };
 
   vm.runInNewContext(source, context);
