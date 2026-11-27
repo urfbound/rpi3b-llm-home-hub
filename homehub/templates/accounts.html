@@ -17,8 +17,8 @@
       <div class="person-main"><strong>{{ user['display_name'] }}</strong> {% if user['role'] == 'admin' %}<span class="chip">Admin</span>{% endif %}{% if user['account_kind'] == 'house' %}<span class="chip amber">Guest display</span>{% endif %}<small>{{ user['username'] }}{% if user['id'] == current_user['id'] %} · You{% endif %}</small></div>
       <div class="person-actions">
       {% if user['id'] == current_user['id'] %}<a class="button" href="{{ url_for('change_password') }}">Change password</a>
-      {% else %}<button type="button" onclick="openReset({{ user['id'] }}, {{ user['username']|tojson }})">Reset password</button>
-      <button type="button" class="quiet" onclick="openRemove({{ user['id'] }}, {{ user['username']|tojson }}, {{ ownership[user['id']]|tojson }})">Remove</button>{% endif %}
+      {% else %}<button type="button" onclick="openReset({{ user['id'] }}, {{ user['username']|tojson|forceescape }})">Reset password</button>
+      <button type="button" class="quiet" onclick="openRemove({{ user['id'] }}, {{ user['username']|tojson|forceescape }}, {{ ownership[user['id']]|tojson|forceescape }})">Remove</button>{% endif %}
       </div>
     </div>{% endfor %}
   </section>
@@ -221,8 +221,8 @@
           <div class="backup-entry-actions">
             <a class="button" href="{{ url_for('download_backup', filename=backup.name) }}">Download</a>
             {% if backup.calendar_bundle %}<a class="button" href="{{ url_for('download_backup_calendar_bundle', filename=backup.name) }}">Calendar archives</a>{% endif %}
-            <button type="button" class="danger" onclick="openBackupAction('restore', {{ backup.name|tojson }})">Restore</button>
-            <button type="button" class="quiet" onclick="openBackupAction('delete', {{ backup.name|tojson }})">Delete</button>
+            <button type="button" class="danger" onclick="openBackupAction('restore', {{ backup.name|tojson|forceescape }})">Restore</button>
+            <button type="button" class="quiet" onclick="openBackupAction('delete', {{ backup.name|tojson|forceescape }})">Delete</button>
           </div>
         </div>{% endfor %}
       </div>

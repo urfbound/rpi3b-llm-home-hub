@@ -1,4 +1,5 @@
 from http import HTTPStatus
+from html.parser import HTMLParser
 import re
 import sqlite3
 import time
@@ -38,6 +39,26 @@ def post(client, path, **data):
 def db_rows(app, query, parameters=()):
     with sqlite3.connect(app.config['DATABASE']) as db:
         return db.execute(query, parameters).fetchall()
+
+
+def test_account_buttons_keep_complete_browser_handlers(app):
+    class ButtonParser(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.handlers = []
+
+        def handle_starttag(self, tag, attrs):
+            if tag == 'button':
+                self.handlers.append(dict(attrs).get('onclick'))
+
+    admin = app.test_client()
+    sign_in(admin)
+    parser = ButtonParser()
+    parser.feed(admin.get('/admin/accounts').data.decode())
+
+    assert 'openReset(2, "sam")' in parser.handlers
+    assert any(handler and handler.startswith('openRemove(2, "sam", ') and
+               handler.endswith(')') for handler in parser.handlers)
 
 
 def test_accounts_are_admin_only(app):
