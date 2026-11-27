@@ -4,10 +4,11 @@ const fs = require('node:fs');
 const path = require('node:path');
 const vm = require('node:vm');
 
-test('the occupied room stays centered when the cave map is rotated', () => {
+test('the occupied room stays centered and highlighted on initial render and rotation', () => {
   const source = fs.readFileSync(
     path.join(__dirname, '../homehub/static/wumpus-map.js'), 'utf8');
   const listeners = {};
+  const paintOrder = [];
   const makeRoom = (number, point, current = false) => {
     const attributes = {};
     return {
@@ -19,7 +20,7 @@ test('the occupied room stays centered when the cave map is rotated', () => {
   };
   const rooms = [
     makeRoom(4, [0.2, -0.5, 0.3]),
-    makeRoom(9, [-0.6, 0.1, 0.7], true),
+    makeRoom(9, [-0.6, 0.1, -0.8], true),
     makeRoom(12, [0.4, 0.8, -0.2]),
   ];
   const corridors = [{
@@ -30,7 +31,7 @@ test('the occupied room stays centered when the cave map is rotated', () => {
   const svg = {
     querySelectorAll: selector => selector === '.wumpus-room' ? rooms : corridors,
     addEventListener: (name, listener) => { listeners[name] = listener; },
-    appendChild() {},
+    appendChild: element => { paintOrder.push(element); },
   };
   const hideMap = {addEventListener() {}};
   const context = {
@@ -47,6 +48,8 @@ test('the occupied room stays centered when the cave map is rotated', () => {
 
   vm.runInNewContext(source, context);
   assertCentered();
+  assert.equal(paintOrder[paintOrder.length - 1], currentRoom);
   listeners.keydown({key: 'ArrowRight', preventDefault() {}});
   assertCentered();
+  assert.equal(paintOrder[paintOrder.length - 1], currentRoom);
 });

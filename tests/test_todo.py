@@ -69,6 +69,8 @@ def test_todo_creation_saves_optional_due_date_and_assignee(client):
         row = db.execute("SELECT due_date,assignee_id FROM shopping_items "
                          "WHERE text='Water plants' ORDER BY id DESC LIMIT 1").fetchone()
     assert row == ('2026-10-25', bob_id)
+    page = client.get(f'/lists?kind=todo&list_id={list_id}').data.decode()
+    assert 'Due 2026-10-25 · Assigned to Bob' in page
 
 
 def test_list_rail_opens_selection_immediately(client):

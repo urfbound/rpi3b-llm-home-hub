@@ -61,10 +61,11 @@
 <script>
 const description = document.querySelector('[name="description"]');
 const descriptionCount = document.getElementById('event-description-count');
+const descriptionMaximum = {{ limits.EVENT_DESCRIPTION_MAXIMUM }};
 const allDay = document.querySelector('[name="all_day"]');
 const timeFields = document.getElementById('event-time-fields');
 function updateDescriptionCount() {
-  descriptionCount.textContent = `${{ limits.EVENT_DESCRIPTION_MAXIMUM }} - description.value.length} characters remaining ({{ limits.EVENT_DESCRIPTION_MAXIMUM }} maximum).`;
+  descriptionCount.textContent = `${descriptionMaximum - description.value.length} characters remaining (${descriptionMaximum} maximum).`;
 }
 description.addEventListener('input', updateDescriptionCount);
 allDay.addEventListener('change', () => { timeFields.hidden = allDay.checked; });

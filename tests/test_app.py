@@ -142,6 +142,22 @@ def test_shopping(client):
         assert db.execute('SELECT title,kind FROM household_lists WHERE id=?',
                           (list_id,)).fetchone() == ('Groceries', 'shopping')
 
+
+def test_shopping_item_controls_show_readable_symbols_and_delete_prompt(client):
+    sign_in(client)
+    token = csrf_token(client)
+    client.post('/shopping', data={'text': 'Milk', '_csrf': token})
+    with sqlite3.connect(client.application.config['DATABASE']) as db:
+        item_id = db.execute("SELECT id FROM shopping_items WHERE text='Milk'").fetchone()[0]
+
+    open_list = client.get('/lists').data.decode()
+    assert '>○</button>' in open_list
+    assert 'Remove “Milk” from Groceries?' in open_list
+
+    client.post(f'/shopping/{item_id}/toggle', data={'_csrf': token})
+    completed_list = client.get('/lists').data.decode()
+    assert '>✓</button>' in completed_list
+
 def test_paste_list_merges_checkmarks_and_adds_items_owned_by_importer(client):
     sign_in(client)
     db_path = client.application.config['DATABASE']

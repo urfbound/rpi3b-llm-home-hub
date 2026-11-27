@@ -64,8 +64,27 @@ approves the completed change.
   each feature below: browser/device review, Pi profiling, and household
   playtesting where applicable.
 - **Next validation:** complete the target Ubuntu LXC install, upgrade, and
-  uninstall checks; connect the agent node and review Chat behavior together;
-  then continue phone/browser review of offline mode and responsive pages.
+  uninstall checks; recheck local fixes after deployment; validate the real
+  agent node's read-only tool behavior and answer quality; then finish trusted-
+  HTTPS phone/browser review of offline mode and responsive pages.
+- **Live LXC browser checkpoint (2026-11-27):** With an admin account, all ten
+  top-level tabs rendered at desktop and 390-pixel widths in both themes without
+  horizontal page overflow; the narrow menu opened. Private contact, shopping
+  list/item, recipe/note, and calendar-event create/edit/delete paths worked.
+  Every temporary entry was removed. Remote Chat streamed an ordinary reply and
+  answered a host-time question; the temporary conversation was removed.
+  The browser did not independently confirm the model's tool invocation.
+  Admin-only access does not establish regular-user privacy or permissions.
+- **Browser findings:** At the LXC's IP-address URL, service-worker registration
+  fails with an SSL certificate `SecurityError`, blocking the browser away-mode
+  check until a trusted HTTPS origin is available. The live app showed garbled
+  Home/list text, a broken event-description character count while typing, and
+  a redundant Chat breadcrumb. These are fixed and test-covered on the feature
+  branch but are not yet deployed. The Admin Reset password button also failed
+  because its inline handler was cut short by unescaped quotes; the same issue
+  affected Remove and backup action buttons. These handlers are fixed and
+  test-covered locally. Deploy the reviewed revision and recheck these findings
+  on the LXC before continuing the regular-user browser review.
 - **Live design follow-up (2026-11-23):** `feature/live-design-polish` fixes the
   narrow calendar weekday labels, collapses the account/logout controls,
   restores a dashboard-focused Home page, and corrects primary button contrast
@@ -365,6 +384,9 @@ approves the completed change.
 
 ### Chat
 
+- Release one includes optional remote-provider Chat and its bounded, read-only
+  data tools. Both remain disabled on a fresh install until an admin enables
+  them. Validate the real agent node and answer quality before household use.
 - Keep Chat hidden by default. Initial Pi 3B warm latency and model-only memory
   are measured; see [CHAT_PI_BENCHMARK.md](CHAT_PI_BENCHMARK.md). The
   implementation on `main` has test-verified admin-only
@@ -492,7 +514,9 @@ approves the completed change.
   connected, reload once so the service worker controls it, turn on airplane
   mode, check items, then reconnect and test login expiry, concurrent changes,
   deleted items, and list access changes. Pending changes must remain visible
-  until they are synced or explicitly discarded.
+  until they are synced or explicitly discarded. First establish a certificate
+  trusted by the browser at the chosen LAN hostname; the IP-address browser
+  checkpoint could not register the service worker.
 - UX follow-up: changing the selected list now opens it immediately; the Open
   button remains as a no-JavaScript fallback. Phone review of item density,
   sharing context, and offline sync status remains open.

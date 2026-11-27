@@ -52,8 +52,10 @@
       line.setAttribute('y2', b.y);
       line.style.opacity = .35 + (a.depth + b.depth + 2) * .13;
     }
-    rooms.sort((a, b) => positions.get(a.number).depth - positions.get(b.number).depth);
-    for (const room of rooms) svg.appendChild(room.element);
+    const drawingOrder = rooms.filter(room => room !== currentRoom);
+    drawingOrder.sort((a, b) => positions.get(a.number).depth - positions.get(b.number).depth);
+    drawingOrder.push(currentRoom);
+    for (const room of drawingOrder) svg.appendChild(room.element);
   }
 
   svg.addEventListener('pointerdown', event => {

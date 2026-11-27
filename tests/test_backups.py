@@ -1,4 +1,5 @@
 from http import HTTPStatus
+from html.parser import HTMLParser
 import logging
 import sqlite3
 import time
@@ -42,9 +43,23 @@ def test_admin_can_create_download_and_delete_verified_backup(tmp_path):
                            follow_redirects=True)
     assert b'Backup created and verified' in response.data
 
+    class ButtonParser(HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self.handlers = []
+
+        def handle_starttag(self, tag, attrs):
+            if tag == 'button':
+                self.handlers.append(dict(attrs).get('onclick'))
+
+    parser = ButtonParser()
+    parser.feed(response.data.decode())
+
     backup_dir = tmp_path / 'backups'
     backups = list(backup_dir.glob('homehub-*.sqlite3'))
     assert len(backups) == 1
+    assert f"openBackupAction('restore', \"{backups[0].name}\")" in parser.handlers
+    assert f"openBackupAction('delete', \"{backups[0].name}\")" in parser.handlers
     bundles = list(backup_dir.glob('*.calendar.zip'))
     assert len(bundles) == 1
     assert bundles[0].is_file()

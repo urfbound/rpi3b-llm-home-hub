@@ -84,6 +84,24 @@ def test_home_chore_card_groups_today_and_filters_to_signed_in_user(household, m
     assert re.search(rb'name="just_my_chores" value="1"[^>]*checked', filtered.data)
 
 
+def test_chore_markers_are_readable_on_home_and_lists(household, monkeypatch):
+    app, client = household
+    monkeypatch.setattr(app_module, 'household_today', lambda: date(2026, 10, 26))
+    create_chore(client, weekday=0)
+    with sqlite3.connect(app.config['DATABASE']) as db:
+        chore_id = db.execute('SELECT id FROM chores').fetchone()[0]
+
+    for route in ('/', '/lists?kind=chores&weekday=0'):
+        page = client.get(route).data.decode()
+        assert '<button aria-label="Mark complete">◯</button>' in page
+        assert '◯ Put clothes away</span>' in page
+
+    client.post(f'/chores/{chore_id}/toggle', data={'_csrf': csrf_token(client)})
+    for route in ('/', '/lists?kind=chores&weekday=0'):
+        page = client.get(route).data.decode()
+        assert '<button aria-label="Mark incomplete">✓</button>' in page
+
+
 def test_everyone_chore_is_grouped_per_person_and_excludes_house_account(household):
     app, client = household
     response = create_chore(client)
