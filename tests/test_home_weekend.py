@@ -84,7 +84,8 @@ def test_weekend_card_covers_friday_through_sunday_with_event_context(app):
     assert 'Bring the pie' in card
     assert 'Carol' in card
     assert '6:00 PM' in card
-    assert '7:30 PM' in card
+    assert '<small>–7:30 PM</small>' in card
+    assert 'â€“' not in card
     assert '/events/1' in card
 
 

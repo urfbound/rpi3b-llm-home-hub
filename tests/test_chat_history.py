@@ -82,6 +82,14 @@ def test_chat_page_is_hidden_when_disabled_and_house_account_is_forbidden(app):
     assert b'>Chat</a>' in alice.get('/').data
 
 
+def test_top_level_chat_has_no_duplicate_breadcrumb(app):
+    alice = sign_in(app, 'alice', 'alice chat password')
+
+    page = alice.get('/chat').data
+
+    assert b'<div class="crumb">' not in page
+
+
 def test_users_can_only_view_and_delete_their_own_conversations(app):
     alice_id = make_chats(app, 'alice', 1)
     make_chats(app, 'bob', 1)
