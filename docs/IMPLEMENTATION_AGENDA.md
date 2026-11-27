@@ -84,7 +84,20 @@ approves the completed change.
   because its inline handler was cut short by unescaped quotes; the same issue
   affected Remove and backup action buttons. These handlers are fixed and
   test-covered locally. Deploy the reviewed revision and recheck these findings
-  on the LXC before continuing the regular-user browser review.
+  on the LXC before finalizing the regular-user browser review.
+- **Live LXC tester checkpoint (2026-11-27):** A regular user could open all
+  enabled feature tabs; Admin was absent and `/admin/accounts` returned 403.
+  An existing event owned by another account had no edit or delete controls.
+  Private contact, shopping list/item, recipe, and calendar-event creation and
+  removal worked. All temporary entries, including the Chat conversation, were
+  removed. Chat answered with the tester's accessible shared shopping list;
+  the browser did not independently confirm a data-tool invocation. Navigating
+  away during the queued request hid its status on return until the answer
+  appeared; persistent running-request navigation remains open. All nine
+  top-level pages fit a narrow viewport without horizontal overflow. The
+  occupied Wumpus room exposed a map offset bug that displaced the following
+  numbered room; the local fix has a failing-then-passing regression test and
+  still needs deployment and live recheck.
 - **Live design follow-up (2026-11-23):** `feature/live-design-polish` fixes the
   narrow calendar weekday labels, collapses the account/logout controls,
   restores a dashboard-focused Home page, and corrects primary button contrast
